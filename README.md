@@ -1,7 +1,7 @@
 eel
 =====
 
-An OTP library
+Embedded Erlang library
 
 Build
 -----
