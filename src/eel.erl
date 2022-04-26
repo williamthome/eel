@@ -34,6 +34,7 @@
     scan/1,
     sort/1,
     group_by_depth/1,
+    parse_expr/1,
     eval_expr/1, eval_expr/2,
     gen_text_struct/1,
     gen_expr_struct/2,
@@ -46,16 +47,6 @@
     gen_mid_expr_token/2,
     gen_end_expr_token/2
 ]).
-
--spec eval_expr(string()) -> string().
-
-eval_expr(Expr) ->
-    eval_expr(Expr, #{}).
-
--spec eval_expr(string(), map()) -> string().
-
-eval_expr(Expr, Bindings) ->
-    eel_utils:to_string(eval(Expr, Bindings)).
 
 %%%=============================================================================
 %%% API
@@ -87,6 +78,21 @@ sort(Tokens) ->
 
 group_by_depth(Tokens) ->
     eel_utils:group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
+
+-spec parse_expr(tokens()) -> string().
+
+parse_expr(Tokens) ->
+    do_parse_expr(Tokens, undefined, []).
+
+-spec eval_expr(string()) -> string().
+
+eval_expr(Expr) ->
+    eval_expr(Expr, #{}).
+
+-spec eval_expr(string(), map()) -> string().
+
+eval_expr(Expr, Bindings) ->
+    eel_utils:to_string(eval(Expr, Bindings)).
 
 %%%-----------------------------------------------------------------------------
 %%% Struct generators
@@ -264,6 +270,37 @@ gen_token(Depth, Struct) ->
 
 depth_compare({ADepth, _AStruct}, {BDepth, _BStruct}) ->
     ADepth >= BDepth.
+
+-spec do_parse_expr(tokens(), undefined | token(), [string()]) -> string().
+
+do_parse_expr(
+    [{_Depth, {text, _Marker, _Syntax}} = Token | Tokens],
+    _Prev,
+    Acc
+) ->
+    %% TODO: Funs and texts must be merged.
+    %% Situations:
+    %%  - text + fun
+    %%  - fun + text
+    %% To merge, Fun must be checked if:
+    %%  - Symbol be [mid_expr, expr];
+    %%  - not ends with [, end, .].
+    %% e.g.:
+    %%      "<% true -> %>"
+    %%      "<li><% foo; %></li>"
+    %%      "<% Bar -> %>"
+    %% ... must be parsed as:
+    %%      " true ->  "<li>foo></li>";  Bar -> "
+    do_parse_expr(Tokens, Token, Acc);
+do_parse_expr(
+    [{_Depth, {_Symbol, _Marker, Syntax}} = Token | Tokens],
+    _Prev,
+    Acc
+) ->
+    SyntaxAsString = eel_utils:to_string(Syntax),
+    do_parse_expr(Tokens, Token, [SyntaxAsString | Acc]);
+do_parse_expr([], _Prev, Acc) ->
+    string:join(lists:reverse(Acc), []).
 
 -spec eval(string(), map()) -> term().
 
@@ -467,6 +504,32 @@ group_by_depth_test() ->
             ]
         },
         group_by_depth(mock_tokens())
+    ).
+
+parse_expr_test() ->
+    ?assertEqual(
+        " lists:map(fun(Foo) -> "
+        " case Foo of "
+        " true -> "
+        " foo; "
+        " Bar -> "
+        " Bar "
+        " end "
+        " end, List). ",
+        parse_expr([
+            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
+            {4, {mid_expr, <<>>, <<" true -> ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" foo; ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" end ">>}},
+            {4, {end_expr, <<>>, <<" end, List). ">>}}
+        ])
     ).
 
 eval_expr_test() ->
