@@ -32,6 +32,7 @@
 
 -export([
     scan/1,
+    sort/1,
     gen_text_struct/1,
     gen_expr_struct/2,
     gen_start_expr_struct/2,
@@ -56,6 +57,15 @@
 
 scan(Bin) ->
     scan([0], 0, Bin, []).
+
+%%------------------------------------------------------------------------------
+%% @doc Sorts tokens from deeper to less deep.
+%% @end
+%%------------------------------------------------------------------------------
+-spec sort(tokens()) -> tokens().
+
+sort(Tokens) ->
+    lists:sort(fun depth_compare/2, Tokens).
 
 %%%-----------------------------------------------------------------------------
 %%% Struct generators
@@ -229,47 +239,55 @@ gen_struct(Symbol, Marker, Syntax) ->
 gen_token(Depth, Struct) ->
     {Depth, Struct}.
 
+-spec depth_compare(token(), token()) -> boolean().
+
+depth_compare({ADepth, _AStruct}, {BDepth, _BStruct}) ->
+    ADepth >= BDepth.
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
 
 -ifdef(TEST).
 
+mock_tokens() ->
+    [
+        {0, {text, <<>>, <<"<ul>">>}},
+        {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+        {1, {mid_expr, <<>>, <<" case Foo of ">>}},
+        {1, {mid_expr, <<>>, <<" true -> ">>}},
+        {1, {text, <<>>, <<"<li>">>}},
+        {1, {mid_expr, <<>>, <<" foo; ">>}},
+        {1, {text, <<>>, <<"</li>">>}},
+        {1, {mid_expr, <<>>, <<" Bar -> ">>}},
+        {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
+        {1, {text, <<>>, <<"<li>">>}},
+        {1, {mid_expr, <<>>, <<" Bar ">>}},
+        {3, {expr, <<"=">>, <<" Baz. ">>}},
+        {1, {text, <<>>, <<"</li><ul>">>}},
+        {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+        {4, {mid_expr, <<>>, <<" case Foo of ">>}},
+        {4, {mid_expr, <<>>, <<" true -> ">>}},
+        {4, {text, <<>>, <<"<li>">>}},
+        {4, {mid_expr, <<>>, <<" foo; ">>}},
+        {4, {text, <<>>, <<"</li>">>}},
+        {4, {mid_expr, <<>>, <<" Bar -> ">>}},
+        {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
+        {4, {text, <<>>, <<"<li>">>}},
+        {4, {mid_expr, <<>>, <<" Bar ">>}},
+        {6, {expr, <<"=">>, <<" Baz. ">>}},
+        {4, {text, <<>>, <<"</li>">>}},
+        {4, {mid_expr, <<>>, <<" end ">>}},
+        {4, {end_expr, <<>>, <<" end, List). ">>}},
+        {1, {text, <<>>, <<"</ul>">>}},
+        {1, {mid_expr, <<>>, <<" end ">>}},
+        {1, {end_expr, <<>>, <<" end, List). ">>}},
+        {0, {text, <<>>, <<"</ul>">>}}
+    ].
+
 scan_test() ->
     ?assertEqual(
-        [
-            {0, {text, <<>>, <<"<ul>">>}},
-            {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-            {1, {mid_expr, <<>>, <<" case Foo of ">>}},
-            {1, {mid_expr, <<>>, <<" true -> ">>}},
-            {1, {text, <<>>, <<"<li>">>}},
-            {1, {mid_expr, <<>>, <<" foo; ">>}},
-            {1, {text, <<>>, <<"</li>">>}},
-            {1, {mid_expr, <<>>, <<" Bar -> ">>}},
-            {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
-            {1, {text, <<>>, <<"<li>">>}},
-            {1, {mid_expr, <<>>, <<" Bar ">>}},
-            {3, {expr, <<"=">>, <<" Baz. ">>}},
-            {1, {text, <<>>, <<"</li><ul>">>}},
-            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
-            {4, {mid_expr, <<>>, <<" true -> ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" foo; ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
-            {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar ">>}},
-            {6, {expr, <<"=">>, <<" Baz. ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" end ">>}},
-            {4, {end_expr, <<>>, <<" end, List). ">>}},
-            {1, {text, <<>>, <<"</ul>">>}},
-            {1, {mid_expr, <<>>, <<" end ">>}},
-            {1, {end_expr, <<>>, <<" end, List). ">>}},
-            {0, {text, <<>>, <<"</ul>">>}}
-        ],
+        mock_tokens(),
         scan(
             <<
                 "<ul>"
@@ -296,6 +314,44 @@ scan_test() ->
                 "</ul>"
             >>
         )
+    ).
+
+sort_test() ->
+    ?assertEqual(
+        [
+            {6, {expr, <<"=">>, <<" Baz. ">>}},
+            {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
+            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
+            {4, {mid_expr, <<>>, <<" true -> ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" foo; ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" end ">>}},
+            {4, {end_expr, <<>>, <<" end, List). ">>}},
+            {3, {expr, <<"=">>, <<" Baz. ">>}},
+            {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
+            {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+            {1, {mid_expr, <<>>, <<" case Foo of ">>}},
+            {1, {mid_expr, <<>>, <<" true -> ">>}},
+            {1, {text, <<>>, <<"<li>">>}},
+            {1, {mid_expr, <<>>, <<" foo; ">>}},
+            {1, {text, <<>>, <<"</li>">>}},
+            {1, {mid_expr, <<>>, <<" Bar -> ">>}},
+            {1, {text, <<>>, <<"<li>">>}},
+            {1, {mid_expr, <<>>, <<" Bar ">>}},
+            {1, {text, <<>>, <<"</li><ul>">>}},
+            {1, {text, <<>>, <<"</ul>">>}},
+            {1, {mid_expr, <<>>, <<" end ">>}},
+            {1, {end_expr, <<>>, <<" end, List). ">>}},
+            {0, {text, <<>>, <<"<ul>">>}},
+            {0, {text, <<>>, <<"</ul>">>}}
+        ],
+        sort(mock_tokens())
     ).
 
 -endif.
