@@ -15,12 +15,8 @@
 -type symbol() :: text | expr | start_expr | mid_expr | end_expr.
 -type marker() :: binary().
 -type syntax() :: binary().
--type token() ::
-    {depth(), text, syntax()}
-    | {depth(), expr, marker(), syntax()}
-    | {depth(), start_expr, marker(), syntax()}
-    | {depth(), mid_expr, syntax()}
-    | {depth(), end_expr, syntax()}.
+-type struct() :: {symbol(), marker(), syntax()}.
+-type token() :: {depth(), struct()}.
 -type tokens() :: [token()].
 
 -export_type([
@@ -29,6 +25,7 @@
     symbol/0,
     marker/0,
     syntax/0,
+    struct/0,
     token/0,
     tokens/0
 ]).
@@ -62,7 +59,7 @@ scan(Depths, ExprCount, <<"<%", T/binary>>, Tokens) ->
     scan(NewDepths, NewExprCount, Rest, [NewToken | Tokens]);
 scan([Depth | _] = Depths, ExprCount, Bin, Tokens) ->
     {Syntax, Rest} = guess_syntax(Bin),
-    Token = {Depth, text, Syntax},
+    Token = {Depth, {text, <<>>, Syntax}},
     scan(Depths, ExprCount, Rest, [Token | Tokens]).
 
 -spec guess_syntax(binary()) -> {syntax(), binary()}.
@@ -95,24 +92,24 @@ guess_token([Depth | LessDeep] = AllDepths, ExprCount, Bin) ->
                 case FirstByte =:= Space of
                     true ->
                         NewSyntax = bin_drop_last(Syntax),
-                        Token = {Depth, end_expr, NewSyntax},
+                        Token = {Depth, {end_expr, <<>>, NewSyntax}},
                         {LessDeep, ExprCount, Token};
                     false ->
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first_and_last(Syntax),
-                        Token = {ExprCount + 1, expr, Marker, NewSyntax},
+                        Token = {ExprCount + 1, {expr, Marker, NewSyntax}},
                         {AllDepths, ExprCount + 1, Token}
                 end;
             false ->
                 case FirstByte =:= Space of
                     true ->
-                        Token = {Depth, mid_expr, Syntax},
+                        Token = {Depth, {mid_expr, <<>>, Syntax}},
                         {AllDepths, ExprCount, Token};
                     false ->
                         Deeper = ExprCount + 1,
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first(Syntax),
-                        Token = {ExprCount + 1, start_expr, Marker, NewSyntax},
+                        Token = {ExprCount + 1, {start_expr, Marker, NewSyntax}},
                         {[Deeper | AllDepths], ExprCount + 1, Token}
                 end
         end,
@@ -154,37 +151,37 @@ byte_to_binary(Byte) ->
 scan_test() ->
     ?assertEqual(
         [
-            {0, text, <<"<ul>">>},
-            {1, start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
-            {1, mid_expr, <<" case Foo of ">>},
-            {1, mid_expr, <<" true -> ">>},
-            {1, text, <<"<li>">>},
-            {1, mid_expr, <<" foo; ">>},
-            {1, text, <<"</li>">>},
-            {1, mid_expr, <<" Bar -> ">>},
-            {2, expr, <<"#">>, <<" Maybe a comment ">>},
-            {1, text, <<"<li>">>},
-            {1, mid_expr, <<" Bar ">>},
-            {3, expr, <<"=">>, <<" Baz. ">>},
-            {1, text, <<"</li><ul>">>},
-            {4, start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
-            {4, mid_expr, <<" case Foo of ">>},
-            {4, mid_expr, <<" true -> ">>},
-            {4, text, <<"<li>">>},
-            {4, mid_expr, <<" foo; ">>},
-            {4, text, <<"</li>">>},
-            {4, mid_expr, <<" Bar -> ">>},
-            {5, expr, <<"#">>, <<" Maybe a comment ">>},
-            {4, text, <<"<li>">>},
-            {4, mid_expr, <<" Bar ">>},
-            {6, expr, <<"=">>, <<" Baz. ">>},
-            {4, text, <<"</li>">>},
-            {4, mid_expr, <<" end ">>},
-            {4, end_expr, <<" end, List). ">>},
-            {1, text, <<"</ul>">>},
-            {1, mid_expr, <<" end ">>},
-            {1, end_expr, <<" end, List). ">>},
-            {0, text, <<"</ul>">>}
+            {0, {text, <<>>, <<"<ul>">>}},
+            {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+            {1, {mid_expr, <<>>, <<" case Foo of ">>}},
+            {1, {mid_expr, <<>>, <<" true -> ">>}},
+            {1, {text, <<>>, <<"<li>">>}},
+            {1, {mid_expr, <<>>, <<" foo; ">>}},
+            {1, {text, <<>>, <<"</li>">>}},
+            {1, {mid_expr, <<>>, <<" Bar -> ">>}},
+            {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
+            {1, {text, <<>>, <<"<li>">>}},
+            {1, {mid_expr, <<>>, <<" Bar ">>}},
+            {3, {expr, <<"=">>, <<" Baz. ">>}},
+            {1, {text, <<>>, <<"</li><ul>">>}},
+            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
+            {4, {mid_expr, <<>>, <<" true -> ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" foo; ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
+            {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
+            {4, {text, <<>>, <<"<li>">>}},
+            {4, {mid_expr, <<>>, <<" Bar ">>}},
+            {6, {expr, <<"=">>, <<" Baz. ">>}},
+            {4, {text, <<>>, <<"</li>">>}},
+            {4, {mid_expr, <<>>, <<" end ">>}},
+            {4, {end_expr, <<>>, <<" end, List). ">>}},
+            {1, {text, <<>>, <<"</ul>">>}},
+            {1, {mid_expr, <<>>, <<" end ">>}},
+            {1, {end_expr, <<>>, <<" end, List). ">>}},
+            {0, {text, <<>>, <<"</ul>">>}}
         ],
         scan(
             <<
