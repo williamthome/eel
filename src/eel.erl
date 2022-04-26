@@ -34,6 +34,7 @@
     scan/1,
     sort/1,
     group_by_depth/1,
+    eval_expr/1, eval_expr/2,
     gen_text_struct/1,
     gen_expr_struct/2,
     gen_start_expr_struct/2,
@@ -45,6 +46,16 @@
     gen_mid_expr_token/2,
     gen_end_expr_token/2
 ]).
+
+-spec eval_expr(string()) -> string().
+
+eval_expr(Expr) ->
+    eval_expr(Expr, #{}).
+
+-spec eval_expr(string(), map()) -> string().
+
+eval_expr(Expr, Bindings) ->
+    eel_utils:to_string(eval(Expr, Bindings)).
 
 %%%=============================================================================
 %%% API
@@ -75,7 +86,7 @@ sort(Tokens) ->
 -spec group_by_depth(tokens()) -> #{depth() => tokens()}.
 
 group_by_depth(Tokens) ->
-    group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
+    eel_utils:group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
 
 %%%-----------------------------------------------------------------------------
 %%% Struct generators
@@ -254,24 +265,47 @@ gen_token(Depth, Struct) ->
 depth_compare({ADepth, _AStruct}, {BDepth, _BStruct}) ->
     ADepth >= BDepth.
 
--spec group_by(fun((Elem :: T) -> Key), [T]) -> #{Key => [T]}.
+-spec eval(string(), map()) -> term().
 
-group_by(Fun, List) when is_function(Fun, 1) ->
-    Reversed = lists:reverse(List),
-    do_group_by(Fun, Reversed, #{}).
+eval(Expr, Bindings) ->
+    {ok, Scanned, _EndLocation} = erl_scan:string(Expr),
+    {ok, Parsed} = erl_parse:parse_exprs(Scanned),
+    {value, Value, NewBindings} = erl_eval:exprs(Parsed, Bindings),
+    bind(Value, Parsed, NewBindings).
 
--spec do_group_by(fun((Elem :: T) -> Key), [T], #{Key => [T]}) -> #{Key => [T]}.
+-spec bind(term(), [erl_parse:abstract_expr()], map()) -> term().
 
-do_group_by(Fun, [Elem | Tail], AccIn) ->
-    Key = Fun(Elem),
-    AccOut =
-        case AccIn of
-            #{Key := Elems} -> AccIn#{Key := [Elem | Elems]};
-            #{} -> AccIn#{Key => [Elem]}
-        end,
-    do_group_by(Fun, Tail, AccOut);
-do_group_by(_Fun, [], Acc) ->
-    Acc.
+bind(
+    Fun,
+    [{'fun', _FunAnno, {clauses, [{clause, _ClauseAnno, Vars, _Guards, _Body}]}}],
+    Bindings
+) when is_function(Fun) ->
+    bind_function(Fun, Vars, Bindings);
+bind(Value, _, _Bindings) ->
+    Value.
+
+-spec bind_function(function(), [erl_parse:abstract_expr()], map()) ->
+    term().
+
+bind_function(Fun, Vars, Bindings) ->
+    VarNames = get_fun_var_names(Vars),
+    FunBindings = maps:with(VarNames, Bindings),
+    Args = maps:values(FunBindings),
+    apply(Fun, Args).
+
+-spec get_fun_var_names([erl_parse:abstract_type()]) -> [atom()].
+
+get_fun_var_names(Vars) ->
+    get_fun_var_names(Vars, []).
+
+-spec get_fun_var_names([erl_parse:abstract_type()], [atom()]) -> [atom()].
+
+get_fun_var_names([{var, _Anno, VarName} | Vars], VarNames) ->
+    get_fun_var_names(Vars, [VarName | VarNames]);
+get_fun_var_names([_Abstract | Vars], VarNames) ->
+    get_fun_var_names(Vars, VarNames);
+get_fun_var_names([], VarNames) ->
+    lists:reverse(VarNames).
 
 %%%=============================================================================
 %%% Tests
@@ -433,6 +467,15 @@ group_by_depth_test() ->
             ]
         },
         group_by_depth(mock_tokens())
+    ).
+
+eval_expr_test() ->
+    ?assertEqual(
+        "foobar",
+        eval_expr(
+            "lists:foldr(fun(X, Acc) -> [X | Acc] end, [], List).",
+            #{'List' => ["foo", "bar"]}
+        )
     ).
 
 -endif.
