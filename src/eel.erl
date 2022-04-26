@@ -33,6 +33,7 @@
 -export([
     scan/1,
     sort/1,
+    group_by_depth/1,
     gen_text_struct/1,
     gen_expr_struct/2,
     gen_start_expr_struct/2,
@@ -66,6 +67,15 @@ scan(Bin) ->
 
 sort(Tokens) ->
     lists:sort(fun depth_compare/2, Tokens).
+
+%%------------------------------------------------------------------------------
+%% @doc Group tokens by depth.
+%% @end
+%%------------------------------------------------------------------------------
+-spec group_by_depth(tokens()) -> #{depth() => tokens()}.
+
+group_by_depth(Tokens) ->
+    group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
 
 %%%-----------------------------------------------------------------------------
 %%% Struct generators
@@ -244,6 +254,25 @@ gen_token(Depth, Struct) ->
 depth_compare({ADepth, _AStruct}, {BDepth, _BStruct}) ->
     ADepth >= BDepth.
 
+-spec group_by(fun((Elem :: T) -> Key), [T]) -> #{Key => [T]}.
+
+group_by(Fun, List) when is_function(Fun, 1) ->
+    Reversed = lists:reverse(List),
+    do_group_by(Fun, Reversed, #{}).
+
+-spec do_group_by(fun((Elem :: T) -> Key), [T], #{Key => [T]}) -> #{Key => [T]}.
+
+do_group_by(Fun, [Elem | Tail], AccIn) ->
+    Key = Fun(Elem),
+    AccOut =
+        case AccIn of
+            #{Key := Elems} -> AccIn#{Key := [Elem | Elems]};
+            #{} -> AccIn#{Key => [Elem]}
+        end,
+    do_group_by(Fun, Tail, AccOut);
+do_group_by(_Fun, [], Acc) ->
+    Acc.
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -352,6 +381,58 @@ sort_test() ->
             {0, {text, <<>>, <<"</ul>">>}}
         ],
         sort(mock_tokens())
+    ).
+
+group_by_depth_test() ->
+    ?assertEqual(
+        #{
+            0 => [
+                {0, {text, <<>>, <<"<ul>">>}},
+                {0, {text, <<>>, <<"</ul>">>}}
+            ],
+            1 => [
+                {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+                {1, {mid_expr, <<>>, <<" case Foo of ">>}},
+                {1, {mid_expr, <<>>, <<" true -> ">>}},
+                {1, {text, <<>>, <<"<li>">>}},
+                {1, {mid_expr, <<>>, <<" foo; ">>}},
+                {1, {text, <<>>, <<"</li>">>}},
+                {1, {mid_expr, <<>>, <<" Bar -> ">>}},
+                {1, {text, <<>>, <<"<li>">>}},
+                {1, {mid_expr, <<>>, <<" Bar ">>}},
+                {1, {text, <<>>, <<"</li><ul>">>}},
+                {1, {text, <<>>, <<"</ul>">>}},
+                {1, {mid_expr, <<>>, <<" end ">>}},
+                {1, {end_expr, <<>>, <<" end, List). ">>}}
+            ],
+            2 => [
+                {2, {expr, <<"#">>, <<" Maybe a comment ">>}}
+            ],
+            3 => [
+                {3, {expr, <<"=">>, <<" Baz. ">>}}
+            ],
+            4 => [
+                {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
+                {4, {mid_expr, <<>>, <<" case Foo of ">>}},
+                {4, {mid_expr, <<>>, <<" true -> ">>}},
+                {4, {text, <<>>, <<"<li>">>}},
+                {4, {mid_expr, <<>>, <<" foo; ">>}},
+                {4, {text, <<>>, <<"</li>">>}},
+                {4, {mid_expr, <<>>, <<" Bar -> ">>}},
+                {4, {text, <<>>, <<"<li>">>}},
+                {4, {mid_expr, <<>>, <<" Bar ">>}},
+                {4, {text, <<>>, <<"</li>">>}},
+                {4, {mid_expr, <<>>, <<" end ">>}},
+                {4, {end_expr, <<>>, <<" end, List). ">>}}
+            ],
+            5 => [
+                {5, {expr, <<"#">>, <<" Maybe a comment ">>}}
+            ],
+            6 => [
+                {6, {expr, <<"=">>, <<" Baz. ">>}}
+            ]
+        },
+        group_by_depth(mock_tokens())
     ).
 
 -endif.
