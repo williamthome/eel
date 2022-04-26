@@ -302,7 +302,7 @@ do_parse_expr(
     %%      "<li><% foo; %></li>"
     %%      "<% Bar -> %>"
     %% ... must be parsed as:
-    %%      " true ->  "<li>foo></li>";  Bar -> "
+    %%      " true ->  \"<li>foo></li>\";  Bar -> "
     do_parse_expr(Tokens, Token, Acc);
 do_parse_expr(
     [{_Depth, {_Symbol, _Marker, Syntax}} = Token | Tokens],
@@ -546,9 +546,9 @@ parse_expr_test() ->
 
 eval_expr_test() ->
     ?assertEqual(
-        "foobar",
+        "foobarbaz",
         eval_expr(
-            "lists:foldr(fun(X, Acc) -> [X | Acc] end, [], List).",
+            "lists:foldr(fun(X, Acc) -> [X | Acc] end, [], List) ++ [\"baz\"].",
             #{'List' => ["foo", "bar"]}
         )
     ).
