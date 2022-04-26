@@ -11,6 +11,7 @@
 -endif.
 
 -type depth() :: non_neg_integer().
+-type depths() :: [depth()].
 -type symbol() :: text | expr | start_expr | mid_expr | end_expr.
 -type marker() :: binary().
 -type syntax() :: binary().
@@ -23,10 +24,13 @@
 -type tokens() :: [token()].
 
 -export_type([
+    depth/0,
+    depths/0,
     symbol/0,
     marker/0,
     syntax/0,
-    token/0
+    token/0,
+    tokens/0
 ]).
 
 -export([scan/1]).
@@ -48,7 +52,7 @@ scan(Bin) ->
 %%% Internal functions
 %%%=============================================================================
 
--spec scan([depth()], non_neg_integer(), binary(), tokens()) -> tokens().
+-spec scan(depths(), non_neg_integer(), binary(), tokens()) -> tokens().
 
 scan(_Depths, _ExprCount, <<>>, Tokens) ->
     lists:reverse(Tokens);
@@ -77,8 +81,8 @@ guess_syntax(<<H, Rest/binary>>, Syntax) ->
 guess_syntax(<<>>, Syntax) ->
     {Syntax, <<>>}.
 
--spec guess_token([depth()], non_neg_integer(), binary()) ->
-    {[depth()], non_neg_integer(), token(), binary()}.
+-spec guess_token(depths(), non_neg_integer(), binary()) ->
+    {depths(), non_neg_integer(), token(), binary()}.
 
 guess_token([Depth | LessDeep] = AllDepths, ExprCount, Bin) ->
     {Syntax, Rest} = guess_syntax(Bin),
