@@ -80,32 +80,32 @@ guess_syntax(<<>>, Syntax) ->
 
 guess_token(Level, Bin) ->
     {Syntax, Rest} = guess_syntax(Bin),
-    First = binary:first(Syntax),
-    Last = binary:last(Syntax),
+    FirstByte = binary:first(Syntax),
+    LastByte = binary:last(Syntax),
     Space = 32,
     {ResultLevel, ResultToken} =
-        case Last =:= $= of
+        case LastByte =:= $= of
             true ->
-                case First =:= Space of
+                case FirstByte =:= Space of
                     true ->
                         NewLevel = Level - 1,
                         NewSyntax = bin_drop_last(Syntax),
                         Token = {Level, end_expr, NewSyntax},
                         {NewLevel, Token};
                     false ->
-                        Marker = byte_to_binary(First),
+                        Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first_and_last(Syntax),
                         Token = {Level + 1, expr, Marker, NewSyntax},
                         {Level, Token}
                 end;
             false ->
-                case First =:= Space of
+                case FirstByte =:= Space of
                     true ->
                         Token = {Level, mid_expr, Syntax},
                         {Level, Token};
                     false ->
                         NewLevel = Level + 1,
-                        Marker = byte_to_binary(First),
+                        Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first(Syntax),
                         Token = {Level + 1, start_expr, Marker, NewSyntax},
                         {NewLevel, Token}
