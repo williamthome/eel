@@ -10,16 +10,16 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type level() :: non_neg_integer().
+-type depth() :: non_neg_integer().
 -type symbol() :: text | expr | start_expr | mid_expr | end_expr.
 -type marker() :: binary().
 -type syntax() :: binary().
 -type token() ::
-    {level(), text, syntax()}
-    | {level(), expr, marker(), syntax()}
-    | {level(), start_expr, marker(), syntax()}
-    | {level(), mid_expr, syntax()}
-    | {level(), end_expr, syntax()}.
+    {depth(), text, syntax()}
+    | {depth(), expr, marker(), syntax()}
+    | {depth(), start_expr, marker(), syntax()}
+    | {depth(), mid_expr, syntax()}
+    | {depth(), end_expr, syntax()}.
 -type tokens() :: [token()].
 
 -export_type([
@@ -48,17 +48,18 @@ scan(Bin) ->
 %%% Internal functions
 %%%=============================================================================
 
--spec scan([level()], non_neg_integer(), binary(), tokens()) -> tokens().
+-spec scan([depth()], non_neg_integer(), binary(), tokens()) -> tokens().
 
-scan(_Levels, _ExprCount, <<>>, Tokens) ->
+scan(_Depths, _ExprCount, <<>>, Tokens) ->
     lists:reverse(Tokens);
-scan(Levels, ExprCount, <<"<%", T/binary>>, Tokens) ->
-    {NewLevels, NewExprCount, Token, Rest} = guess_token(Levels, ExprCount, T),
-    scan(NewLevels, NewExprCount, Rest, [Token | Tokens]);
-scan([Level | _] = Levels, ExprCount, Bin, Tokens) ->
+scan(Depths, ExprCount, <<"<%", T/binary>>, Tokens) ->
+    {NewDepths, NewExprCount, NewToken, Rest} =
+        guess_token(Depths, ExprCount, T),
+    scan(NewDepths, NewExprCount, Rest, [NewToken | Tokens]);
+scan([Depth | _] = Depths, ExprCount, Bin, Tokens) ->
     {Syntax, Rest} = guess_syntax(Bin),
-    Token = {Level, text, Syntax},
-    scan(Levels, ExprCount, Rest, [Token | Tokens]).
+    Token = {Depth, text, Syntax},
+    scan(Depths, ExprCount, Rest, [Token | Tokens]).
 
 -spec guess_syntax(binary()) -> {syntax(), binary()}.
 
@@ -76,42 +77,42 @@ guess_syntax(<<H, Rest/binary>>, Syntax) ->
 guess_syntax(<<>>, Syntax) ->
     {Syntax, <<>>}.
 
--spec guess_token([level()], non_neg_integer(), binary()) ->
-    {[level()], non_neg_integer(), token(), binary()}.
+-spec guess_token([depth()], non_neg_integer(), binary()) ->
+    {[depth()], non_neg_integer(), token(), binary()}.
 
-guess_token([Level | OtherLevels] = AllLevels, ExprCount, Bin) ->
+guess_token([Depth | LessDeep] = AllDepths, ExprCount, Bin) ->
     {Syntax, Rest} = guess_syntax(Bin),
     FirstByte = binary:first(Syntax),
     LastByte = binary:last(Syntax),
     Space = 32,
-    {ResultLevels, ResultExprCount, ResultToken} =
+    {NewDepths, NewExprCount, NewToken} =
         case LastByte =:= $= of
             true ->
                 case FirstByte =:= Space of
                     true ->
                         NewSyntax = bin_drop_last(Syntax),
-                        Token = {Level, end_expr, NewSyntax},
-                        {OtherLevels, ExprCount, Token};
+                        Token = {Depth, end_expr, NewSyntax},
+                        {LessDeep, ExprCount, Token};
                     false ->
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first_and_last(Syntax),
                         Token = {ExprCount + 1, expr, Marker, NewSyntax},
-                        {AllLevels, ExprCount + 1, Token}
+                        {AllDepths, ExprCount + 1, Token}
                 end;
             false ->
                 case FirstByte =:= Space of
                     true ->
-                        Token = {Level, mid_expr, Syntax},
-                        {AllLevels, ExprCount, Token};
+                        Token = {Depth, mid_expr, Syntax},
+                        {AllDepths, ExprCount, Token};
                     false ->
-                        NewLevel = ExprCount + 1,
+                        Deeper = ExprCount + 1,
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first(Syntax),
                         Token = {ExprCount + 1, start_expr, Marker, NewSyntax},
-                        {[NewLevel | AllLevels], ExprCount + 1, Token}
+                        {[Deeper | AllDepths], ExprCount + 1, Token}
                 end
         end,
-    {ResultLevels, ResultExprCount, ResultToken, Rest}.
+    {NewDepths, NewExprCount, NewToken, Rest}.
 
 -spec bin_reverse(binary()) -> binary().
 
