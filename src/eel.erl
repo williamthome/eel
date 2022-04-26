@@ -35,6 +35,7 @@
     sort/1,
     group_by_depth/1,
     parse_expr/1,
+    eval/1, eval/2,
     eval_expr/1, eval_expr/2,
     gen_text_struct/1,
     gen_expr_struct/2,
@@ -87,6 +88,27 @@ group_by_depth(Tokens) ->
 
 parse_expr(Tokens) ->
     do_parse_expr(Tokens, undefined, []).
+
+%%------------------------------------------------------------------------------
+%% @doc Evaluates an expression to term.
+%% @end
+%%------------------------------------------------------------------------------
+-spec eval(string()) -> term().
+
+eval(Expr) ->
+    eval(Expr, #{}).
+
+%%------------------------------------------------------------------------------
+%% @doc Evaluates an expression to term by binding a map of vars.
+%% @end
+%%------------------------------------------------------------------------------
+-spec eval(string(), map()) -> term().
+
+eval(Expr, Bindings) ->
+    {ok, Scanned, _EndLocation} = erl_scan:string(Expr),
+    {ok, Parsed} = erl_parse:parse_exprs(Scanned),
+    {value, Value, NewBindings} = erl_eval:exprs(Parsed, Bindings),
+    bind(Value, Parsed, NewBindings).
 
 %%------------------------------------------------------------------------------
 %% @doc Evaluates an expression to string.
@@ -313,14 +335,6 @@ do_parse_expr(
     do_parse_expr(Tokens, Token, [SyntaxAsString | Acc]);
 do_parse_expr([], _Prev, Acc) ->
     string:join(lists:reverse(Acc), []).
-
--spec eval(string(), map()) -> term().
-
-eval(Expr, Bindings) ->
-    {ok, Scanned, _EndLocation} = erl_scan:string(Expr),
-    {ok, Parsed} = erl_parse:parse_exprs(Scanned),
-    {value, Value, NewBindings} = erl_eval:exprs(Parsed, Bindings),
-    bind(Value, Parsed, NewBindings).
 
 -spec bind(term(), [erl_parse:abstract_expr()], map()) -> term().
 
