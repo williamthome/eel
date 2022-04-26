@@ -42,23 +42,23 @@
 -spec scan(binary()) -> tokens().
 
 scan(Bin) ->
-    scan(0, Bin, []).
+    scan([0], 0, Bin, []).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
--spec scan(level(), binary(), tokens()) -> tokens().
+-spec scan([level()], non_neg_integer(), binary(), tokens()) -> tokens().
 
-scan(_Level, <<>>, Tokens) ->
+scan(_Levels, _ExprCount, <<>>, Tokens) ->
     lists:reverse(Tokens);
-scan(Level, <<"<%", T/binary>>, Tokens) ->
-    {NewLevel, Token, Rest} = guess_token(Level, T),
-    scan(NewLevel, Rest, [Token | Tokens]);
-scan(Level, Bin, Tokens) ->
+scan(Levels, ExprCount, <<"<%", T/binary>>, Tokens) ->
+    {NewLevels, NewExprCount, Token, Rest} = guess_token(Levels, ExprCount, T),
+    scan(NewLevels, NewExprCount, Rest, [Token | Tokens]);
+scan([Level | _] = Levels, ExprCount, Bin, Tokens) ->
     {Syntax, Rest} = guess_syntax(Bin),
     Token = {Level, text, Syntax},
-    scan(Level, Rest, [Token | Tokens]).
+    scan(Levels, ExprCount, Rest, [Token | Tokens]).
 
 -spec guess_syntax(binary()) -> {syntax(), binary()}.
 
@@ -76,42 +76,42 @@ guess_syntax(<<H, Rest/binary>>, Syntax) ->
 guess_syntax(<<>>, Syntax) ->
     {Syntax, <<>>}.
 
--spec guess_token(level(), binary()) -> {level(), token(), binary()}.
+-spec guess_token([level()], non_neg_integer(), binary()) ->
+    {[level()], non_neg_integer(), token(), binary()}.
 
-guess_token(Level, Bin) ->
+guess_token([Level | OtherLevels] = AllLevels, ExprCount, Bin) ->
     {Syntax, Rest} = guess_syntax(Bin),
     FirstByte = binary:first(Syntax),
     LastByte = binary:last(Syntax),
     Space = 32,
-    {ResultLevel, ResultToken} =
+    {ResultLevels, ResultExprCount, ResultToken} =
         case LastByte =:= $= of
             true ->
                 case FirstByte =:= Space of
                     true ->
-                        NewLevel = Level - 1,
                         NewSyntax = bin_drop_last(Syntax),
                         Token = {Level, end_expr, NewSyntax},
-                        {NewLevel, Token};
+                        {OtherLevels, ExprCount, Token};
                     false ->
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first_and_last(Syntax),
-                        Token = {Level + 1, expr, Marker, NewSyntax},
-                        {Level, Token}
+                        Token = {ExprCount + 1, expr, Marker, NewSyntax},
+                        {AllLevels, ExprCount + 1, Token}
                 end;
             false ->
                 case FirstByte =:= Space of
                     true ->
                         Token = {Level, mid_expr, Syntax},
-                        {Level, Token};
+                        {AllLevels, ExprCount, Token};
                     false ->
-                        NewLevel = Level + 1,
+                        NewLevel = ExprCount + 1,
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first(Syntax),
-                        Token = {Level + 1, start_expr, Marker, NewSyntax},
-                        {NewLevel, Token}
+                        Token = {ExprCount + 1, start_expr, Marker, NewSyntax},
+                        {[NewLevel | AllLevels], ExprCount + 1, Token}
                 end
         end,
-    {ResultLevel, ResultToken, Rest}.
+    {ResultLevels, ResultExprCount, ResultToken, Rest}.
 
 -spec bin_reverse(binary()) -> binary().
 
@@ -160,8 +160,23 @@ scan_test() ->
             {2, expr, <<"#">>, <<" Maybe a comment ">>},
             {1, text, <<"<li>">>},
             {1, mid_expr, <<" Bar ">>},
-            {2, expr, <<"=">>, <<" Baz. ">>},
-            {1, text, <<"</li>">>},
+            {3, expr, <<"=">>, <<" Baz. ">>},
+            {1, text, <<"</li><ul>">>},
+            {4, start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
+            {4, mid_expr, <<" case Foo of ">>},
+            {4, mid_expr, <<" true -> ">>},
+            {4, text, <<"<li>">>},
+            {4, mid_expr, <<" foo; ">>},
+            {4, text, <<"</li>">>},
+            {4, mid_expr, <<" Bar -> ">>},
+            {5, expr, <<"#">>, <<" Maybe a comment ">>},
+            {4, text, <<"<li>">>},
+            {4, mid_expr, <<" Bar ">>},
+            {6, expr, <<"=">>, <<" Baz. ">>},
+            {4, text, <<"</li>">>},
+            {4, mid_expr, <<" end ">>},
+            {4, end_expr, <<" end, List). ">>},
+            {1, text, <<"</ul>">>},
             {1, mid_expr, <<" end ">>},
             {1, end_expr, <<" end, List). ">>},
             {0, text, <<"</ul>">>}
@@ -176,6 +191,17 @@ scan_test() ->
                 "<% Bar -> %>"
                 "<%# Maybe a comment =%>"
                 "<li><% Bar %><%= Baz. =%></li>"
+                "<ul>"
+                "<%= lists:map(fun(Foo) -> %>"
+                "<% case Foo of %>"
+                "<% true -> %>"
+                "<li><% foo; %></li>"
+                "<% Bar -> %>"
+                "<%# Maybe a comment =%>"
+                "<li><% Bar %><%= Baz. =%></li>"
+                "<% end %>"
+                "<% end, List). =%>"
+                "</ul>"
                 "<% end %>"
                 "<% end, List). =%>"
                 "</ul>"
