@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @doc Embedded Erlang.
+%%% @doc Embedded Erlang library.
 %%%
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @end
