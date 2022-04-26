@@ -30,7 +30,19 @@
     tokens/0
 ]).
 
--export([scan/1]).
+-export([
+    scan/1,
+    gen_text_struct/1,
+    gen_expr_struct/2,
+    gen_start_expr_struct/2,
+    gen_mid_expr_struct/1,
+    gen_end_expr_struct/1,
+    gen_text_token/2,
+    gen_expr_token/3,
+    gen_start_expr_token/3,
+    gen_mid_expr_token/2,
+    gen_end_expr_token/2
+]).
 
 %%%=============================================================================
 %%% API
@@ -44,6 +56,69 @@
 
 scan(Bin) ->
     scan([0], 0, Bin, []).
+
+%%%-----------------------------------------------------------------------------
+%%% Struct generators
+%%%-----------------------------------------------------------------------------
+
+-spec gen_text_struct(syntax()) -> struct().
+
+gen_text_struct(Syntax) ->
+    gen_struct(text, <<>>, Syntax).
+
+-spec gen_expr_struct(marker(), syntax()) -> struct().
+
+gen_expr_struct(Marker, Syntax) ->
+    gen_struct(expr, Marker, Syntax).
+
+-spec gen_start_expr_struct(marker(), syntax()) -> struct().
+
+gen_start_expr_struct(Marker, Syntax) ->
+    gen_struct(start_expr, Marker, Syntax).
+
+-spec gen_mid_expr_struct(syntax()) -> struct().
+
+gen_mid_expr_struct(Syntax) ->
+    gen_struct(mid_expr, <<>>, Syntax).
+
+-spec gen_end_expr_struct(syntax()) -> struct().
+
+gen_end_expr_struct(Syntax) ->
+    gen_struct(end_expr, <<>>, Syntax).
+
+%%%-----------------------------------------------------------------------------
+%%% Token generators
+%%%-----------------------------------------------------------------------------
+
+-spec gen_text_token(depth(), syntax()) -> token().
+
+gen_text_token(Depth, Syntax) ->
+    Struct = gen_text_struct(Syntax),
+    gen_token(Depth, Struct).
+
+-spec gen_expr_token(depth(), marker(), syntax()) -> token().
+
+gen_expr_token(Depth, Marker, Syntax) ->
+    Struct = gen_expr_struct(Marker, Syntax),
+    gen_token(Depth, Struct).
+
+-spec gen_start_expr_token(depth(), marker(), syntax()) -> token().
+
+gen_start_expr_token(Depth, Marker, Syntax) ->
+    Struct = gen_start_expr_struct(Marker, Syntax),
+    gen_token(Depth, Struct).
+
+-spec gen_mid_expr_token(depth(), syntax()) -> token().
+
+gen_mid_expr_token(Depth, Syntax) ->
+    Struct = gen_mid_expr_struct(Syntax),
+    gen_token(Depth, Struct).
+
+-spec gen_end_expr_token(depth(), syntax()) -> token().
+
+gen_end_expr_token(Depth, Syntax) ->
+    Struct = gen_end_expr_struct(Syntax),
+    gen_token(Depth, Struct).
 
 %%%=============================================================================
 %%% Internal functions
@@ -59,7 +134,7 @@ scan(Depths, ExprCount, <<"<%", T/binary>>, Tokens) ->
     scan(NewDepths, NewExprCount, Rest, [NewToken | Tokens]);
 scan([Depth | _] = Depths, ExprCount, Bin, Tokens) ->
     {Syntax, Rest} = guess_syntax(Bin),
-    Token = {Depth, {text, <<>>, Syntax}},
+    Token = gen_text_token(Depth, Syntax),
     scan(Depths, ExprCount, Rest, [Token | Tokens]).
 
 -spec guess_syntax(binary()) -> {syntax(), binary()}.
@@ -92,24 +167,26 @@ guess_token([Depth | LessDeep] = AllDepths, ExprCount, Bin) ->
                 case FirstByte =:= Space of
                     true ->
                         NewSyntax = bin_drop_last(Syntax),
-                        Token = {Depth, {end_expr, <<>>, NewSyntax}},
+                        Token = gen_end_expr_token(Depth, NewSyntax),
                         {LessDeep, ExprCount, Token};
                     false ->
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first_and_last(Syntax),
-                        Token = {ExprCount + 1, {expr, Marker, NewSyntax}},
+                        Token = gen_expr_token(ExprCount + 1, Marker, NewSyntax),
                         {AllDepths, ExprCount + 1, Token}
                 end;
             false ->
                 case FirstByte =:= Space of
                     true ->
-                        Token = {Depth, {mid_expr, <<>>, Syntax}},
+                        Token = gen_mid_expr_token(Depth, Syntax),
                         {AllDepths, ExprCount, Token};
                     false ->
                         Deeper = ExprCount + 1,
                         Marker = byte_to_binary(FirstByte),
                         NewSyntax = bin_drop_first(Syntax),
-                        Token = {ExprCount + 1, {start_expr, Marker, NewSyntax}},
+                        Token = gen_start_expr_token(
+                            ExprCount + 1, Marker, NewSyntax
+                        ),
                         {[Deeper | AllDepths], ExprCount + 1, Token}
                 end
         end,
@@ -141,6 +218,16 @@ bin_drop_first_and_last(<<_H, T/binary>>) ->
 
 byte_to_binary(Byte) ->
     list_to_binary(io_lib:format("~c", [Byte])).
+
+-spec gen_struct(symbol(), marker(), syntax()) -> struct().
+
+gen_struct(Symbol, Marker, Syntax) ->
+    {Symbol, Marker, Syntax}.
+
+-spec gen_token(depth(), struct()) -> token().
+
+gen_token(Depth, Struct) ->
+    {Depth, Struct}.
 
 %%%=============================================================================
 %%% Tests
