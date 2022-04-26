@@ -71,7 +71,7 @@ sort(Tokens) ->
     lists:sort(fun depth_compare/2, Tokens).
 
 %%------------------------------------------------------------------------------
-%% @doc Group tokens by depth.
+%% @doc Groups tokens by depth.
 %% @end
 %%------------------------------------------------------------------------------
 -spec group_by_depth(tokens()) -> #{depth() => tokens()}.
@@ -79,16 +79,28 @@ sort(Tokens) ->
 group_by_depth(Tokens) ->
     eel_utils:group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
 
+%%------------------------------------------------------------------------------
+%% @doc Parses tokens to expression.
+%% @end
+%%------------------------------------------------------------------------------
 -spec parse_expr(tokens()) -> string().
 
 parse_expr(Tokens) ->
     do_parse_expr(Tokens, undefined, []).
 
+%%------------------------------------------------------------------------------
+%% @doc Evaluates an expression to string.
+%% @end
+%%------------------------------------------------------------------------------
 -spec eval_expr(string()) -> string().
 
 eval_expr(Expr) ->
     eval_expr(Expr, #{}).
 
+%%------------------------------------------------------------------------------
+%% @doc Evaluates an expression to string by binding a map of vars.
+%% @end
+%%------------------------------------------------------------------------------
 -spec eval_expr(string(), map()) -> string().
 
 eval_expr(Expr, Bindings) ->

@@ -16,14 +16,26 @@
     group_by/2
 ]).
 
+%%------------------------------------------------------------------------------
+%% @doc Parses any term to string.
+%% @end
+%%------------------------------------------------------------------------------
 -spec term_to_string(term()) -> string().
 
 term_to_string(Term) -> io_lib:format("~p", [Term]).
 
+%%------------------------------------------------------------------------------
+%% @doc Parses a term to string analyzing its type.
+%% @end
+%%------------------------------------------------------------------------------
 -spec to_string(term()) -> string().
 
 to_string(Value) -> to_string(Value, #{}).
 
+%%------------------------------------------------------------------------------
+%% @doc Parses with options a term to string analyzing its type.
+%% @end
+%%------------------------------------------------------------------------------
 -spec to_string(term(), map()) -> string().
 
 to_string(undefined, _Options) ->
@@ -88,6 +100,10 @@ to_string(Value, _Options) when is_port(Value) ->
 to_string(Value, _Options) ->
     term_to_string(Value).
 
+%%------------------------------------------------------------------------------
+%% @doc Groups a list to map finding the key by a fun/1.
+%% @end
+%%------------------------------------------------------------------------------
 -spec group_by(fun((Elem :: T) -> Key), [T]) -> #{Key => [T]}.
 
 group_by(Fun, List) when is_function(Fun, 1) ->
