@@ -30,13 +30,18 @@
     tokens/0
 ]).
 
+% API
 -export([
     scan/1,
     sort/1,
     group_by_depth/1,
     parse_expr/1,
     eval/1, eval/2,
-    eval_expr/1, eval_expr/2,
+    eval_expr/1, eval_expr/2
+]).
+
+% Generators
+-export([
     gen_text_struct/1,
     gen_expr_struct/2,
     gen_start_expr_struct/2,
@@ -127,6 +132,10 @@ eval_expr(Expr) ->
 
 eval_expr(Expr, Bindings) ->
     eel_utils:to_string(eval(Expr, Bindings)).
+
+%%%=============================================================================
+%%% Generators
+%%%=============================================================================
 
 %%%-----------------------------------------------------------------------------
 %%% Struct generators
