@@ -10,15 +10,16 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-type level() :: non_neg_integer().
 -type symbol() :: text | expr | start_expr | mid_expr | end_expr.
 -type marker() :: binary().
 -type syntax() :: binary().
 -type token() ::
-    {text, syntax()}
-    | {expr, marker(), syntax()}
-    | {start_expr, marker(), syntax()}
-    | {mid_expr, syntax()}
-    | {end_expr, syntax()}.
+    {level(), text, syntax()}
+    | {level(), expr, marker(), syntax()}
+    | {level(), start_expr, marker(), syntax()}
+    | {level(), mid_expr, syntax()}
+    | {level(), end_expr, syntax()}.
 -type tokens() :: [token()].
 
 -export_type([
@@ -41,23 +42,23 @@
 -spec scan(binary()) -> tokens().
 
 scan(Bin) ->
-    scan(Bin, []).
+    scan(0, Bin, []).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
--spec scan(binary(), tokens()) -> tokens().
+-spec scan(level(), binary(), tokens()) -> tokens().
 
-scan(<<>>, Tokens) ->
+scan(_Level, <<>>, Tokens) ->
     lists:reverse(Tokens);
-scan(<<"<%", T/binary>>, Tokens) ->
-    {Token, Rest} = guess_token(T),
-    scan(Rest, [Token | Tokens]);
-scan(Bin, Tokens) ->
+scan(Level, <<"<%", T/binary>>, Tokens) ->
+    {NewLevel, Token, Rest} = guess_token(Level, T),
+    scan(NewLevel, Rest, [Token | Tokens]);
+scan(Level, Bin, Tokens) ->
     {Syntax, Rest} = guess_syntax(Bin),
-    Token = {text, Syntax},
-    scan(Rest, [Token | Tokens]).
+    Token = {Level, text, Syntax},
+    scan(Level, Rest, [Token | Tokens]).
 
 -spec guess_syntax(binary()) -> {syntax(), binary()}.
 
@@ -75,33 +76,42 @@ guess_syntax(<<H, Rest/binary>>, Syntax) ->
 guess_syntax(<<>>, Syntax) ->
     {Syntax, <<>>}.
 
--spec guess_token(binary()) -> {token(), binary()}.
+-spec guess_token(level(), binary()) -> {level(), token(), binary()}.
 
-guess_token(Bin) ->
+guess_token(Level, Bin) ->
     {Syntax, Rest} = guess_syntax(Bin),
     First = binary:first(Syntax),
     Last = binary:last(Syntax),
     Space = 32,
-    Token =
+    {ResultLevel, ResultToken} =
         case Last =:= $= of
             true ->
                 case First =:= Space of
                     true ->
-                        {end_expr, bin_drop_last(Syntax)};
+                        NewLevel = Level - 1,
+                        NewSyntax = bin_drop_last(Syntax),
+                        Token = {Level, end_expr, NewSyntax},
+                        {NewLevel, Token};
                     false ->
                         Marker = byte_to_binary(First),
-                        {expr, Marker, bin_drop_first_and_last(Syntax)}
+                        NewSyntax = bin_drop_first_and_last(Syntax),
+                        Token = {Level + 1, expr, Marker, NewSyntax},
+                        {Level, Token}
                 end;
             false ->
                 case First =:= Space of
                     true ->
-                        {mid_expr, Syntax};
+                        Token = {Level, mid_expr, Syntax},
+                        {Level, Token};
                     false ->
+                        NewLevel = Level + 1,
                         Marker = byte_to_binary(First),
-                        {start_expr, Marker, bin_drop_first(Syntax)}
+                        NewSyntax = bin_drop_first(Syntax),
+                        Token = {Level + 1, start_expr, Marker, NewSyntax},
+                        {NewLevel, Token}
                 end
         end,
-    {Token, Rest}.
+    {ResultLevel, ResultToken, Rest}.
 
 -spec bin_reverse(binary()) -> binary().
 
@@ -139,22 +149,22 @@ byte_to_binary(Byte) ->
 scan_test() ->
     ?assertEqual(
         [
-            {text, <<"<ul>">>},
-            {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
-            {start_expr, <<"=">>, <<" case Foo of ">>},
-            {mid_expr, <<" true -> ">>},
-            {text, <<"<li>">>},
-            {mid_expr, <<" foo; ">>},
-            {text, <<"</li>">>},
-            {mid_expr, <<" Bar -> ">>},
-            {expr, <<"#">>, <<" Maybe a comment ">>},
-            {text, <<"<li>">>},
-            {mid_expr, <<" Bar ">>},
-            {expr, <<"=">>, <<" Baz. ">>},
-            {text, <<"</li>">>},
-            {end_expr, <<" end. ">>},
-            {end_expr, <<" end, List). ">>},
-            {text, <<"</ul>">>}
+            {0, text, <<"<ul>">>},
+            {1, start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
+            {2, start_expr, <<"=">>, <<" case Foo of ">>},
+            {2, mid_expr, <<" true -> ">>},
+            {2, text, <<"<li>">>},
+            {2, mid_expr, <<" foo; ">>},
+            {2, text, <<"</li>">>},
+            {2, mid_expr, <<" Bar -> ">>},
+            {3, expr, <<"#">>, <<" Maybe a comment ">>},
+            {2, text, <<"<li>">>},
+            {2, mid_expr, <<" Bar ">>},
+            {3, expr, <<"=">>, <<" Baz. ">>},
+            {2, text, <<"</li>">>},
+            {2, end_expr, <<" end. ">>},
+            {1, end_expr, <<" end, List). ">>},
+            {0, text, <<"</ul>">>}
         ],
         scan(
             <<
