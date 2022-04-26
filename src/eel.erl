@@ -151,18 +151,18 @@ scan_test() ->
         [
             {0, text, <<"<ul>">>},
             {1, start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>},
-            {2, start_expr, <<"=">>, <<" case Foo of ">>},
-            {2, mid_expr, <<" true -> ">>},
-            {2, text, <<"<li>">>},
-            {2, mid_expr, <<" foo; ">>},
-            {2, text, <<"</li>">>},
-            {2, mid_expr, <<" Bar -> ">>},
-            {3, expr, <<"#">>, <<" Maybe a comment ">>},
-            {2, text, <<"<li>">>},
-            {2, mid_expr, <<" Bar ">>},
-            {3, expr, <<"=">>, <<" Baz. ">>},
-            {2, text, <<"</li>">>},
-            {2, end_expr, <<" end. ">>},
+            {1, mid_expr, <<" case Foo of ">>},
+            {1, mid_expr, <<" true -> ">>},
+            {1, text, <<"<li>">>},
+            {1, mid_expr, <<" foo; ">>},
+            {1, text, <<"</li>">>},
+            {1, mid_expr, <<" Bar -> ">>},
+            {2, expr, <<"#">>, <<" Maybe a comment ">>},
+            {1, text, <<"<li>">>},
+            {1, mid_expr, <<" Bar ">>},
+            {2, expr, <<"=">>, <<" Baz. ">>},
+            {1, text, <<"</li>">>},
+            {1, mid_expr, <<" end ">>},
             {1, end_expr, <<" end, List). ">>},
             {0, text, <<"</ul>">>}
         ],
@@ -170,14 +170,13 @@ scan_test() ->
             <<
                 "<ul>"
                 "<%= lists:map(fun(Foo) -> %>"
-                "<%= case Foo of %>"
+                "<% case Foo of %>"
                 "<% true -> %>"
                 "<li><% foo; %></li>"
                 "<% Bar -> %>"
                 "<%# Maybe a comment =%>"
                 "<li><% Bar %><%= Baz. =%></li>"
-                % maybe "<% end %>?"
-                "<% end. =%>"
+                "<% end %>"
                 "<% end, List). =%>"
                 "</ul>"
             >>
