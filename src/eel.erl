@@ -6,378 +6,360 @@
 %%%-----------------------------------------------------------------------------
 -module(eel).
 
+-dialyzer({nowarn_function, to_binary/2}).
+
+-export([render/2, render_file/2]).
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--type depth() :: non_neg_integer().
--type depths() :: [depth()].
--type symbol() :: text | expr | start_expr | mid_expr | end_expr.
--type marker() :: binary().
--type syntax() :: binary().
--type struct() :: {symbol(), marker(), syntax()}.
--type token() :: {depth(), struct()}.
--type tokens() :: [token()].
+-spec render(Bin :: binary(), Bindings :: map()) -> binary().
 
--export_type([
-    depth/0,
-    depths/0,
-    symbol/0,
-    marker/0,
-    syntax/0,
-    struct/0,
-    token/0,
-    tokens/0
-]).
+render(Bin, Bindings) ->
+    {Static, Dynamic0} = resolve_html(Bin, Bindings),
+    Dynamic = lists:map(fun(Expr) -> eval(Expr, Bindings) end, Dynamic0),
+    merge_bin_lists(Static, Dynamic).
 
-% API
--export([
-    scan/1,
-    sort/1,
-    group_by_depth/1,
-    parse_expr/1,
-    eval/1, eval/2,
-    eval_expr/1, eval_expr/2
-]).
+-spec render_file(FileName :: file:name_all(), Bindings :: map()) -> binary().
 
-% Generators
--export([
-    gen_text_struct/1,
-    gen_expr_struct/2,
-    gen_start_expr_struct/2,
-    gen_mid_expr_struct/1,
-    gen_end_expr_struct/1,
-    gen_text_token/2,
-    gen_expr_token/3,
-    gen_start_expr_token/3,
-    gen_mid_expr_token/2,
-    gen_end_expr_token/2
-]).
-
-%%%=============================================================================
-%%% API
-%%%=============================================================================
-
-%%------------------------------------------------------------------------------
-%% @doc Scans characters to tokens.
-%% @end
-%%------------------------------------------------------------------------------
--spec scan(binary()) -> tokens().
-
-scan(Bin) ->
-    scan([0], 0, Bin, []).
-
-%%------------------------------------------------------------------------------
-%% @doc Sorts tokens from deeper to less deep.
-%% @end
-%%------------------------------------------------------------------------------
--spec sort(tokens()) -> tokens().
-
-sort(Tokens) ->
-    lists:sort(fun depth_compare/2, Tokens).
-
-%%------------------------------------------------------------------------------
-%% @doc Groups tokens by depth.
-%% @end
-%%------------------------------------------------------------------------------
--spec group_by_depth(tokens()) -> #{depth() => tokens()}.
-
-group_by_depth(Tokens) ->
-    eel_utils:group_by(fun({Depth, _Struct}) -> Depth end, Tokens).
-
-%%------------------------------------------------------------------------------
-%% @doc Parses tokens to expression.
-%% @end
-%%------------------------------------------------------------------------------
--spec parse_expr(tokens()) -> string().
-
-parse_expr(Tokens) ->
-    do_parse_expr(Tokens, undefined, []).
-
-%%------------------------------------------------------------------------------
-%% @doc Evaluates an expression to term.
-%% @end
-%%------------------------------------------------------------------------------
--spec eval(string()) -> term().
-
-eval(Expr) ->
-    eval(Expr, #{}).
-
-%%------------------------------------------------------------------------------
-%% @doc Evaluates an expression to term by binding a map of vars.
-%% @end
-%%------------------------------------------------------------------------------
--spec eval(string(), map()) -> term().
-
-eval(Expr, Bindings) ->
-    {ok, Scanned, _EndLocation} = erl_scan:string(Expr),
-    {ok, Parsed} = erl_parse:parse_exprs(Scanned),
-    {value, Value, NewBindings} = erl_eval:exprs(Parsed, Bindings),
-    bind(Value, Parsed, NewBindings).
-
-%%------------------------------------------------------------------------------
-%% @doc Evaluates an expression to string.
-%% @end
-%%------------------------------------------------------------------------------
--spec eval_expr(string()) -> string().
-
-eval_expr(Expr) ->
-    eval_expr(Expr, #{}).
-
-%%------------------------------------------------------------------------------
-%% @doc Evaluates an expression to string by binding a map of vars.
-%% @end
-%%------------------------------------------------------------------------------
--spec eval_expr(string(), map()) -> string().
-
-eval_expr(Expr, Bindings) ->
-    eel_utils:to_string(eval(Expr, Bindings)).
-
-%%%=============================================================================
-%%% Generators
-%%%=============================================================================
-
-%%%-----------------------------------------------------------------------------
-%%% Struct generators
-%%%-----------------------------------------------------------------------------
-
--spec gen_text_struct(syntax()) -> struct().
-
-gen_text_struct(Syntax) ->
-    gen_struct(text, <<>>, Syntax).
-
--spec gen_expr_struct(marker(), syntax()) -> struct().
-
-gen_expr_struct(Marker, Syntax) ->
-    gen_struct(expr, Marker, Syntax).
-
--spec gen_start_expr_struct(marker(), syntax()) -> struct().
-
-gen_start_expr_struct(Marker, Syntax) ->
-    gen_struct(start_expr, Marker, Syntax).
-
--spec gen_mid_expr_struct(syntax()) -> struct().
-
-gen_mid_expr_struct(Syntax) ->
-    gen_struct(mid_expr, <<>>, Syntax).
-
--spec gen_end_expr_struct(syntax()) -> struct().
-
-gen_end_expr_struct(Syntax) ->
-    gen_struct(end_expr, <<>>, Syntax).
-
-%%%-----------------------------------------------------------------------------
-%%% Token generators
-%%%-----------------------------------------------------------------------------
-
--spec gen_text_token(depth(), syntax()) -> token().
-
-gen_text_token(Depth, Syntax) ->
-    Struct = gen_text_struct(Syntax),
-    gen_token(Depth, Struct).
-
--spec gen_expr_token(depth(), marker(), syntax()) -> token().
-
-gen_expr_token(Depth, Marker, Syntax) ->
-    Struct = gen_expr_struct(Marker, Syntax),
-    gen_token(Depth, Struct).
-
--spec gen_start_expr_token(depth(), marker(), syntax()) -> token().
-
-gen_start_expr_token(Depth, Marker, Syntax) ->
-    Struct = gen_start_expr_struct(Marker, Syntax),
-    gen_token(Depth, Struct).
-
--spec gen_mid_expr_token(depth(), syntax()) -> token().
-
-gen_mid_expr_token(Depth, Syntax) ->
-    Struct = gen_mid_expr_struct(Syntax),
-    gen_token(Depth, Struct).
-
--spec gen_end_expr_token(depth(), syntax()) -> token().
-
-gen_end_expr_token(Depth, Syntax) ->
-    Struct = gen_end_expr_struct(Syntax),
-    gen_token(Depth, Struct).
+render_file(FileName, Bindings) ->
+    case file:read_file(FileName) of
+        {ok, Bin} -> render(Bin, Bindings);
+        _ -> <<>>
+    end.
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
--spec scan(depths(), non_neg_integer(), binary(), tokens()) -> tokens().
+tokens(Bin) ->
+    do_tokens(Bin, static, []).
 
-scan(_Depths, _ExprCount, <<>>, Tokens) ->
-    lists:reverse(Tokens);
-scan(Depths, ExprCount, <<"<%", T/binary>>, Tokens) ->
-    {NewDepths, NewExprCount, NewToken, Rest} =
-        guess_token(Depths, ExprCount, T),
-    scan(NewDepths, NewExprCount, Rest, [NewToken | Tokens]);
-scan([Depth | _] = Depths, ExprCount, Bin, Tokens) ->
-    {Syntax, Rest} = guess_syntax(Bin),
-    Token = gen_text_token(Depth, Syntax),
-    scan(Depths, ExprCount, Rest, [Token | Tokens]).
+do_tokens(<<"<%", Marker, Bin/binary>>, _, Acc) ->
+    do_tokens(Bin, dynamic_start, [{dynamic, <<Marker>>, <<>>} | Acc]);
+do_tokens(<<MarkerEnd, "%>", Bin/binary>>, dynamic_start, [{dynamic, MarkerStart, Expr} | Acc]) ->
+    do_tokens(Bin, dynamic_end, [{dynamic, {MarkerStart, <<MarkerEnd>>}, Expr} | Acc]);
+do_tokens(<<H, Bin/binary>>, dynamic_end, [{dynamic, Marker, Expr} | Acc]) ->
+    do_tokens(Bin, static, [{static, <<H>>}, {dynamic, Marker, Expr} | Acc]);
+do_tokens(<<H, Bin/binary>>, Kind, [{static, Text} | Acc]) ->
+    do_tokens(Bin, Kind, [{static, <<Text/binary, H>>} | Acc]);
+do_tokens(<<H, Bin/binary>>, Kind, [{Type, Marker, Expr} | Acc]) ->
+    do_tokens(Bin, Kind, [{Type, Marker, <<Expr/binary, H>>} | Acc]);
+do_tokens(<<H, Bin/binary>>, static, []) ->
+    do_tokens(Bin, static, [{static, <<H>>}]);
+do_tokens(<<>>, _, Acc) ->
+    lists:reverse(Acc).
 
--spec guess_syntax(binary()) -> {syntax(), binary()}.
+parse_tokens(Tokens) ->
+    do_parse_tokens(Tokens, []).
 
-guess_syntax(Bin) ->
-    guess_syntax(Bin, <<>>).
+do_parse_tokens([{static, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{text, Expr} | Acc]);
+do_parse_tokens([{dynamic, {<<"=">>, <<".">>}, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{{expr, inline}, Expr} | Acc]);
+do_parse_tokens([{dynamic, {<<"=">>, <<" ">>}, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{{expr, start}, <<Expr/binary, 32>>} | Acc]);
+do_parse_tokens([{dynamic, {<<" ">>, <<" ">>}, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{{expr, continue}, <<32, Expr/binary, 32>>} | Acc]);
+do_parse_tokens([{dynamic, {<<" ">>, <<".">>}, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{{expr, 'end'}, <<32, Expr/binary>>} | Acc]);
+do_parse_tokens([{dynamic, {<<"#">>, <<".">>}, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{comment, Expr} | Acc]);
+do_parse_tokens([{dynamic, Marker, Expr} | Tokens], Acc) ->
+    do_parse_tokens(Tokens, [{unknown, Marker, Expr} | Acc]);
+do_parse_tokens([], Acc) ->
+    lists:reverse(Acc).
 
--spec guess_syntax(binary(), binary()) -> {syntax(), binary()}.
+resolve_parsed_tokens([Token | _] = Tokens) ->
+    do_resolve_parsed_tokens(Tokens, Token, root, {[], []}).
 
-guess_syntax(<<"%>", Rest/binary>>, Syntax) ->
-    {Syntax, Rest};
-guess_syntax(<<"<%", _/binary>> = Rest, Syntax) ->
-    {Syntax, Rest};
-guess_syntax(<<H, Rest/binary>>, Syntax) ->
-    guess_syntax(Rest, <<Syntax/binary, H>>);
-guess_syntax(<<>>, Syntax) ->
-    {Syntax, <<>>}.
-
--spec guess_token(depths(), non_neg_integer(), binary()) ->
-    {depths(), non_neg_integer(), token(), binary()}.
-
-guess_token([Depth | LessDeep] = AllDepths, ExprCount, Bin) ->
-    {Syntax, Rest} = guess_syntax(Bin),
-    FirstByte = binary:first(Syntax),
-    LastByte = binary:last(Syntax),
-    Space = 32,
-    {NewDepths, NewExprCount, NewToken} =
-        case LastByte =:= $= of
-            true ->
-                case FirstByte =:= Space of
-                    true ->
-                        NewSyntax = bin_drop_last(Syntax),
-                        Token = gen_end_expr_token(Depth, NewSyntax),
-                        {LessDeep, ExprCount, Token};
-                    false ->
-                        Marker = byte_to_binary(FirstByte),
-                        NewSyntax = bin_drop_first_and_last(Syntax),
-                        Token = gen_expr_token(ExprCount + 1, Marker, NewSyntax),
-                        {AllDepths, ExprCount + 1, Token}
-                end;
-            false ->
-                case FirstByte =:= Space of
-                    true ->
-                        Token = gen_mid_expr_token(Depth, Syntax),
-                        {AllDepths, ExprCount, Token};
-                    false ->
-                        Deeper = ExprCount + 1,
-                        Marker = byte_to_binary(FirstByte),
-                        NewSyntax = bin_drop_first(Syntax),
-                        Token = gen_start_expr_token(
-                            ExprCount + 1, Marker, NewSyntax
-                        ),
-                        {[Deeper | AllDepths], ExprCount + 1, Token}
-                end
+do_resolve_parsed_tokens([{text, Text} = Token | Tokens], _Previous, root, {Static, Dynamic}) ->
+    do_resolve_parsed_tokens(Tokens, Token, root, {[Text | Static], Dynamic});
+do_resolve_parsed_tokens(
+    [{text, Text} = Token | Tokens], _Previous, expr, {Static, [{EFun, EBody0} | Dynamic]}
+) ->
+    EBody =
+        case EBody0 of
+            [] -> [Text];
+            [BodyHead | BodyTail] -> [<<BodyHead/binary, Text/binary>> | BodyTail]
         end,
-    {NewDepths, NewExprCount, NewToken, Rest}.
-
--spec bin_reverse(binary()) -> binary().
-
-bin_reverse(Bin) ->
-    binary:encode_unsigned(binary:decode_unsigned(Bin, little)).
-
--spec bin_drop_first(binary()) -> binary().
-
-bin_drop_first(<<_H, T/binary>>) ->
-    T.
-
--spec bin_drop_last(binary()) -> binary().
-
-bin_drop_last(Bin) ->
-    Bin1 = bin_reverse(Bin),
-    Bin2 = bin_drop_first(Bin1),
-    bin_reverse(Bin2).
-
--spec bin_drop_first_and_last(binary()) -> binary().
-
-bin_drop_first_and_last(<<_H, T/binary>>) ->
-    bin_drop_last(T).
-
--spec byte_to_binary(byte()) -> binary().
-
-byte_to_binary(Byte) ->
-    list_to_binary(io_lib:format("~c", [Byte])).
-
--spec gen_struct(symbol(), marker(), syntax()) -> struct().
-
-gen_struct(Symbol, Marker, Syntax) ->
-    {Symbol, Marker, Syntax}.
-
--spec gen_token(depth(), struct()) -> token().
-
-gen_token(Depth, Struct) ->
-    {Depth, Struct}.
-
--spec depth_compare(token(), token()) -> boolean().
-
-depth_compare({ADepth, _AStruct}, {BDepth, _BStruct}) ->
-    ADepth >= BDepth.
-
--spec do_parse_expr(tokens(), undefined | token(), [string()]) -> string().
-
-do_parse_expr(
-    [{_Depth, {text, _Marker, _Syntax}} = Token | Tokens],
-    _Prev,
-    Acc
+    do_resolve_parsed_tokens(Tokens, Token, expr, {Static, [{EFun, EBody} | Dynamic]});
+do_resolve_parsed_tokens([{comment, _Comment} = Token | Tokens], _Previous, In, Acc) ->
+    do_resolve_parsed_tokens(Tokens, Token, In, Acc);
+do_resolve_parsed_tokens(
+    [{{expr, inline}, Expr} = Token | Tokens], Previous, root, {Static0, Dynamic}
 ) ->
-    %% TODO: Funs and texts must be merged.
-    %% Situations:
-    %%  - text + fun
-    %%  - fun + text
-    %% To merge, Fun must be checked if:
-    %%  - Symbol be [mid_expr, expr];
-    %%  - not ends with [, end, .].
-    %% e.g.:
-    %%      "<% true -> %>"
-    %%      "<li><% foo; %></li>"
-    %%      "<% Bar -> %>"
-    %% ... must be parsed as:
-    %%      " true ->  \"<li>foo></li>\";  Bar -> "
-    do_parse_expr(Tokens, Token, Acc);
-do_parse_expr(
-    [{_Depth, {_Symbol, _Marker, Syntax}} = Token | Tokens],
-    _Prev,
-    Acc
+    Static =
+        case Previous of
+            {{expr, _}, _} -> [<<>> | Static0];
+            _ -> Static0
+        end,
+    do_resolve_parsed_tokens(Tokens, Token, root, {Static, [Expr | Dynamic]});
+do_resolve_parsed_tokens(
+    [{{expr, inline}, Expr0} = Token | Tokens], Previous, expr, {Static, [{EFun, EBody0} | Dynamic]}
 ) ->
-    SyntaxAsString = eel_utils:to_string(Syntax),
-    do_parse_expr(Tokens, Token, [SyntaxAsString | Acc]);
-do_parse_expr([], _Prev, Acc) ->
-    string:join(lists:reverse(Acc), []).
+    Expr = <<"<%=", Expr0/binary, ".%>">>,
+    EBody =
+        case Previous of
+            {text, _Text} ->
+                case EBody0 of
+                    [] -> [Expr];
+                    [BodyHead | BodyTail] -> [<<BodyHead/binary, Expr/binary>> | BodyTail]
+                end;
+            {{expr, _}, _} ->
+                [Expr | EBody0]
+        end,
+    do_resolve_parsed_tokens(Tokens, Token, expr, {Static, [{EFun, EBody} | Dynamic]});
+do_resolve_parsed_tokens(
+    [{{expr, start}, Expr} = Token | Tokens], Previous, root, {Static0, Dynamic}
+) ->
+    Static =
+        case Previous of
+            {{expr, _}, _} -> [<<>> | Static0];
+            _ -> Static0
+        end,
+    do_resolve_parsed_tokens(Tokens, Token, expr, {Static, [{[Expr], []} | Dynamic]});
+do_resolve_parsed_tokens(
+    [{{expr, continue}, Expr} = Token | Tokens],
+    Previous,
+    expr,
+    {Static, [{[EFunHead | EFunTail] = EFun0, EBody} | Dynamic]}
+) ->
+    EFun =
+        case Previous of
+            {{expr, start}, _} -> [<<EFunHead/binary, Expr/binary>> | EFunTail];
+            {{expr, continue}, _} -> [<<EFunHead/binary, Expr/binary>> | EFunTail];
+            _ -> [Expr | EFun0]
+        end,
+    do_resolve_parsed_tokens(Tokens, Token, expr, {Static, [{EFun, EBody} | Dynamic]});
+do_resolve_parsed_tokens(
+    [{{expr, 'end'}, Expr} = Token | Tokens],
+    Previous,
+    expr,
+    {Static, [{[EFunHead | EFunTail] = EFun0, EBody} | Dynamic]}
+) ->
+    EFun =
+        case Previous of
+            {{expr, start}, _} -> [<<EFunHead/binary, Expr/binary>> | EFunTail];
+            {{expr, continue}, _} -> [<<EFunHead/binary, Expr/binary>> | EFunTail];
+            _ -> [Expr | EFun0]
+        end,
+    do_resolve_parsed_tokens(
+        Tokens, Token, root, {Static, [{lists:reverse(EFun), lists:reverse(EBody)} | Dynamic]}
+    );
+do_resolve_parsed_tokens([Token | Tokens], _Previous, In, Acc) ->
+    do_resolve_parsed_tokens(Tokens, Token, In, Acc);
+do_resolve_parsed_tokens([], _Token, _In, {Static, Dynamic}) ->
+    {lists:reverse(Static), lists:reverse(Dynamic)}.
 
--spec bind(term(), [erl_parse:abstract_expr()], map()) -> term().
+to_binary(Value) ->
+    to_binary(Value, undefined).
 
-bind(
-    Fun,
-    [{'fun', _FunAnno, {clauses, [{clause, _ClauseAnno, Vars, _Guards, _Body}]}}],
-    Bindings
-) when is_function(Fun) ->
-    bind_function(Fun, Vars, Bindings);
-bind(Value, _, _Bindings) ->
-    Value.
+to_binary(Bin, _) when is_binary(Bin) ->
+    Bin;
+to_binary(undefined, _) ->
+    <<>>;
+to_binary(Atom, undefined) when is_atom(Atom) ->
+    erlang:atom_to_binary(Atom);
+to_binary(Atom, Encoding) when is_atom(Atom), is_atom(Encoding) ->
+    erlang:atom_to_binary(Atom, Encoding);
+to_binary(Float, undefined) when is_float(Float) ->
+    erlang:float_to_binary(Float);
+to_binary(Float, Options) when is_float(Float), is_list(Options) ->
+    erlang:float_to_binary(Float, Options);
+to_binary(Int, undefined) when is_integer(Int) ->
+    erlang:integer_to_binary(Int);
+to_binary(Int, Base) when is_integer(Int), is_integer(Base) ->
+    erlang:integer_to_binary(Int, Base);
+to_binary(List, undefined) when is_list(List) ->
+    case io_lib:char_list(List) of
+        true ->
+            erlang:list_to_binary(List);
+        false ->
+            BinList = lists:map(fun to_binary/1, List),
+            erlang:iolist_to_binary([<<"[">>, lists:join(", ", BinList), <<"]">>])
+    end;
+to_binary(Fun, _) when is_function(Fun) ->
+    Clauses =
+        case erlang:fun_info(Fun, env) of
+            {env, [{_, _, _, Abstract}]} -> Abstract;
+            {env, [{_, _, _, _, _, Abstract}]} -> Abstract
+        end,
+    AbstractExpr = {'fun', 1, {'clauses', Clauses}},
+    IoList = erl_pp:expr(AbstractExpr),
+    erlang:iolist_to_binary(IoList);
+% to_binary(Map, get) when is_map(Map) ->
+%     map_to_bin_with_get_mark(Map);
+to_binary(Map, _) when is_map(Map) ->
+    map_to_bin_with_put_mark(Map);
+to_binary(Tuple, undefined) when is_tuple(Tuple) ->
+    to_binary(erlang:tuple_to_list(Tuple));
+to_binary(_, _) ->
+    <<>>.
 
--spec bind_function(function(), [erl_parse:abstract_expr()], map()) ->
-    term().
+map_self_to_bin_with_get_mark(Map) ->
+    KVTransform =
+        fun(K, _V) ->
+            Key = key_to_erl_bin(K),
+            Value = string:titlecase(to_binary(K)),
+            map_kv_to_binary_with_get_mark(Key, Value)
+        end,
+    map_self_to_binary(Map, KVTransform).
 
-bind_function(Fun, Vars, Bindings) ->
-    VarNames = get_fun_var_names(Vars),
-    FunBindings = maps:with(VarNames, Bindings),
-    Args = maps:values(FunBindings),
-    apply(Fun, Args).
+% map_self_to_bin_with_put_mark(Map) ->
+%     KVTransform =
+%         fun(K, _V) ->
+%             Key = key_to_erl_bin(K),
+%             Value = string:titlecase(to_binary(K)),
+%             map_kv_to_binary_with_put_mark(Key, Value)
+%         end,
+%     map_self_to_binary(Map, KVTransform).
 
--spec get_fun_var_names([erl_parse:abstract_type()]) -> [atom()].
+map_self_to_binary(Map, KVTransform) ->
+    KeyMap = maps:map(fun(K, _) -> K end, Map),
+    map_to_binary(KeyMap, KVTransform).
 
-get_fun_var_names(Vars) ->
-    get_fun_var_names(Vars, []).
+% map_to_bin_with_get_mark(Map) ->
+%     KVTransform =
+%         fun(K, V) ->
+%             Key = key_to_erl_bin(K),
+%             Value = value_to_erl_bin(V),
+%             map_kv_to_binary_with_get_mark(Key, Value)
+%         end,
+%     map_to_binary(Map, KVTransform).
 
--spec get_fun_var_names([erl_parse:abstract_type()], [atom()]) -> [atom()].
+map_to_bin_with_put_mark(Map) ->
+    KVTransform =
+        fun(K, V) ->
+            Key = key_to_erl_bin(K),
+            Value = value_to_erl_bin(V),
+            map_kv_to_binary_with_put_mark(Key, Value)
+        end,
+    map_to_binary(Map, KVTransform).
 
-get_fun_var_names([{var, _Anno, VarName} | Vars], VarNames) ->
-    get_fun_var_names(Vars, [VarName | VarNames]);
-get_fun_var_names([_Abstract | Vars], VarNames) ->
-    get_fun_var_names(Vars, VarNames);
-get_fun_var_names([], VarNames) ->
-    lists:reverse(VarNames).
+map_to_binary(Map, KVTransform) when is_function(KVTransform, 2) ->
+    KVs =
+        lists:foldl(
+            fun({K, V}, Acc) -> [KVTransform(K, V) | Acc] end,
+            [],
+            maps:to_list(Map)
+        ),
+    erlang:iolist_to_binary([<<"#{">>, lists:join(", ", lists:reverse(KVs)), <<"}">>]).
+
+map_kv_to_binary_with_get_mark(Key, Value) ->
+    map_kv_to_binary(Key, <<":=">>, Value).
+
+map_kv_to_binary_with_put_mark(Key, Value) ->
+    map_kv_to_binary(Key, <<"=>">>, Value).
+
+map_kv_to_binary(Key, Sign, Value) ->
+    <<Key/binary, 32, Sign/binary, 32, Value/binary>>.
+
+key_to_erl_bin(Atom) when is_atom(Atom) ->
+    erl_quote_atom(Atom);
+key_to_erl_bin(Bin) when is_binary(Bin) ->
+    erl_quote_bin(Bin);
+key_to_erl_bin(X) ->
+    to_binary(X).
+
+value_to_erl_bin(Bin) when is_binary(Bin) ->
+    erl_quote_bin(Bin);
+value_to_erl_bin(X) ->
+    to_binary(X).
+
+erl_quote_atom(Atom) ->
+    Bin = erlang:atom_to_binary(Atom),
+    <<"'", Bin/binary, "'">>.
+
+erl_quote_bin(Bin) ->
+    <<"<<\"", Bin/binary, "\">>">>.
+
+build_render_fun(Mod0, Fun0, Body0, Args0) ->
+    Mod = atom_to_binary(Mod0),
+    Fun = atom_to_binary(Fun0),
+    Body = erl_quote_bin(Body0),
+    Args = map_to_bin_with_put_mark(Args0),
+    do_build_render_fun(Mod, Fun, Body, Args).
+
+do_build_render_fun(Mod, Fun, Body, Args) ->
+    <<Mod/binary, ":", Fun/binary, "(", Body/binary, ", ", Args/binary, ")">>.
+
+merge_bin_lists(Static, Dynamic) when
+    is_list(Static), is_list(Dynamic), length(Static) >= length(Dynamic)
+->
+    do_merge_bin_lists(Static, Dynamic, <<>>).
+
+do_merge_bin_lists([S | Static], [D | Dynamic], Acc) ->
+    do_merge_bin_lists(Static, Dynamic, <<Acc/binary, S/binary, D/binary>>);
+do_merge_bin_lists([S | Static], [], Acc) ->
+    do_merge_bin_lists(Static, [], <<Acc/binary, S/binary>>);
+do_merge_bin_lists([], [], Acc) ->
+    Acc.
+
+resolve_expr_fun(Mod, RenderFun, Bindings, {EFun, EBody0}) ->
+    Expr = erlang:iolist_to_binary(EFun),
+    ExprArgs = resolve_expr_vars(Expr, Bindings),
+    Args = maps:merge(Bindings, ExprArgs),
+    EBody =
+        lists:map(
+            fun(Body) -> build_render_fun(Mod, RenderFun, Body, Args) end,
+            EBody0
+        ),
+    merge_bin_lists(EFun, EBody).
+
+resolve_expr(_Mod, _RenderFun, _Bindings, Expr) when is_binary(Expr) ->
+    Expr;
+resolve_expr(Mod, RenderFun, Bindings, {EFun, EBody}) when is_list(EFun), is_list(EBody) ->
+    resolve_expr_fun(Mod, RenderFun, Bindings, {EFun, EBody}).
+
+wrap_expr(Mod, RenderFun, Bindings, Expr) ->
+    Args = map_self_to_bin_with_get_mark(Bindings),
+    Body = resolve_expr(Mod, RenderFun, Bindings, Expr),
+    <<"fun(", Args/binary, ") -> ", Body/binary, " end.">>.
+
+resolve_expr_vars(Expr, Bindings) ->
+    {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
+    get_tokens_vars(Tokens, Bindings).
+
+get_tokens_vars(Tokens, Bindings) ->
+    do_get_tokens_vars(Tokens, Bindings).
+
+do_get_tokens_vars([{var, _, K}, {'=', _}, {var, _, Var} | Tokens], Acc) ->
+    V = maps:get(Var, Acc),
+    do_get_tokens_vars(Tokens, Acc#{K => V});
+do_get_tokens_vars([{var, _, K}, {'=', _}, {'fun', _, Fun} | Tokens], Acc) ->
+    do_get_tokens_vars(Tokens, Acc#{K => Fun});
+do_get_tokens_vars([{var, _, K}, {'=', _}, {_, _, V} | Tokens], Acc) ->
+    do_get_tokens_vars(Tokens, Acc#{K => V});
+do_get_tokens_vars([{_, _, K}, {':=', _}, {_, _, V} | Tokens], Acc) ->
+    do_get_tokens_vars(Tokens, Acc#{K => V});
+do_get_tokens_vars([_ | Tokens], Acc) ->
+    do_get_tokens_vars(Tokens, Acc);
+do_get_tokens_vars([], Acc) ->
+    Acc.
+
+resolve_html(Bin, Bindings) ->
+    {Static, Dynamic0} = resolve_parsed_tokens(parse_tokens(tokens(Bin))),
+    Dynamic = lists:map(
+        fun(Expr) -> wrap_expr(?MODULE, render, Bindings, Expr) end,
+        Dynamic0
+    ),
+    {Static, Dynamic}.
+
+eval(Expr, Bindings) ->
+    {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
+    {ok, Exprs} = erl_parse:parse_exprs(Tokens),
+    {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
+    nomalize_resolved_eval_result(resolve_eval_result(Result(Bindings))).
+
+resolve_eval_result(Result) when is_function(Result, 0) -> Result();
+resolve_eval_result(Result) -> Result.
+
+nomalize_resolved_eval_result(Result) when is_list(Result) ->
+    erlang:iolist_to_binary(Result);
+nomalize_resolved_eval_result(Result) ->
+    to_binary(Result).
 
 %%%=============================================================================
 %%% Tests
@@ -385,195 +367,270 @@ get_fun_var_names([], VarNames) ->
 
 -ifdef(TEST).
 
-mock_tokens() ->
+-define(HTML, <<
+    "<html>"
+    "<head>"
+    "<title><%= Title .%></title>"
+    "</head>"
+    "<body>"
+    "<%# This is a comment and will be ignored .%>"
+    "<%= Mod:format([$~, $s], [Title]) .%>"
+    "<%= fun() -> Foo = 1, Bar = Foobar, %>"
+    "<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>"
+    "<% end .%>"
+    "<%= case Title of %>"
+    "<% <<\"EEL\">> -> %>"
+    "<p><%= Title .%></p>"
+    "<% ; #{<<\"EEL\">> := EEL} -> %>"
+    "<%= Mod:format([$~, $s], [EEL]) .%>"
+    "<% end .%>"
+    "<%= Title .%>"
+    "<div>List below</div>"
+    "<%= lists:map(fun(#{foo := Foo}) -> %>"
+    "<div><%= Foo .%></div>"
+    "<% end, List) .%>"
+    "</body>"
+    "</html>"
+>>).
+
+tokens_test() ->
+    Expected = [
+        {static, <<"<html><head><title>">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Title ">>},
+        {static, <<"</title></head><body>">>},
+        {dynamic, {<<"#">>, <<".">>}, <<" This is a comment and will be ignored ">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Mod:format([$~, $s], [Title]) ">>},
+        {dynamic, {<<"=">>, <<" ">>}, <<" fun() -> Foo = 1, Bar = Foobar,">>},
+        {static, <<"<p>">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Foo ">>},
+        {static, <<"</p>">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Mod:format([$~, $s], [Bar]) ">>},
+        {dynamic, {<<" ">>, <<".">>}, <<"end ">>},
+        {dynamic, {<<"=">>, <<" ">>}, <<" case Title of">>},
+        {dynamic, {<<" ">>, <<" ">>}, <<"<<\"EEL\">> ->">>},
+        {static, <<"<p>">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Title ">>},
+        {static, <<"</p>">>},
+        {dynamic, {<<" ">>, <<" ">>}, <<"; #{<<\"EEL\">> := EEL} ->">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Mod:format([$~, $s], [EEL]) ">>},
+        {dynamic, {<<" ">>, <<".">>}, <<"end ">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Title ">>},
+        {static, <<"<div>List below</div>">>},
+        {dynamic, {<<"=">>, <<" ">>}, <<" lists:map(fun(#{foo := Foo}) ->">>},
+        {static, <<"<div>">>},
+        {dynamic, {<<"=">>, <<".">>}, <<" Foo ">>},
+        {static, <<"</div>">>},
+        {dynamic, {<<" ">>, <<".">>}, <<"end, List) ">>},
+        {static, <<"</body></html>">>}
+    ],
+    ?assertEqual(Expected, tokens(?HTML)).
+
+parse_tokens_test() ->
+    Expected = [
+        {text, <<"<html><head><title>">>},
+        {{expr, inline}, <<" Title ">>},
+        {text, <<"</title></head><body>">>},
+        {comment, <<" This is a comment and will be ignored ">>},
+        {{expr, inline}, <<" Mod:format([$~, $s], [Title]) ">>},
+        {{expr, start}, <<" fun() -> Foo = 1, Bar = Foobar, ">>},
+        {text, <<"<p>">>},
+        {{expr, inline}, <<" Foo ">>},
+        {text, <<"</p>">>},
+        {{expr, inline}, <<" Mod:format([$~, $s], [Bar]) ">>},
+        {{expr, 'end'}, <<" end ">>},
+        {{expr, start}, <<" case Title of ">>},
+        {{expr, continue}, <<" <<\"EEL\">> -> ">>},
+        {text, <<"<p>">>},
+        {{expr, inline}, <<" Title ">>},
+        {text, <<"</p>">>},
+        {{expr, continue}, <<" ; #{<<\"EEL\">> := EEL} -> ">>},
+        {{expr, inline}, <<" Mod:format([$~, $s], [EEL]) ">>},
+        {{expr, 'end'}, <<" end ">>},
+        {{expr, inline}, <<" Title ">>},
+        {text, <<"<div>List below</div>">>},
+        {{expr, start}, <<" lists:map(fun(#{foo := Foo}) -> ">>},
+        {text, <<"<div>">>},
+        {{expr, inline}, <<" Foo ">>},
+        {text, <<"</div>">>},
+        {{expr, 'end'}, <<" end, List) ">>},
+        {text, <<"</body></html>">>}
+    ],
+    ?assertEqual(Expected, parse_tokens(tokens(?HTML))).
+
+resolve_parsed_tokens_test() ->
+    Expected = {
+        [
+            <<"<html><head><title>">>,
+            <<"</title></head><body>">>,
+            <<>>,
+            <<>>,
+            <<>>,
+            <<"<div>List below</div>">>,
+            <<"</body></html>">>
+        ],
+        [
+            <<" Title ">>,
+            <<" Mod:format([$~, $s], [Title]) ">>,
+            {
+                [<<" fun() -> Foo = 1, Bar = Foobar, ">>, <<" end ">>],
+                [<<"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>">>]
+            },
+            {
+                [
+                    <<" case Title of  <<\"EEL\">> -> ">>,
+                    <<" ; #{<<\"EEL\">> := EEL} -> ">>,
+                    <<" end ">>
+                ],
+                [<<"<p><%= Title .%></p>">>, <<"<%= Mod:format([$~, $s], [EEL]) .%>">>]
+            },
+            <<" Title ">>,
+            {
+                [<<" lists:map(fun(#{foo := Foo}) -> ">>, <<" end, List) ">>],
+                [<<"<div><%= Foo .%></div>">>]
+            }
+        ]
+    },
+    ?assertEqual(Expected, resolve_parsed_tokens(parse_tokens(tokens(?HTML)))).
+
+to_binary_test() ->
     [
-        {0, {text, <<>>, <<"<ul>">>}},
-        {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-        {1, {mid_expr, <<>>, <<" case Foo of ">>}},
-        {1, {mid_expr, <<>>, <<" true -> ">>}},
-        {1, {text, <<>>, <<"<li>">>}},
-        {1, {mid_expr, <<>>, <<" foo; ">>}},
-        {1, {text, <<>>, <<"</li>">>}},
-        {1, {mid_expr, <<>>, <<" Bar -> ">>}},
-        {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
-        {1, {text, <<>>, <<"<li>">>}},
-        {1, {mid_expr, <<>>, <<" Bar ">>}},
-        {3, {expr, <<"=">>, <<" Baz. ">>}},
-        {1, {text, <<>>, <<"</li><ul>">>}},
-        {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-        {4, {mid_expr, <<>>, <<" case Foo of ">>}},
-        {4, {mid_expr, <<>>, <<" true -> ">>}},
-        {4, {text, <<>>, <<"<li>">>}},
-        {4, {mid_expr, <<>>, <<" foo; ">>}},
-        {4, {text, <<>>, <<"</li>">>}},
-        {4, {mid_expr, <<>>, <<" Bar -> ">>}},
-        {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
-        {4, {text, <<>>, <<"<li>">>}},
-        {4, {mid_expr, <<>>, <<" Bar ">>}},
-        {6, {expr, <<"=">>, <<" Baz. ">>}},
-        {4, {text, <<>>, <<"</li>">>}},
-        {4, {mid_expr, <<>>, <<" end ">>}},
-        {4, {end_expr, <<>>, <<" end, List). ">>}},
-        {1, {text, <<>>, <<"</ul>">>}},
-        {1, {mid_expr, <<>>, <<" end ">>}},
-        {1, {end_expr, <<>>, <<" end, List). ">>}},
-        {0, {text, <<>>, <<"</ul>">>}}
+        ?assertEqual(<<"foo">>, to_binary(<<"foo">>)),
+        ?assertEqual(<<"foo">>, to_binary(foo)),
+        ?assertEqual(<<"0.0">>, to_binary(0.0, [short])),
+        ?assertEqual(<<"0">>, to_binary(0)),
+        ?assertEqual(<<"foo">>, to_binary("foo")),
+        ?assertEqual(<<"[foo, bar, 0]">>, to_binary([foo, <<"bar">>, 0])),
+        ?assertEqual(<<"[foo, bar, 0]">>, to_binary({foo, <<"bar">>, 0})),
+        ?assertEqual(<<>>, to_binary([]))
     ].
 
-scan_test() ->
+map_self_to_bin_with_get_mark_test() ->
+    ?assertEqual(<<"#{'Foo' := Foo}">>, map_self_to_bin_with_get_mark(#{'Foo' => foo})).
+
+% map_self_to_bin_with_put_mark_test() ->
+%     ?assertEqual(<<"#{'Foo' => Foo}">>, map_self_to_bin_with_put_mark(#{'Foo' => foo})).
+
+map_kv_to_binary_test() ->
     ?assertEqual(
-        mock_tokens(),
-        scan(
-            <<
-                "<ul>"
-                "<%= lists:map(fun(Foo) -> %>"
-                "<% case Foo of %>"
-                "<% true -> %>"
-                "<li><% foo; %></li>"
-                "<% Bar -> %>"
-                "<%# Maybe a comment =%>"
-                "<li><% Bar %><%= Baz. =%></li>"
-                "<ul>"
-                "<%= lists:map(fun(Foo) -> %>"
-                "<% case Foo of %>"
-                "<% true -> %>"
-                "<li><% foo; %></li>"
-                "<% Bar -> %>"
-                "<%# Maybe a comment =%>"
-                "<li><% Bar %><%= Baz. =%></li>"
-                "<% end %>"
-                "<% end, List). =%>"
-                "</ul>"
-                "<% end %>"
-                "<% end, List). =%>"
-                "</ul>"
-            >>
-        )
+        <<"Foo => 0">>,
+        map_kv_to_binary(<<"Foo">>, <<"=>">>, <<"0">>)
     ).
 
-sort_test() ->
+erl_quote_atom_test() ->
+    ?assertEqual(<<"'Foo'">>, erl_quote_atom('Foo')).
+
+erl_quote_bin_test() ->
+    ?assertEqual(<<"<<\"Foo\">>">>, erl_quote_bin(<<"Foo">>)).
+
+build_render_fun_test() ->
     ?assertEqual(
-        [
-            {6, {expr, <<"=">>, <<" Baz. ">>}},
-            {5, {expr, <<"#">>, <<" Maybe a comment ">>}},
-            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
-            {4, {mid_expr, <<>>, <<" true -> ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" foo; ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" end ">>}},
-            {4, {end_expr, <<>>, <<" end, List). ">>}},
-            {3, {expr, <<"=">>, <<" Baz. ">>}},
-            {2, {expr, <<"#">>, <<" Maybe a comment ">>}},
-            {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-            {1, {mid_expr, <<>>, <<" case Foo of ">>}},
-            {1, {mid_expr, <<>>, <<" true -> ">>}},
-            {1, {text, <<>>, <<"<li>">>}},
-            {1, {mid_expr, <<>>, <<" foo; ">>}},
-            {1, {text, <<>>, <<"</li>">>}},
-            {1, {mid_expr, <<>>, <<" Bar -> ">>}},
-            {1, {text, <<>>, <<"<li>">>}},
-            {1, {mid_expr, <<>>, <<" Bar ">>}},
-            {1, {text, <<>>, <<"</li><ul>">>}},
-            {1, {text, <<>>, <<"</ul>">>}},
-            {1, {mid_expr, <<>>, <<" end ">>}},
-            {1, {end_expr, <<>>, <<" end, List). ">>}},
-            {0, {text, <<>>, <<"<ul>">>}},
-            {0, {text, <<>>, <<"</ul>">>}}
-        ],
-        sort(mock_tokens())
+        <<"mod:render(<<\"<div><%= Foo .%></div>\">>, #{'Foo' => foo})">>,
+        build_render_fun(mod, render, <<"<div><%= Foo .%></div>">>, #{'Foo' => foo})
     ).
 
-group_by_depth_test() ->
+merge_bin_lists_test() ->
     ?assertEqual(
-        #{
-            0 => [
-                {0, {text, <<>>, <<"<ul>">>}},
-                {0, {text, <<>>, <<"</ul>">>}}
-            ],
-            1 => [
-                {1, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-                {1, {mid_expr, <<>>, <<" case Foo of ">>}},
-                {1, {mid_expr, <<>>, <<" true -> ">>}},
-                {1, {text, <<>>, <<"<li>">>}},
-                {1, {mid_expr, <<>>, <<" foo; ">>}},
-                {1, {text, <<>>, <<"</li>">>}},
-                {1, {mid_expr, <<>>, <<" Bar -> ">>}},
-                {1, {text, <<>>, <<"<li>">>}},
-                {1, {mid_expr, <<>>, <<" Bar ">>}},
-                {1, {text, <<>>, <<"</li><ul>">>}},
-                {1, {text, <<>>, <<"</ul>">>}},
-                {1, {mid_expr, <<>>, <<" end ">>}},
-                {1, {end_expr, <<>>, <<" end, List). ">>}}
-            ],
-            2 => [
-                {2, {expr, <<"#">>, <<" Maybe a comment ">>}}
-            ],
-            3 => [
-                {3, {expr, <<"=">>, <<" Baz. ">>}}
-            ],
-            4 => [
-                {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-                {4, {mid_expr, <<>>, <<" case Foo of ">>}},
-                {4, {mid_expr, <<>>, <<" true -> ">>}},
-                {4, {text, <<>>, <<"<li>">>}},
-                {4, {mid_expr, <<>>, <<" foo; ">>}},
-                {4, {text, <<>>, <<"</li>">>}},
-                {4, {mid_expr, <<>>, <<" Bar -> ">>}},
-                {4, {text, <<>>, <<"<li>">>}},
-                {4, {mid_expr, <<>>, <<" Bar ">>}},
-                {4, {text, <<>>, <<"</li>">>}},
-                {4, {mid_expr, <<>>, <<" end ">>}},
-                {4, {end_expr, <<>>, <<" end, List). ">>}}
-            ],
-            5 => [
-                {5, {expr, <<"#">>, <<" Maybe a comment ">>}}
-            ],
-            6 => [
-                {6, {expr, <<"=">>, <<" Baz. ">>}}
-            ]
-        },
-        group_by_depth(mock_tokens())
+        <<"Hello, World!">>,
+        merge_bin_lists([<<"Hello">>, <<"Worl">>, <<"!">>], [<<", ">>, <<"d">>])
     ).
 
-parse_expr_test() ->
-    ?assertEqual(
-        " lists:map(fun(Foo) -> "
-        " case Foo of "
-        " true -> "
-        " foo; "
-        " Bar -> "
-        " Bar "
+resolve_expr_fun_test() ->
+    Fun = {
+        [<<" case Title of  <<\"EEL\">> -> ">>, <<" ; #{<<\"EEL\">> := EEL} -> ">>, <<" end ">>],
+        [<<"<p><%= Title .%></p>">>, <<"<%= Mod:format([$~, $s], [EEL]) .%>">>]
+    },
+    Expected = <<
+        " case Title of  <<\"EEL\">> -> "
+        "mod:render(<<\"<p><%= Title .%></p>\">>, #{'Title' => <<\"EEL\">>})"
+        " ; #{<<\"EEL\">> := EEL} -> "
+        "mod:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Title' => <<\"EEL\">>})"
         " end "
-        " end, List). ",
-        parse_expr([
-            {4, {start_expr, <<"=">>, <<" lists:map(fun(Foo) -> ">>}},
-            {4, {mid_expr, <<>>, <<" case Foo of ">>}},
-            {4, {mid_expr, <<>>, <<" true -> ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" foo; ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar -> ">>}},
-            {4, {text, <<>>, <<"<li>">>}},
-            {4, {mid_expr, <<>>, <<" Bar ">>}},
-            {4, {text, <<>>, <<"</li>">>}},
-            {4, {mid_expr, <<>>, <<" end ">>}},
-            {4, {end_expr, <<>>, <<" end, List). ">>}}
-        ])
+    >>,
+    ?assertEqual(Expected, resolve_expr_fun(mod, render, #{'Title' => <<"EEL">>}, Fun)).
+
+wrap_expr_test() ->
+    ?assertEqual(
+        <<"fun(#{'Foo' := Foo, <<\"Bar\">> := Bar}) -> Foo end.">>,
+        wrap_expr(mod, render, #{'Foo' => foo, <<"Bar">> => 0}, <<"Foo">>)
     ).
 
-eval_expr_test() ->
+resolve_expr_vars_test() ->
     ?assertEqual(
-        "foobarbaz",
-        eval_expr(
-            "lists:foldr(fun(X, Acc) -> [X | Acc] end, [], List) ++ [\"baz\"].",
-            #{'List' => ["foo", "bar"]}
-        )
+        #{foo => foo, 'Bar' => bar, foobar => foobar},
+        resolve_expr_vars(<<"fun(#{foo := foo}) -> Bar = bar end.">>, #{foobar => foobar})
     ).
+
+resolve_html_test() ->
+    Expected = {
+        [
+            <<"<html><head><title>">>,
+            <<"</title></head><body>">>,
+            <<>>,
+            <<>>,
+            <<>>,
+            <<"<div>List below</div>">>,
+            <<"</body></html>">>
+        ],
+        [
+            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
+            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Mod:format([$~, $s], [Title])  end.">>,
+            <<
+                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+                " fun() -> Foo = 1, Bar = Foobar, "
+                "eel:render(<<\"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>\">>, #{'Bar' => foobar, 'Foo' => 1, 'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+                " end "
+                " end."
+            >>,
+            <<
+                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+                " case Title of  <<\"EEL\">> -> "
+                "eel:render(<<\"<p><%= Title .%></p>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+                " ; #{<<\"EEL\">> := EEL} -> "
+                "eel:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+                " end "
+                " end."
+            >>,
+            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
+            <<
+                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+                " lists:map(fun(#{foo := Foo}) -> "
+                "eel:render(<<\"<div><%= Foo .%></div>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}], 'foo' => Foo})"
+                " end, List) "
+                " end."
+            >>
+        ]
+    },
+    ?assertEqual(Expected, resolve_html(?HTML, #{'Foobar' => foobar, 'List' => [#{foo => foo}]})).
+
+eval_test() ->
+    ?assertEqual(
+        <<"bar">>,
+        eval(<<"fun(#{'Foo' := bar}) -> Foo end.">>, #{'Foo' => bar})
+    ).
+
+render_test() ->
+    Expected = <<
+        "<html>"
+        "<head>"
+        "<title>EEL</title>"
+        "</head>"
+        "<body>"
+        "EEL"
+        "<p>1</p>foobar"
+        "<p>EEL</p>"
+        "EEL"
+        "<div>List below</div>"
+        "<div>foo</div>"
+        "<div>bar</div>"
+        "</body>"
+        "</html>"
+    >>,
+    Bindings = #{
+        'Title' => <<"EEL">>,
+        'Mod' => io_lib,
+        'Foobar' => foobar,
+        'List' => [#{foo => foo}, #{foo => bar}]
+    },
+    ?assertEqual(Expected, render(?HTML, Bindings)).
 
 -endif.
