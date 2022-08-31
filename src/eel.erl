@@ -575,37 +575,43 @@ wrap_expr_test() ->
 
 map_dynamic_to_render_fun_test() ->
     Expected = [
-        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
-        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Mod:format([$~, $s], [Title])  end.">>,
+        <<"fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) ->  Title  end.">>,
+        <<"fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) ->  Mod:format([$~, $s], [Title])  end.">>,
         <<
-            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            "fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) -> "
             " fun() -> Foo = 1, Bar = Foobar, "
-            "eel:render(<<\"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>\">>, #{'Bar' => foobar, 'Foo' => 1, 'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            "eel:render(<<\"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>\">>, #{'Bar' => foobar, 'Foo' => 1, 'Foobar' => foobar, 'List' => [#{'foo' => foo}, #{'foo' => bar}], 'Mod' => io_lib, 'Title' => <<\"EEL\">>})"
             " end "
             " end."
         >>,
         <<
-            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            "fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) -> "
             " case Title of  <<\"EEL\">> -> "
-            "eel:render(<<\"<p><%= Title .%></p>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            "eel:render(<<\"<p><%= Title .%></p>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}, #{'foo' => bar}], 'Mod' => io_lib, 'Title' => <<\"EEL\">>})"
             " ; #{<<\"EEL\">> := EEL} -> "
-            "eel:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            "eel:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}, #{'foo' => bar}], 'Mod' => io_lib, 'Title' => <<\"EEL\">>})"
             " end "
             " end."
         >>,
-        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
+        <<"fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) ->  Title  end.">>,
         <<
-            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            "fun(#{'Foobar' := Foobar, 'List' := List, 'Mod' := Mod, 'Title' := Title}) -> "
             " lists:map(fun(#{foo := Foo}) -> "
-            "eel:render(<<\"<div><%= Foo .%></div>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}], 'foo' => Foo})"
+            "eel:render(<<\"<div><%= Foo .%></div>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}, #{'foo' => bar}], 'Mod' => io_lib, 'Title' => <<\"EEL\">>, 'foo' => Foo})"
             " end, List) "
             " end."
         >>
     ],
+    Bindings = #{
+        'Title' => <<"EEL">>,
+        'Mod' => io_lib,
+        'Foobar' => foobar,
+        'List' => [#{foo => foo}, #{foo => bar}]
+    },
     {_, Dynamic} = compile(?HTML),
     ?assertEqual(
         Expected,
-        map_dynamic_to_render_fun(Dynamic, #{'Foobar' => foobar, 'List' => [#{foo => foo}]})
+        map_dynamic_to_render_fun(Dynamic, Bindings)
     ).
 
 resolve_expr_vars_test() ->
