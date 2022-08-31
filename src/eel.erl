@@ -8,20 +8,41 @@
 
 -dialyzer({nowarn_function, to_binary/2}).
 
--export([render/2, render_file/2]).
+-export([
+    compile/1,
+    compile_file/1,
+    render/2,
+    render_file/2
+]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--spec render(Bin :: binary(), Bindings :: map()) -> binary().
+-spec compile(binary()) -> {list(), list()}.
 
+compile(Bin) ->
+    resolve_parsed_tokens(parse_tokens(tokens(Bin))).
+
+-spec compile_file(file:name_all()) -> {list(), list()}.
+
+compile_file(FileName) ->
+    case file:read_file(FileName) of
+        {ok, Bin} -> compile(Bin);
+        _ -> {[], []}
+    end.
+
+-spec render(binary() | {list(), list()}, map()) -> binary().
+
+render({Static, Dynamic0}, Bindings) ->
+    RenderFuns = map_dynamic_to_render_fun(Dynamic0, Bindings),
+    Dynamic = lists:map(fun(Render) -> eval(Render, Bindings) end, RenderFuns),
+    merge_bin_lists(Static, Dynamic);
 render(Bin, Bindings) ->
-    {Static, Dynamic0} = resolve_html(Bin, Bindings),
-    Dynamic = lists:map(fun(Expr) -> eval(Expr, Bindings) end, Dynamic0),
-    merge_bin_lists(Static, Dynamic).
+    {Static, Dynamic} = compile(Bin),
+    render({Static, Dynamic}, Bindings).
 
--spec render_file(FileName :: file:name_all(), Bindings :: map()) -> binary().
+-spec render_file(file:name_all(), map()) -> binary().
 
 render_file(FileName, Bindings) ->
     case file:read_file(FileName) of
@@ -318,6 +339,12 @@ wrap_expr(Mod, RenderFun, Bindings, Expr) ->
     Body = resolve_expr(Mod, RenderFun, Bindings, Expr),
     <<"fun(", Args/binary, ") -> ", Body/binary, " end.">>.
 
+map_dynamic_to_render_fun(Dynamic, Bindings) ->
+    lists:map(
+        fun(Expr) -> wrap_expr(?MODULE, render, Bindings, Expr) end,
+        Dynamic
+    ).
+
 resolve_expr_vars(Expr, Bindings) ->
     {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
     get_tokens_vars(Tokens, Bindings).
@@ -338,14 +365,6 @@ do_get_tokens_vars([_ | Tokens], Acc) ->
     do_get_tokens_vars(Tokens, Acc);
 do_get_tokens_vars([], Acc) ->
     Acc.
-
-resolve_html(Bin, Bindings) ->
-    {Static, Dynamic0} = resolve_parsed_tokens(parse_tokens(tokens(Bin))),
-    Dynamic = lists:map(
-        fun(Expr) -> wrap_expr(?MODULE, render, Bindings, Expr) end,
-        Dynamic0
-    ),
-    {Static, Dynamic}.
 
 eval(Expr, Bindings) ->
     {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
@@ -554,13 +573,48 @@ wrap_expr_test() ->
         wrap_expr(mod, render, #{'Foo' => foo, <<"Bar">> => 0}, <<"Foo">>)
     ).
 
+map_dynamic_to_render_fun_test() ->
+    Expected = [
+        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
+        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Mod:format([$~, $s], [Title])  end.">>,
+        <<
+            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            " fun() -> Foo = 1, Bar = Foobar, "
+            "eel:render(<<\"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>\">>, #{'Bar' => foobar, 'Foo' => 1, 'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            " end "
+            " end."
+        >>,
+        <<
+            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            " case Title of  <<\"EEL\">> -> "
+            "eel:render(<<\"<p><%= Title .%></p>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            " ; #{<<\"EEL\">> := EEL} -> "
+            "eel:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
+            " end "
+            " end."
+        >>,
+        <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
+        <<
+            "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
+            " lists:map(fun(#{foo := Foo}) -> "
+            "eel:render(<<\"<div><%= Foo .%></div>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}], 'foo' => Foo})"
+            " end, List) "
+            " end."
+        >>
+    ],
+    {_, Dynamic} = compile(?HTML),
+    ?assertEqual(
+        Expected,
+        map_dynamic_to_render_fun(Dynamic, #{'Foobar' => foobar, 'List' => [#{foo => foo}]})
+    ).
+
 resolve_expr_vars_test() ->
     ?assertEqual(
         #{foo => foo, 'Bar' => bar, foobar => foobar},
         resolve_expr_vars(<<"fun(#{foo := foo}) -> Bar = bar end.">>, #{foobar => foobar})
     ).
 
-resolve_html_test() ->
+compile_test() ->
     Expected = {
         [
             <<"<html><head><title>">>,
@@ -572,35 +626,41 @@ resolve_html_test() ->
             <<"</body></html>">>
         ],
         [
-            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
-            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Mod:format([$~, $s], [Title])  end.">>,
-            <<
-                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
-                " fun() -> Foo = 1, Bar = Foobar, "
-                "eel:render(<<\"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>\">>, #{'Bar' => foobar, 'Foo' => 1, 'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
-                " end "
-                " end."
-            >>,
-            <<
-                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
-                " case Title of  <<\"EEL\">> -> "
-                "eel:render(<<\"<p><%= Title .%></p>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
-                " ; #{<<\"EEL\">> := EEL} -> "
-                "eel:render(<<\"<%= Mod:format([$~, $s], [EEL]) .%>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}]})"
-                " end "
-                " end."
-            >>,
-            <<"fun(#{'Foobar' := Foobar, 'List' := List}) ->  Title  end.">>,
-            <<
-                "fun(#{'Foobar' := Foobar, 'List' := List}) -> "
-                " lists:map(fun(#{foo := Foo}) -> "
-                "eel:render(<<\"<div><%= Foo .%></div>\">>, #{'Foobar' => foobar, 'List' => [#{'foo' => foo}], 'foo' => Foo})"
-                " end, List) "
-                " end."
-            >>
+            <<" Title ">>,
+            <<" Mod:format([$~, $s], [Title]) ">>,
+            {
+                [
+                    <<" fun() -> Foo = 1, Bar = Foobar, ">>,
+                    <<" end ">>
+                ],
+                [
+                    <<"<p><%= Foo .%></p><%= Mod:format([$~, $s], [Bar]) .%>">>
+                ]
+            },
+            {
+                [
+                    <<" case Title of  <<\"EEL\">> -> ">>,
+                    <<" ; #{<<\"EEL\">> := EEL} -> ">>,
+                    <<" end ">>
+                ],
+                [
+                    <<"<p><%= Title .%></p>">>,
+                    <<"<%= Mod:format([$~, $s], [EEL]) .%>">>
+                ]
+            },
+            <<" Title ">>,
+            {
+                [
+                    <<" lists:map(fun(#{foo := Foo}) -> ">>,
+                    <<" end, List) ">>
+                ],
+                [
+                    <<"<div><%= Foo .%></div>">>
+                ]
+            }
         ]
     },
-    ?assertEqual(Expected, resolve_html(?HTML, #{'Foobar' => foobar, 'List' => [#{foo => foo}]})).
+    ?assertEqual(Expected, compile(?HTML)).
 
 eval_test() ->
     ?assertEqual(
