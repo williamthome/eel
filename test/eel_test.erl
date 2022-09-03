@@ -129,6 +129,7 @@ tokenize_expr(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache, Acc) ->
         end,
     {ok, {ExprRef, Expr, <<EndMarker>>, T, <<Acc/binary, Expr/binary, 32, EndMarker, "%>">>}};
 tokenize_expr(<<"<%", _/binary>>, _StartMarker, _Cache, _Acc) ->
+    % TODO: Handle unknown marker
     {error, unknown_end_marker};
 tokenize_expr(<<H, T/binary>>, StartMarker, Cache, Acc) ->
     tokenize_expr(T, StartMarker, <<Cache/binary, H>>, Acc);
