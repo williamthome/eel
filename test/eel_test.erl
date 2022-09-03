@@ -21,7 +21,9 @@ tokenize_test() ->
         "</div>"
         "<%# Comment #%>"
         "<%=   case #{foo := Foo} = Map of %>"
-        "<%   bar -> Bar; %>"
+        "<%   bar -> %>"
+        "<p><%= Bar .%></p>"
+        "<% ; %>"
         "<%   foobar -> Foobar; %>"
         "<%   Foo -> Foo end .%>"
         "</html>"
@@ -56,9 +58,37 @@ tokenize_test() ->
                     {mid_expr,
                         {
                             {<<" ">>, <<" ">>},
-                            <<"bar -> Bar;">>,
-                            ['Bar'],
-                            {[<<"bar -> ">>, <<";">>], ['Bar']}
+                            <<"bar ->">>,
+                            [],
+                            {[<<"bar ->">>], []}
+                        }},
+                    {nested_expr, {
+                        {
+                            [
+                                <<"<p>">>,
+                                <<>>,
+                                <<"</p>">>
+                            ],
+                            [
+                                [
+                                    {expr,
+                                        {
+                                            {<<"=">>, <<".">>},
+                                            <<"Bar.">>,
+                                            ['Bar'],
+                                            {[<<>>, <<".">>], ['Bar']}
+                                        }}
+                                ]
+                            ]
+                        },
+                        <<"<p><%= Bar .%></p>">>
+                    }},
+                    {mid_expr,
+                        {
+                            {<<" ">>, <<" ">>},
+                            <<";">>,
+                            [],
+                            {[<<";">>], []}
                         }},
                     {mid_expr,
                         {
@@ -77,7 +107,7 @@ tokenize_test() ->
                 ]
             ]
         },
-        <<"<html><div><%= Foo = 1, Bar = Foo .%></div><%= case #{foo := Foo} = Map of %><% bar -> Bar; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
+        <<"<html><div><%= Foo = 1, Bar = Foo .%></div><%= case #{foo := Foo} = Map of %><% bar -> %><p><%= Bar .%></p><% ; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
     },
     ?assertEqual(Expected, tokenize(Bin)).
 
@@ -108,6 +138,21 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
             % Token = {comment, Comment},
             % Dynamic = [Token | Dynamic0],
             do_tokenize(Rest, {Static0, Dynamic0}, TokensAcc, Acc0);
+        {error, Reason} ->
+            {error, Reason}
+    end;
+do_tokenize(Bin, {Static, [HD | Dynamic]}, [{ExprRef, _Expr} | _] = TokensAcc, Acc) when
+    ExprRef =:= start_expr; ExprRef =:= mid_expr
+->
+    case nested(Bin, <<>>) of
+        {ok, {Nested, T}} ->
+            Token = {nested_expr, tokenize(Nested)},
+            do_tokenize(
+                T,
+                {Static, [[Token | HD] | Dynamic]},
+                [Token | TokensAcc],
+                <<Acc/binary, Nested/binary>>
+            );
         {error, Reason} ->
             {error, Reason}
     end;
@@ -194,6 +239,13 @@ expression(<<H, T/binary>>, StartMarker, Cache, Acc) ->
 expression(<<>>, _StartMarker, _Cache, _Acc) ->
     {error, eof}.
 
+nested(<<"<% ", _/binary>> = T, Expr) ->
+    {ok, {Expr, T}};
+nested(<<H, T/binary>>, Expr) ->
+    nested(T, <<Expr/binary, H>>);
+nested(<<>>, _Expr) ->
+    {error, eof}.
+
 retrieve_marker(<<32, T/binary>>, <<>>) ->
     {<<32>>, <<>>, T};
 retrieve_marker(<<32, _/binary>> = T, Marker) ->
@@ -223,7 +275,7 @@ do_retrieve_vars([], Acc) ->
     lists:reverse(Acc).
 
 split_expr(Expr, []) ->
-    Expr;
+    {[Expr], []};
 split_expr(Expr, Vars) ->
     VarsBin = lists:map(fun erlang:atom_to_binary/1, Vars),
     Static = binary:split(Expr, VarsBin, [global]),
