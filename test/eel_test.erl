@@ -15,7 +15,9 @@
 tokenize_test() ->
     Bin = <<
         "<html>"
+        "<div>"
         "<%=   Foo = 1, Bar = Foo   .%>"
+        "</div>"
         "<%=   case #{foo := Foo} = Map of %>"
         "<%   bar -> Bar; %>"
         "<%   foobar -> Foobar; %>"
@@ -24,7 +26,13 @@ tokenize_test() ->
     >>,
     Expected = {
         {
-            [],
+            [
+                <<"<html><div>">>,
+                <<>>,
+                <<"</div>">>,
+                <<>>,
+                <<"</html>">>
+            ],
             [
                 [
                     {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'], {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}}
@@ -37,34 +45,52 @@ tokenize_test() ->
                 ]
             ]
         },
-        <<"<html><%= Foo = 1, Bar = Foo .%><%= case #{foo := Foo} = Map of %><% bar -> Bar; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
+        <<"<html><div><%= Foo = 1, Bar = Foo .%></div><%= case #{foo := Foo} = Map of %><% bar -> Bar; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
     },
     ?assertEqual(Expected, tokenize(Bin)).
 
 tokenize(Bin) ->
-    do_tokenize(Bin, {[], []}, <<>>).
+    do_tokenize(Bin, {[], []}, [], <<>>).
 
-do_tokenize(<<"<%", _/binary>> = Bin, {Static, Dynamic0}, Acc0) ->
+do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
     case tokenize_expr(Bin, Acc0) of
         {ok, {ExprRef, Token, Rest, Acc}} ->
-            Dynamic1 =
+            {Static, Dynamic1} =
                 case lists:member(ExprRef, [expr, start_expr]) of
-                    true -> [[Token] | Dynamic0];
+                    true -> {[<<>> | Static0], [[Token] | Dynamic0]};
                     false ->
-                        [[Token | erlang:hd(Dynamic0)] | erlang:tl(Dynamic0)]
+                        [DH0 | DT0] = Dynamic0,
+                        {Static0, [[Token | DH0] | DT0]}
                 end,
             Dynamic =
                 case ExprRef =:= end_expr of
-                    true -> [lists:reverse(erlang:hd(Dynamic1)) | erlang:tl(Dynamic1)];
+                    true ->
+                        [DH1 | DT1] = Dynamic1,
+                        [lists:reverse(DH1) | DT1];
                     false -> Dynamic1
                 end,
-            do_tokenize(Rest, {Static, Dynamic}, Acc);
+            do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc], Acc);
         {error, Reason} ->
             {error, Reason}
     end;
-do_tokenize(<<H, T/binary>>, Tokens, Acc) ->
-    do_tokenize(T, Tokens, <<Acc/binary, H>>);
-do_tokenize(<<>>, {Static, Dynamic}, Acc) ->
+do_tokenize(<<H, T/binary>>, {Static0, Dynamic}, TokensAcc0, Acc) ->
+    {TokenStatic, Static} =
+        case Static0 of
+            [] -> {<<H>>, [<<H>>]};
+            [SH | ST] ->
+                case TokensAcc0 of
+                    [{text, _} | _] -> {<<SH/binary, H>>, [<<SH/binary, H>> | ST]};
+                    _ -> {<<H>>, [<<H>>, SH | ST]}
+                end
+        end,
+    Token = {text, TokenStatic},
+    TokensAcc =
+        case TokensAcc0 of
+            [{text, _} | TT] -> [Token | TT];
+            _ -> [Token | TokensAcc0]
+        end,
+    do_tokenize(T, {Static, Dynamic}, TokensAcc, <<Acc/binary, H>>);
+do_tokenize(<<>>, {Static, Dynamic}, _TokensAcc, Acc) ->
     {{lists:reverse(Static), lists:reverse(Dynamic)}, Acc}.
 
 tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
