@@ -197,6 +197,8 @@ do_retrieve_vars([_Token | Tokens], Acc) ->
 do_retrieve_vars([], Acc) ->
     lists:reverse(Acc).
 
+split_expr(Expr, []) ->
+    Expr;
 split_expr(Expr, Vars) ->
     VarsBin = lists:map(fun erlang:atom_to_binary/1, Vars),
     Static = binary:split(Expr, VarsBin, [global]),
