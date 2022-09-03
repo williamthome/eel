@@ -35,13 +35,18 @@ tokenize_test() ->
             ],
             [
                 [
-                    {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'], {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}}
+                    {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'],
+                        {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}}
                 ],
                 [
-                    {start_expr, {<<"=">>, <<" ">>}, <<"case #{foo := Foo} = Map of">>, ['Map'], {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}},
-                    {mid_expr, {<<" ">>, <<" ">>}, <<"bar -> Bar;">>, ['Bar'], {[<<"bar -> ">>, <<";">>], ['Bar']}},
-                    {mid_expr, {<<" ">>, <<" ">>}, <<"foobar -> Foobar;">>, ['Foobar'], {[<<"foobar -> ">>, <<";">>], ['Foobar']}},
-                    {end_expr, {<<" ">>, <<".">>}, <<"Foo -> Foo end.">>, ['Foo'], {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}}
+                    {start_expr, {<<"=">>, <<" ">>}, <<"case #{foo := Foo} = Map of">>, ['Map'],
+                        {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}},
+                    {mid_expr, {<<" ">>, <<" ">>}, <<"bar -> Bar;">>, ['Bar'],
+                        {[<<"bar -> ">>, <<";">>], ['Bar']}},
+                    {mid_expr, {<<" ">>, <<" ">>}, <<"foobar -> Foobar;">>, ['Foobar'],
+                        {[<<"foobar -> ">>, <<";">>], ['Foobar']}},
+                    {end_expr, {<<" ">>, <<".">>}, <<"Foo -> Foo end.">>, ['Foo'],
+                        {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}}
                 ]
             ]
         },
@@ -57,7 +62,8 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
         {ok, {ExprRef, Token, Rest, Acc}} ->
             {Static, Dynamic1} =
                 case lists:member(ExprRef, [expr, start_expr]) of
-                    true -> {[<<>> | Static0], [[Token] | Dynamic0]};
+                    true ->
+                        {[<<>> | Static0], [[Token] | Dynamic0]};
                     false ->
                         [DH0 | DT0] = Dynamic0,
                         {Static0, [[Token | DH0] | DT0]}
@@ -67,7 +73,8 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
                     true ->
                         [DH1 | DT1] = Dynamic1,
                         [lists:reverse(DH1) | DT1];
-                    false -> Dynamic1
+                    false ->
+                        Dynamic1
                 end,
             do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc], Acc);
         {error, Reason} ->
@@ -76,7 +83,8 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
 do_tokenize(<<H, T/binary>>, {Static0, Dynamic}, TokensAcc0, Acc) ->
     {TokenStatic, Static} =
         case Static0 of
-            [] -> {<<H>>, [<<H>>]};
+            [] ->
+                {<<H>>, [<<H>>]};
             [SH | ST] ->
                 case TokensAcc0 of
                     [{text, _} | _] -> {<<SH/binary, H>>, [<<SH/binary, H>> | ST]};
@@ -95,7 +103,8 @@ do_tokenize(<<>>, {Static, Dynamic}, _TokensAcc, Acc) ->
 
 tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
     {StartMarker, MaybeSpace, T} = retrieve_marker(T0, <<>>),
-    case tokenize_expr(T, StartMarker, <<>>, <<Acc0/binary, "<%", StartMarker/binary, MaybeSpace/binary>>) of
+    Acc1 = <<Acc0/binary, "<%", StartMarker/binary, MaybeSpace/binary>>,
+    case tokenize_expr(T, StartMarker, <<>>, Acc1) of
         {ok, {ExprRef, Expr0, EndMarker, Rest, Acc}} ->
             Expr =
                 case lists:member(ExprRef, [expr, end_expr]) andalso EndMarker =:= <<".">> of
@@ -147,7 +156,7 @@ retrieve_marker(<<>>, _Marker) ->
 
 trim(Bin) ->
     {ok, RE} = ?RE_WS_TRIM,
-     re:replace(Bin, RE, "", [{return, binary}, global]).
+    re:replace(Bin, RE, "", [{return, binary}, global]).
 
 retrieve_vars(Expr0) ->
     Expr = erlang:binary_to_list(Expr0),
@@ -169,5 +178,5 @@ split_expr(Expr, Vars) ->
     Static = binary:split(Expr, VarsBin, [global]),
     {Static, Vars}.
 
-unique([])    -> [];
-unique([H|T]) -> [H | [X || X <- unique(T), X =/= H]].
+unique([]) -> [];
+unique([H | T]) -> [H | [X || X <- unique(T), X =/= H]].
