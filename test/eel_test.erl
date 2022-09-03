@@ -14,10 +14,12 @@
 
 tokenize_test() ->
     Bin = <<
+        "<%# Comment #%>"
         "<html>"
         "<div>"
         "<%=   Foo = 1, Bar = Foo   .%>"
         "</div>"
+        "<%# Comment #%>"
         "<%=   case #{foo := Foo} = Map of %>"
         "<%   bar -> Bar; %>"
         "<%   foobar -> Foobar; %>"
@@ -77,6 +79,10 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
                         Dynamic1
                 end,
             do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc], Acc);
+        {ok, {_Comment, Rest, _Acc}} ->
+            % Token = {comment, Comment},
+            % Dynamic = [Token | Dynamic0],
+            do_tokenize(Rest, {Static0, Dynamic0}, TokensAcc, Acc0);
         {error, Reason} ->
             {error, Reason}
     end;
@@ -104,7 +110,12 @@ do_tokenize(<<>>, {Static, Dynamic}, _TokensAcc, Acc) ->
 tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
     {StartMarker, MaybeSpace, T} = retrieve_marker(T0, <<>>),
     Acc1 = <<Acc0/binary, "<%", StartMarker/binary, MaybeSpace/binary>>,
-    case tokenize_expr(T, StartMarker, <<>>, Acc1) of
+    tokenize_by_marker(StartMarker, T, Acc1).
+
+tokenize_by_marker(<<"#">>, Bin, Acc0) ->
+    comment(Bin, <<>>, Acc0);
+tokenize_by_marker(StartMarker, Bin, Acc1) ->
+    case expression(Bin, StartMarker, <<>>, Acc1) of
         {ok, {ExprRef, Expr0, EndMarker, Rest, Acc}} ->
             Expr =
                 case lists:member(ExprRef, [expr, end_expr]) andalso EndMarker =:= <<".">> of
@@ -114,14 +125,24 @@ tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
             Vars = retrieve_vars(Expr),
             Parts = split_expr(Expr, Vars),
             UniqueVars = unique(Vars),
-
             Token = {ExprRef, {StartMarker, EndMarker}, Expr, UniqueVars, Parts},
             {ok, {ExprRef, Token, Rest, Acc}};
         {error, Reason} ->
             {error, Reason}
     end.
 
-tokenize_expr(<<32, "%>", T/binary>>, StartMarker, Cache, Acc) ->
+comment(<<32, "#%>", T/binary>>, Cache, Acc0) ->
+    Comment = trim(Cache),
+    {ok, {Comment, T, <<Acc0/binary, Comment/binary, " #%>">>}};
+comment(<<"#%>", _/binary>>, _Cache, _Acc) ->
+    % TODO: Handle missing_space
+    {error, missing_space};
+comment(<<H, T/binary>>, Cache, Acc) ->
+    comment(T, <<Cache/binary, H>>, Acc);
+comment(<<>>, _Cache, _Acc) ->
+    {error, eof}.
+
+expression(<<32, "%>", T/binary>>, StartMarker, Cache, Acc) ->
     Expr = trim(Cache),
     ExprRef =
         case StartMarker of
@@ -129,7 +150,7 @@ tokenize_expr(<<32, "%>", T/binary>>, StartMarker, Cache, Acc) ->
             _ -> start_expr
         end,
     {ok, {ExprRef, Expr, <<32>>, T, <<Acc/binary, Expr/binary, " %>">>}};
-tokenize_expr(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache, Acc) ->
+expression(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache, Acc) ->
     Expr = trim(Cache),
     ExprRef =
         case StartMarker of
@@ -137,12 +158,15 @@ tokenize_expr(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache, Acc) ->
             _ -> expr
         end,
     {ok, {ExprRef, Expr, <<EndMarker>>, T, <<Acc/binary, Expr/binary, 32, EndMarker, "%>">>}};
-tokenize_expr(<<"<%", _/binary>>, _StartMarker, _Cache, _Acc) ->
-    % TODO: Handle unknown marker
+expression(<<"<%", _/binary>>, _StartMarker, _Cache, _Acc) ->
+    % TODO: Handle unknown start marker
+    {error, unknown_start_marker};
+expression(<<"%>", _/binary>>, _StartMarker, _Cache, _Acc) ->
+    % TODO: Handle unknown end marker
     {error, unknown_end_marker};
-tokenize_expr(<<H, T/binary>>, StartMarker, Cache, Acc) ->
-    tokenize_expr(T, StartMarker, <<Cache/binary, H>>, Acc);
-tokenize_expr(<<>>, _StartMarker, _Cache, _Acc) ->
+expression(<<H, T/binary>>, StartMarker, Cache, Acc) ->
+    expression(T, StartMarker, <<Cache/binary, H>>, Acc);
+expression(<<>>, _StartMarker, _Cache, _Acc) ->
     {error, eof}.
 
 retrieve_marker(<<32, T/binary>>, <<>>) ->
