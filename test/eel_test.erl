@@ -37,18 +37,43 @@ tokenize_test() ->
             ],
             [
                 [
-                    {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'],
-                        {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}}
+                    {expr,
+                        {
+                            {<<"=">>, <<".">>},
+                            <<"Foo = 1, Bar = Foo.">>,
+                            ['Foo', 'Bar'],
+                            {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}
+                        }}
                 ],
                 [
-                    {start_expr, {<<"=">>, <<" ">>}, <<"case #{foo := Foo} = Map of">>, ['Map'],
-                        {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}},
-                    {mid_expr, {<<" ">>, <<" ">>}, <<"bar -> Bar;">>, ['Bar'],
-                        {[<<"bar -> ">>, <<";">>], ['Bar']}},
-                    {mid_expr, {<<" ">>, <<" ">>}, <<"foobar -> Foobar;">>, ['Foobar'],
-                        {[<<"foobar -> ">>, <<";">>], ['Foobar']}},
-                    {end_expr, {<<" ">>, <<".">>}, <<"Foo -> Foo end.">>, ['Foo'],
-                        {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}}
+                    {start_expr,
+                        {
+                            {<<"=">>, <<" ">>},
+                            <<"case #{foo := Foo} = Map of">>,
+                            ['Map'],
+                            {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}
+                        }},
+                    {mid_expr,
+                        {
+                            {<<" ">>, <<" ">>},
+                            <<"bar -> Bar;">>,
+                            ['Bar'],
+                            {[<<"bar -> ">>, <<";">>], ['Bar']}
+                        }},
+                    {mid_expr,
+                        {
+                            {<<" ">>, <<" ">>},
+                            <<"foobar -> Foobar;">>,
+                            ['Foobar'],
+                            {[<<"foobar -> ">>, <<";">>], ['Foobar']}
+                        }},
+                    {end_expr,
+                        {
+                            {<<" ">>, <<".">>},
+                            <<"Foo -> Foo end.">>,
+                            ['Foo'],
+                            {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}
+                        }}
                 ]
             ]
         },
@@ -125,7 +150,7 @@ tokenize_by_marker(StartMarker, Bin, Acc1) ->
             Vars = retrieve_vars(Expr),
             Parts = split_expr(Expr, Vars),
             UniqueVars = unique(Vars),
-            Token = {ExprRef, {StartMarker, EndMarker}, Expr, UniqueVars, Parts},
+            Token = {ExprRef, {{StartMarker, EndMarker}, Expr, UniqueVars, Parts}},
             {ok, {ExprRef, Token, Rest, Acc}};
         {error, Reason} ->
             {error, Reason}
