@@ -135,6 +135,7 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
                 end,
             do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc], Acc);
         {ok, {_Comment, Rest, _Acc}} ->
+            % TODO: Maybe the comment supress can be optional
             % Token = {comment, Comment},
             % Dynamic = [Token | Dynamic0],
             do_tokenize(Rest, {Static0, Dynamic0}, TokensAcc, Acc0);
