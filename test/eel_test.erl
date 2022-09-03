@@ -26,11 +26,15 @@ tokenize_test() ->
         {
             [],
             [
-                {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'], {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}},
-                {start_expr, {<<"=">>, <<" ">>}, <<"case #{foo := Foo} = Map of">>, ['Map'], {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}},
-                {mid_expr, {<<" ">>, <<" ">>}, <<"bar -> Bar;">>, ['Bar'], {[<<"bar -> ">>, <<";">>], ['Bar']}},
-                {mid_expr, {<<" ">>, <<" ">>}, <<"foobar -> Foobar;">>, ['Foobar'], {[<<"foobar -> ">>, <<";">>], ['Foobar']}},
-                {end_expr, {<<" ">>, <<".">>}, <<"Foo -> Foo end.">>, ['Foo'], {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}}
+                [
+                    {expr, {<<"=">>, <<".">>}, <<"Foo = 1, Bar = Foo.">>, ['Foo', 'Bar'], {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}}
+                ],
+                [
+                    {start_expr, {<<"=">>, <<" ">>}, <<"case #{foo := Foo} = Map of">>, ['Map'], {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}},
+                    {mid_expr, {<<" ">>, <<" ">>}, <<"bar -> Bar;">>, ['Bar'], {[<<"bar -> ">>, <<";">>], ['Bar']}},
+                    {mid_expr, {<<" ">>, <<" ">>}, <<"foobar -> Foobar;">>, ['Foobar'], {[<<"foobar -> ">>, <<";">>], ['Foobar']}},
+                    {end_expr, {<<" ">>, <<".">>}, <<"Foo -> Foo end.">>, ['Foo'], {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}}
+                ]
             ]
         },
         <<"<html><%= Foo = 1, Bar = Foo .%><%= case #{foo := Foo} = Map of %><% bar -> Bar; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
@@ -40,10 +44,21 @@ tokenize_test() ->
 tokenize(Bin) ->
     do_tokenize(Bin, {[], []}, <<>>).
 
-do_tokenize(<<"<%", _/binary>> = Bin, {Static, Dynamic}, Acc0) ->
+do_tokenize(<<"<%", _/binary>> = Bin, {Static, Dynamic0}, Acc0) ->
     case tokenize_expr(Bin, Acc0) of
-        {ok, {Token, Rest, Acc}} ->
-            do_tokenize(Rest, {Static, [Token | Dynamic]}, Acc);
+        {ok, {ExprRef, Token, Rest, Acc}} ->
+            Dynamic1 =
+                case lists:member(ExprRef, [expr, start_expr]) of
+                    true -> [[Token] | Dynamic0];
+                    false ->
+                        [[Token | erlang:hd(Dynamic0)] | erlang:tl(Dynamic0)]
+                end,
+            Dynamic =
+                case ExprRef =:= end_expr of
+                    true -> [lists:reverse(erlang:hd(Dynamic1)) | erlang:tl(Dynamic1)];
+                    false -> Dynamic1
+                end,
+            do_tokenize(Rest, {Static, Dynamic}, Acc);
         {error, Reason} ->
             {error, Reason}
     end;
@@ -66,7 +81,7 @@ tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
             UniqueVars = unique(Vars),
 
             Token = {ExprRef, {StartMarker, EndMarker}, Expr, UniqueVars, Parts},
-            {ok, {Token, Rest, Acc}};
+            {ok, {ExprRef, Token, Rest, Acc}};
         {error, Reason} ->
             {error, Reason}
     end.
