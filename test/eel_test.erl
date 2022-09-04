@@ -431,6 +431,8 @@ join(Static, Dynamic) ->
     do_join(Static, Dynamic, [], []).
 
 do_join([S | Static], [D0 | Dynamic], IOList, Siblings) ->
+    % TODO: Dynamic expression must be wrapped with "to_binary_fun".
+    %       Same as iolist_to_binary_fun/2 case,
     D = erlang:iolist_to_binary(D0),
     do_join(Static, Dynamic, [D, S | IOList], ["~s", "~p" | Siblings]);
 do_join([S | Static], [], IOList, Siblings) ->
@@ -532,3 +534,78 @@ parse(Flattened) ->
         end,
         Flattened
     ).
+
+compile_test() ->
+    Bin = <<
+        "<%# Comment #%>"
+        "<html>"
+        "<div>"
+        "<%=   Foo = 1, Bar = Foo   .%>"
+        "</div>"
+        "<%# Comment #%>"
+        "<%=   case #{foo := Foo} = Map of %>"
+        "<%   bar -> %>"
+        "<p><%= Bar .%></p>"
+        "<% ; %>"
+        "<%   foobar -> Foobar; %>"
+        "<%   Foo -> Foo end .%>"
+        "</html>"
+    >>,
+    Expected = {
+        [
+            <<"<html><div>">>,
+            <<>>,
+            <<"</div>">>,
+            <<>>,
+            <<"</html>">>
+        ],
+        [
+            {
+                [
+                    {match, 1, {var, 1, 'Foo'}, {integer, 1, 1}},
+                    {match, 1, {var, 1, 'Bar'}, {var, 1, 'Foo'}}
+                ],
+                ['Foo', 'Bar']
+            },
+            {
+                [
+                    {'case', 1,
+                        {match, 1,
+                            {map, 1, [{map_field_exact, 1, {atom, 1, foo}, {var, 1, 'Foo'}}]},
+                            {var, 1, 'Map'}},
+                        [
+                            {clause, 1, [{atom, 1, bar}], [], [
+                                {call, 1,
+                                    {remote, 1, {atom, 1, erlang}, {atom, 1, iolist_to_binary}}, [
+                                        {cons, 1,
+                                            {bin, 1, [
+                                                {bin_element, 1, {string, 1, "<p>"}, default,
+                                                    default}
+                                            ]},
+                                            {cons, 1, {var, 1, 'Bar'},
+                                                {cons, 1, {bin, 1, []},
+                                                    {cons, 1,
+                                                        {bin, 1, [
+                                                            {bin_element, 1, {string, 1, "</p>"},
+                                                                default, default}
+                                                        ]},
+                                                        {nil, 1}}}}}
+                                    ]}
+                            ]},
+                            {clause, 1, [{atom, 1, foobar}], [], [{var, 1, 'Foobar'}]},
+                            {clause, 1, [{var, 1, 'Foo'}], [], [{var, 1, 'Foo'}]}
+                        ]}
+                ],
+                ['Map', 'Bar', 'Foobar', 'Foo']
+            }
+        ]
+    },
+    ?assertEqual(Expected, compile(Bin)).
+
+compile(Bin) ->
+    % TODO: Remove Expression from tokenize return.
+    %       It should be {Static, Dynamic}.
+    {{Static, Dynamic0}, _Expression} = tokenize(Bin),
+    Dynamic1 = flatten(Dynamic0),
+    Dynamic = parse(Dynamic1),
+    {Static, Dynamic}.
