@@ -24,10 +24,10 @@
 compile(Bin) ->
     % TODO: Remove Expression from tokenize return.
     %       It should be {Static, Dynamic}.
-    {{Static, Dynamic0}, _Expression} = tokenize(Bin),
-    Dynamic1 = flatten(Dynamic0),
-    Dynamic = parse(Dynamic1),
-    {Static, Dynamic}.
+    {{Static, Dynamic}, _Expression} = tokenize(Bin),
+    Flattened = flatten(Dynamic),
+    AST = parse(Flattened),
+    {Static, AST}.
 
 compile_file(FileName) ->
     case file:read_file(FileName) of
@@ -35,10 +35,10 @@ compile_file(FileName) ->
         {error, Reason} -> {error, Reason}
     end.
 
-render(Static, Compiled, Bindings) ->
-    render(Static, Compiled, #{}, Bindings).
+render(Static, AST, Bindings) ->
+    render(Static, AST, #{}, Bindings).
 
-render(Static, Compiled, Memo, NewBindings) ->
+render(Static, AST, Memo, NewBindings) ->
     Bindings = maps:merge(maps:get(bindings, Memo, #{}), NewBindings),
     VarsToRender = maps:keys(NewBindings),
     EvalMemo = maps:get(eval, Memo, []),
@@ -62,7 +62,7 @@ render(Static, Compiled, Memo, NewBindings) ->
                 {[Bin | Acc], Indexes0#{Index => Bin}, NewIndexes, Index + 1}
             end,
             {[], #{}, #{}, 1},
-            Compiled
+            AST
         ),
     Eval = lists:reverse(ReversedEval),
     Render = merge(Static, Eval),
@@ -70,6 +70,7 @@ render(Static, Compiled, Memo, NewBindings) ->
         eval => Eval,
         bindings => Bindings
     },
+    % TODO: Remove Static from the bindings tuple
     {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
 
 %%%=============================================================================
@@ -710,18 +711,18 @@ render_test() ->
         "</ul>"
         "<div>Item count: <%= erlang:length(List) .%></div>"
     >>,
-    {Static, Dynamic} = compile(Bin),
+    {Static, AST} = compile(Bin),
     Bindings = #{
         'Title' => <<"EEL">>,
         'List' => [<<"Foo">>, <<"Bar">>]
     },
-    ExpectedRender = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+    ExpectedRender = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>ItFem count: 2</div>">>,
     ExpectedIndexes = #{
         1 => <<"EEL">>,
         2 => <<"<li>Foo</li><li>Bar</li>">>,
         3 => <<"2">>
     },
-    {Render, Memo, {_, _, Indexes}} = render(Static, Dynamic, Bindings),
+    {Render, Memo, {_, _, Indexes}} = render(Static, AST, Bindings),
     ?assertEqual(ExpectedRender, Render),
     ?assertEqual(ExpectedIndexes, Indexes),
 
@@ -734,7 +735,7 @@ render_test() ->
     ExpectedMemoIndexes = #{
         1 => <<"Embedded Erlang">>
     },
-    {MemoRender, _, {_, _, MemoIndexes}} = render(Static, Dynamic, Memo, NewBindings),
+    {MemoRender, _, {_, _, MemoIndexes}} = render(Static, AST, Memo, NewBindings),
     ?assertEqual(ExpectedMemoRender, MemoRender),
     ?assertEqual(ExpectedMemoIndexes, MemoIndexes).
 
