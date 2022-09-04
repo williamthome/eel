@@ -466,3 +466,69 @@ extract_expression_vars(Expression) ->
             Expression
         ),
     lists:reverse(lists:flatten(Vars)).
+
+parse_test() ->
+    Flattened = [
+        {
+            <<"Foo = 1, Bar = Foo.">>,
+            ['Foo', 'Bar']
+        },
+        {
+            <<
+                "case #{foo := Foo} = Map of "
+                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, Bar, <<>>, <<\"</p>\">>]); "
+                "foobar -> Foobar; "
+                "Foo -> Foo "
+                "end."
+            >>,
+            ['Map', 'Bar', 'Foobar', 'Foo']
+        }
+    ],
+    Expected = [
+        {
+            [
+                {match, 1, {var, 1, 'Foo'}, {integer, 1, 1}},
+                {match, 1, {var, 1, 'Bar'}, {var, 1, 'Foo'}}
+            ],
+            ['Foo', 'Bar']
+        },
+        {
+            [
+                {'case', 1,
+                    {match, 1, {map, 1, [{map_field_exact, 1, {atom, 1, foo}, {var, 1, 'Foo'}}]},
+                        {var, 1, 'Map'}},
+                    [
+                        {clause, 1, [{atom, 1, bar}], [], [
+                            {call, 1, {remote, 1, {atom, 1, erlang}, {atom, 1, iolist_to_binary}}, [
+                                {cons, 1,
+                                    {bin, 1, [
+                                        {bin_element, 1, {string, 1, "<p>"}, default, default}
+                                    ]},
+                                    {cons, 1, {var, 1, 'Bar'},
+                                        {cons, 1, {bin, 1, []},
+                                            {cons, 1,
+                                                {bin, 1, [
+                                                    {bin_element, 1, {string, 1, "</p>"}, default,
+                                                        default}
+                                                ]},
+                                                {nil, 1}}}}}
+                            ]}
+                        ]},
+                        {clause, 1, [{atom, 1, foobar}], [], [{var, 1, 'Foobar'}]},
+                        {clause, 1, [{var, 1, 'Foo'}], [], [{var, 1, 'Foo'}]}
+                    ]}
+            ],
+            ['Map', 'Bar', 'Foobar', 'Foo']
+        }
+    ],
+    ?assertEqual(Expected, parse(Flattened)).
+
+parse(Flattened) ->
+    lists:map(
+        fun({Expr, Vars}) ->
+            {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
+            {ok, Exprs} = erl_parse:parse_exprs(Tokens),
+            {Exprs, Vars}
+        end,
+        Flattened
+    ).
