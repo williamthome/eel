@@ -620,13 +620,14 @@ render_test() ->
         "<li><%= Item .%></li>"
         "<% end, List) .%>"
         "</ul>"
+        "<div>Item count: <%= erlang:length(List) .%></div>"
     >>,
     {Static, Dynamic} = compile(Bin),
     Bindings = #{
         'Title' => <<"EEL">>,
         'List' => [<<"Foo">>, <<"Bar">>]
     },
-    Expected = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul>">>,
+    Expected = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
     ?assertEqual(Expected, render(Static, Dynamic, [], Bindings)).
 
 % TODO: Memo to render only dynamics with bindings keys.
@@ -635,9 +636,35 @@ render(Static, Compiled, _Memo = [], Bindings) ->
         lists:map(
             fun({Exprs, _Vars}) ->
                 {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
-                % TODO: Map all results to binary
-                erlang:iolist_to_binary(Result)
+                % TODO: to_binary options
+                to_binary(Result)
             end,
             Compiled
         ),
     merge(Static, Eval).
+
+to_binary(Value) ->
+    to_binary(Value, undefined).
+
+to_binary(Bin, _) when is_binary(Bin) ->
+    Bin;
+to_binary(undefined, _) ->
+    <<>>;
+to_binary(Atom, undefined) when is_atom(Atom) ->
+    erlang:atom_to_binary(Atom);
+to_binary(Atom, Encoding) when is_atom(Atom), is_atom(Encoding) ->
+    erlang:atom_to_binary(Atom, Encoding);
+to_binary(Float, undefined) when is_float(Float) ->
+    erlang:float_to_binary(Float);
+to_binary(Float, Options) when is_float(Float), is_list(Options) ->
+    erlang:float_to_binary(Float, Options);
+to_binary(Int, undefined) when is_integer(Int) ->
+    erlang:integer_to_binary(Int);
+to_binary(Int, Base) when is_integer(Int), is_integer(Base) ->
+    erlang:integer_to_binary(Int, Base);
+to_binary(List, undefined) when is_list(List) ->
+    erlang:iolist_to_binary(List);
+to_binary(Tuple, undefined) when is_tuple(Tuple) ->
+    to_binary(erlang:tuple_to_list(Tuple));
+to_binary(_, _) ->
+    <<>>.
