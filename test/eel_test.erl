@@ -627,21 +627,51 @@ render_test() ->
         'Title' => <<"EEL">>,
         'List' => [<<"Foo">>, <<"Bar">>]
     },
-    Expected = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
-    ?assertEqual(Expected, render(Static, Dynamic, [], Bindings)).
+    ExpectedRender = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+    {Render, Memo} = render(Static, Dynamic, Bindings),
+    ?assertEqual(ExpectedRender, Render),
 
-% TODO: Memo to render only dynamics with bindings keys.
-render(Static, Compiled, _Memo = [], Bindings) ->
-    Eval =
-        lists:map(
-            fun({Exprs, _Vars}) ->
-                {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
-                % TODO: to_binary options
-                to_binary(Result)
+    NewBindings = Bindings = #{
+        'Title' => <<"Embedded Erlang">>
+    },
+    ExpectedMemoRender = <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+    {MemoRender, _} = render(Static, Dynamic, Memo, NewBindings),
+    ?assertEqual(ExpectedMemoRender, MemoRender).
+
+render(Static, Compiled, Bindings) ->
+    render(Static, Compiled, #{}, Bindings).
+
+render(Static, Compiled, Memo, NewBindings) ->
+    Bindings = maps:merge(maps:get(bindings, Memo, #{}), NewBindings),
+    VarsToRender = maps:keys(NewBindings),
+    EvalMemo = maps:get(eval, Memo, []),
+    {ReversedEval, _} =
+        lists:foldl(
+            fun({Exprs, Vars}, {Acc, Index}) ->
+                Bin =
+                    case lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars) of
+                        true ->
+                            {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
+                            % TODO: to_binary options
+                            to_binary(Result);
+                        false ->
+                            case EvalMemo of
+                                [] -> <<>>;
+                                _ -> lists:nth(Index, EvalMemo)
+                            end
+                    end,
+                {[Bin | Acc], Index + 1}
             end,
+            {[], 1},
             Compiled
         ),
-    merge(Static, Eval).
+    Eval = lists:reverse(ReversedEval),
+    Render = merge(Static, Eval),
+    NewMemo = #{
+        eval => Eval,
+        bindings => Bindings
+    },
+    {Render, NewMemo}.
 
 to_binary(Value) ->
     to_binary(Value, undefined).
