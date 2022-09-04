@@ -628,15 +628,27 @@ render_test() ->
         'List' => [<<"Foo">>, <<"Bar">>]
     },
     ExpectedRender = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
-    {Render, Memo} = render(Static, Dynamic, Bindings),
-    ?assertEqual(ExpectedRender, Render),
-
-    NewBindings = Bindings = #{
-        'Title' => <<"Embedded Erlang">>
+    ExpectedIndexes = #{
+        1 => <<"EEL">>,
+        2 => <<"<li>Foo</li><li>Bar</li>">>,
+        3 => <<"2">>
     },
-    ExpectedMemoRender = <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
-    {MemoRender, _} = render(Static, Dynamic, Memo, NewBindings),
-    ?assertEqual(ExpectedMemoRender, MemoRender).
+    {Render, Memo, {_, _, Indexes}} = render(Static, Dynamic, Bindings),
+    ?assertEqual(ExpectedRender, Render),
+    ?assertEqual(ExpectedIndexes, Indexes),
+
+    NewBindings =
+        Bindings = #{
+            'Title' => <<"Embedded Erlang">>
+        },
+    ExpectedMemoRender =
+        <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+    ExpectedMemoIndexes = #{
+        1 => <<"Embedded Erlang">>
+    },
+    {MemoRender, _, {_, _, MemoIndexes}} = render(Static, Dynamic, Memo, NewBindings),
+    ?assertEqual(ExpectedMemoRender, MemoRender),
+    ?assertEqual(ExpectedMemoIndexes, MemoIndexes).
 
 render(Static, Compiled, Bindings) ->
     render(Static, Compiled, #{}, Bindings).
@@ -645,25 +657,26 @@ render(Static, Compiled, Memo, NewBindings) ->
     Bindings = maps:merge(maps:get(bindings, Memo, #{}), NewBindings),
     VarsToRender = maps:keys(NewBindings),
     EvalMemo = maps:get(eval, Memo, []),
-    {ReversedEval, _} =
+    {ReversedEval, BindingsIndexes, NewBindingsIndexes, _} =
         lists:foldl(
-            fun({Exprs, Vars}, {Acc, Index}) ->
-                Bin =
+            fun({Exprs, Vars}, {Acc, Indexes0, NewIndexes0, Index}) ->
+                {Bin, NewIndexes} =
                     case lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars) of
                         true ->
-                            {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
+                            {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
                             % TODO: to_binary options
-                            to_binary(Result);
+                            Result = to_binary(Result0),
+                            {Result, NewIndexes0#{Index => Result}};
                         false ->
                             case EvalMemo of
                                 % TODO: Return custom error or maybe empty binary
                                 [] -> erlang:error(badarg);
-                                _ -> lists:nth(Index, EvalMemo)
+                                _ -> {lists:nth(Index, EvalMemo), NewIndexes0}
                             end
                     end,
-                {[Bin | Acc], Index + 1}
+                {[Bin | Acc], Indexes0#{Index => Bin}, NewIndexes, Index + 1}
             end,
-            {[], 1},
+            {[], #{}, #{}, 1},
             Compiled
         ),
     Eval = lists:reverse(ReversedEval),
@@ -672,7 +685,7 @@ render(Static, Compiled, Memo, NewBindings) ->
         eval => Eval,
         bindings => Bindings
     },
-    {Render, NewMemo}.
+    {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
 
 to_binary(Value) ->
     to_binary(Value, undefined).
