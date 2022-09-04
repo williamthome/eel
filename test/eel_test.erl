@@ -656,7 +656,8 @@ render(Static, Compiled, Memo, NewBindings) ->
                             to_binary(Result);
                         false ->
                             case EvalMemo of
-                                [] -> <<>>;
+                                % TODO: Return custom error or maybe empty binary
+                                [] -> erlang:error(badarg);
                                 _ -> lists:nth(Index, EvalMemo)
                             end
                     end,
