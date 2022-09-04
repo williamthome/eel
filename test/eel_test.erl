@@ -32,9 +32,7 @@ tokenize_test() ->
         {
             [
                 <<"<html><div>">>,
-                <<>>,
                 <<"</div>">>,
-                <<>>,
                 <<"</html>">>
             ],
             [
@@ -66,7 +64,6 @@ tokenize_test() ->
                         {
                             [
                                 <<"<p>">>,
-                                <<>>,
                                 <<"</p>">>
                             ],
                             [
@@ -117,13 +114,20 @@ tokenize(Bin) ->
 do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
     case tokenize_expr(Bin, Acc0) of
         {ok, {ExprRef, Token, Rest, Acc}} ->
-            {Static, Dynamic1} =
+            Static =
+                case TokensAcc of
+                    [{ExprRef, _} | _] when ExprRef =:= expr; ExprRef =:= start_expr ->
+                        [<<>> | Static0];
+                    _ ->
+                        Static0
+                end,
+            Dynamic1 =
                 case lists:member(ExprRef, [expr, start_expr]) of
                     true ->
-                        {[<<>> | Static0], [[Token] | Dynamic0]};
+                        [[Token] | Dynamic0];
                     false ->
                         [DH0 | DT0] = Dynamic0,
-                        {Static0, [[Token | DH0] | DT0]}
+                        [[Token | DH0] | DT0]
                 end,
             Dynamic =
                 case ExprRef =:= end_expr of
@@ -525,6 +529,7 @@ parse_test() ->
     ],
     ?assertEqual(Expected, parse(Flattened)).
 
+% TODO: Return ok or error tuple.
 parse(Flattened) ->
     lists:map(
         fun({Expr, Vars}) ->
@@ -554,9 +559,7 @@ compile_test() ->
     Expected = {
         [
             <<"<html><div>">>,
-            <<>>,
             <<"</div>">>,
-            <<>>,
             <<"</html>">>
         ],
         [
@@ -583,13 +586,12 @@ compile_test() ->
                                                     default}
                                             ]},
                                             {cons, 1, {var, 1, 'Bar'},
-                                                {cons, 1, {bin, 1, []},
-                                                    {cons, 1,
-                                                        {bin, 1, [
-                                                            {bin_element, 1, {string, 1, "</p>"},
-                                                                default, default}
-                                                        ]},
-                                                        {nil, 1}}}}}
+                                                {cons, 1,
+                                                    {bin, 1, [
+                                                        {bin_element, 1, {string, 1, "</p>"},
+                                                            default, default}
+                                                    ]},
+                                                    {nil, 1}}}}
                                     ]}
                             ]},
                             {clause, 1, [{atom, 1, foobar}], [], [{var, 1, 'Foobar'}]},
@@ -609,3 +611,33 @@ compile(Bin) ->
     Dynamic1 = flatten(Dynamic0),
     Dynamic = parse(Dynamic1),
     {Static, Dynamic}.
+
+render_test() ->
+    Bin = <<
+        "<h1><%= Title .%></h1>"
+        "<ul>"
+        "<%= lists:map(fun(Item) -> %>"
+        "<li><%= Item .%></li>"
+        "<% end, List) .%>"
+        "</ul>"
+    >>,
+    {Static, Dynamic} = compile(Bin),
+    Bindings = #{
+        'Title' => <<"EEL">>,
+        'List' => [<<"Foo">>, <<"Bar">>]
+    },
+    Expected = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul>">>,
+    ?assertEqual(Expected, render(Static, Dynamic, [], Bindings)).
+
+% TODO: Memo to render only dynamics with bindings keys.
+render(Static, Compiled, _Memo = [], Bindings) ->
+    Eval =
+        lists:map(
+            fun({Exprs, _Vars}) ->
+                {value, Result, _} = erl_eval:exprs(Exprs, Bindings),
+                % TODO: Map all results to binary
+                erlang:iolist_to_binary(Result)
+            end,
+            Compiled
+        ),
+    merge(Static, Eval).
