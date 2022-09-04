@@ -42,9 +42,9 @@ tokenize_test() ->
                     {expr,
                         {
                             {<<"=">>, <<".">>},
-                            <<"Foo = 1, Bar = Foo.">>,
+                            <<"Foo = 1, Bar = Foo">>,
                             ['Foo', 'Bar'],
-                            {[<<>>, <<" = 1, ">>, <<" = ">>, <<".">>], ['Foo', 'Bar', 'Foo']}
+                            {[<<>>, <<" = 1, ">>, <<" = ">>, <<>>], ['Foo', 'Bar', 'Foo']}
                         }}
                 ],
                 [
@@ -74,9 +74,9 @@ tokenize_test() ->
                                     {expr,
                                         {
                                             {<<"=">>, <<".">>},
-                                            <<"Bar.">>,
+                                            <<"Bar">>,
                                             ['Bar'],
-                                            {[<<>>, <<".">>], ['Bar']}
+                                            {[<<>>, <<>>], ['Bar']}
                                         }}
                                 ]
                             ]
@@ -100,9 +100,9 @@ tokenize_test() ->
                     {end_expr,
                         {
                             {<<" ">>, <<".">>},
-                            <<"Foo -> Foo end.">>,
+                            <<"Foo -> Foo end">>,
                             ['Foo'],
-                            {[<<>>, <<" -> ">>, <<" end.">>], ['Foo', 'Foo']}
+                            {[<<>>, <<" -> ">>, <<" end">>], ['Foo', 'Foo']}
                         }}
                 ]
             ]
@@ -187,12 +187,7 @@ tokenize_by_marker(<<"#">>, Bin, Acc0) ->
     comment(Bin, <<>>, Acc0);
 tokenize_by_marker(StartMarker, Bin, Acc1) ->
     case expression(Bin, StartMarker, <<>>, Acc1) of
-        {ok, {ExprRef, Expr0, EndMarker, Rest, Acc}} ->
-            Expr =
-                case lists:member(ExprRef, [expr, end_expr]) andalso EndMarker =:= <<".">> of
-                    true -> <<Expr0/binary, $.>>;
-                    false -> Expr0
-                end,
+        {ok, {ExprRef, Expr, EndMarker, Rest, Acc}} ->
             Vars = retrieve_vars(Expr),
             Parts = split_expr(Expr, Vars),
             UniqueVars = unique(Vars),
@@ -284,3 +279,190 @@ split_expr(Expr, Vars) ->
 
 unique([]) -> [];
 unique([H | T]) -> [H | [X || X <- unique(T), X =/= H]].
+
+merge(Static, Dynamic) ->
+    do_merge(Static, Dynamic, <<>>).
+
+do_merge([S | Static], [D0 | Dynamic], Acc) ->
+    D =
+        case D0 of
+            D0 when is_atom(D0) ->
+                erlang:atom_to_binary(D0);
+            D0 when is_binary(D0) ->
+                D0
+        end,
+    do_merge(Static, Dynamic, <<Acc/binary, S/binary, D/binary>>);
+do_merge([S | Static], [], Acc) ->
+    do_merge(Static, [], <<Acc/binary, S/binary>>);
+do_merge([], [], Acc) ->
+    Acc.
+
+flatten_test() ->
+    Dynamic = [
+        [
+            {expr,
+                {
+                    {<<"=">>, <<".">>},
+                    <<"Foo = 1, Bar = Foo">>,
+                    ['Foo', 'Bar'],
+                    {[<<>>, <<" = 1, ">>, <<" = ">>, <<>>], ['Foo', 'Bar', 'Foo']}
+                }}
+        ],
+        [
+            {start_expr,
+                {
+                    {<<"=">>, <<" ">>},
+                    <<"case #{foo := Foo} = Map of">>,
+                    ['Map'],
+                    {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}
+                }},
+            {mid_expr,
+                {
+                    {<<" ">>, <<" ">>},
+                    <<"bar ->">>,
+                    [],
+                    {[<<"bar ->">>], []}
+                }},
+            {nested_expr, {
+                {
+                    [
+                        <<"<p>">>,
+                        <<>>,
+                        <<"</p>">>
+                    ],
+                    [
+                        [
+                            {expr,
+                                {
+                                    {<<"=">>, <<".">>},
+                                    <<"Bar">>,
+                                    ['Bar'],
+                                    {[<<>>, <<>>], ['Bar']}
+                                }}
+                        ]
+                    ]
+                },
+                <<"<p><%= Bar .%></p>">>
+            }},
+            {mid_expr,
+                {
+                    {<<" ">>, <<" ">>},
+                    <<";">>,
+                    [],
+                    {[<<";">>], []}
+                }},
+            {mid_expr,
+                {
+                    {<<" ">>, <<" ">>},
+                    <<"foobar -> Foobar;">>,
+                    ['Foobar'],
+                    {[<<"foobar -> ">>, <<";">>], ['Foobar']}
+                }},
+            {end_expr,
+                {
+                    {<<" ">>, <<".">>},
+                    <<"Foo -> Foo end">>,
+                    ['Foo'],
+                    {[<<>>, <<" -> ">>, <<" end">>], ['Foo', 'Foo']}
+                }}
+        ]
+    ],
+    Expected = [
+        {
+            <<"Foo = 1, Bar = Foo.">>,
+            ['Foo', 'Bar']
+        },
+        {
+            <<
+                "case #{foo := Foo} = Map of "
+                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, Bar, <<>>, <<\"</p>\">>]); "
+                "foobar -> Foobar; "
+                "Foo -> Foo "
+                "end."
+            >>,
+            ['Map', 'Bar', 'Foobar', 'Foo']
+        }
+    ],
+    ?assertEqual(Expected, flatten(Dynamic)).
+
+flatten(Dynamic) ->
+    lists:map(fun merge_expression/1, Dynamic).
+
+merge_expression(Expression) ->
+    Merged =
+        lists:foldl(
+            fun
+                ({ERef, {_, _, _, {Static, Dynamic}}}, Acc) ->
+                    Merged = merge(Static, Dynamic),
+                    MaybeSpace =
+                        case lists:member(ERef, [expr, end_expr]) of
+                            true -> <<>>;
+                            false -> <<32>>
+                        end,
+                    <<Acc/binary, Merged/binary, MaybeSpace/binary>>;
+                ({nested_expr, {{Static, Dynamic}, _}}, Acc) ->
+                    DynamicExpr = extract_dynamic_expression(Dynamic),
+                    {IOList, Siblings} = join(Static, DynamicExpr),
+                    IOListToBinFun = iolist_to_binary_fun(IOList, Siblings),
+                    <<Acc/binary, IOListToBinFun/binary>>
+            end,
+            <<>>,
+            Expression
+        ),
+    ExpressionEnddingWithDot = <<Merged/binary, $.>>,
+    ExpressionVars = extract_expression_vars(Expression),
+    {ExpressionEnddingWithDot, ExpressionVars}.
+
+extract_dynamic_expression(Dynamic) ->
+    do_extract_dynamic_expression(Dynamic, []).
+
+do_extract_dynamic_expression([Token | Dynamic], Acc) ->
+    Expression = extract_token_expression(Token, Acc),
+    do_extract_dynamic_expression(Dynamic, [Expression | Acc]);
+do_extract_dynamic_expression([], Acc) ->
+    lists:reverse(Acc).
+
+extract_token_expression([{_, {_, Expr, _, _}} | Tokens], Acc) ->
+    extract_token_expression(Tokens, [Expr | Acc]);
+extract_token_expression([], Acc) ->
+    Acc.
+
+join(Static, Dynamic) ->
+    do_join(Static, Dynamic, [], []).
+
+do_join([S | Static], [D0 | Dynamic], IOList, Siblings) ->
+    D = erlang:iolist_to_binary(D0),
+    do_join(Static, Dynamic, [D, S | IOList], ["~s", "~p" | Siblings]);
+do_join([S | Static], [], IOList, Siblings) ->
+    do_join(Static, [], [S | IOList], ["~p" | Siblings]);
+do_join([], _, IOList, Siblings) ->
+    {lists:reverse(IOList), lists:reverse(Siblings)}.
+
+iolist_to_binary_fun(IOList, Siblings) ->
+    Format = erlang:iolist_to_binary([
+        "erlang:iolist_to_binary([", lists:join(", ", Siblings), "])"
+    ]),
+    List = io_lib:format(Format, IOList),
+    erlang:list_to_binary(List).
+
+extract_expression_vars(Expression) ->
+    Vars =
+        lists:foldl(
+            fun
+                ({_, {_, _, ExprVars, _}}, Acc) ->
+                    [lists:reverse(ExprVars) | Acc];
+                ({nested_expr, {{_, Dynamic}, _}}, Acc) ->
+                    NAcc =
+                        lists:foldl(
+                            fun(E, A) ->
+                                [extract_expression_vars(E) | A]
+                            end,
+                            [],
+                            Dynamic
+                        ),
+                    [NAcc | Acc]
+            end,
+            [],
+            Expression
+        ),
+    lists:reverse(lists:flatten(Vars)).
