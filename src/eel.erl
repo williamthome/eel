@@ -9,6 +9,7 @@
 -export([
     compile/1,
     compile_file/1,
+    compile_file/2,
     render/3,
     render/4
 ]).
@@ -28,6 +29,11 @@ compile(Bin) ->
     Flattened = flatten(Dynamic),
     AST = parse(Flattened),
     {Static, AST}.
+
+compile_file(App, FileName0) ->
+    PrivDir = code:priv_dir(App),
+    FileName = filename:join([PrivDir, "templates", FileName0]),
+    compile_file(FileName).
 
 compile_file(FileName) ->
     case file:read_file(FileName) of
