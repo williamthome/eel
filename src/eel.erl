@@ -9,11 +9,10 @@
 -export([
     compile/1,
     compile_file/1,
+    compile_file/2,
     render/3,
     render/4
 ]).
-
--dialyzer({nowarn_function, to_binary/2}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -24,10 +23,15 @@
 compile(Bin) ->
     % TODO: Remove Expression from tokenize return.
     %       It should be {Static, Dynamic}.
-    {{Static, Dynamic0}, _Expression} = tokenize(Bin),
-    Dynamic1 = flatten(Dynamic0),
-    Dynamic = parse(Dynamic1),
-    {Static, Dynamic}.
+    {{Static, Dynamic}, _Expression} = tokenize(Bin),
+    Flattened = flatten(Dynamic),
+    AST = parse(Flattened),
+    {Static, AST}.
+
+compile_file(App, FileName0) ->
+    PrivDir = code:priv_dir(App),
+    FileName = filename:join([PrivDir, "templates", FileName0]),
+    compile_file(FileName).
 
 compile_file(FileName) ->
     case file:read_file(FileName) of
@@ -35,10 +39,10 @@ compile_file(FileName) ->
         {error, Reason} -> {error, Reason}
     end.
 
-render(Static, Compiled, Bindings) ->
-    render(Static, Compiled, #{}, Bindings).
+render(Static, AST, Bindings) ->
+    render(Static, AST, #{}, Bindings).
 
-render(Static, Compiled, Memo, NewBindings) ->
+render(Static, AST, Memo, NewBindings) ->
     Bindings = maps:merge(maps:get(bindings, Memo, #{}), NewBindings),
     VarsToRender = maps:keys(NewBindings),
     EvalMemo = maps:get(eval, Memo, []),
@@ -50,7 +54,7 @@ render(Static, Compiled, Memo, NewBindings) ->
                         true ->
                             {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
                             % TODO: to_binary options
-                            Result = to_binary(Result0),
+                            Result = eel_utils:to_binary(Result0),
                             {Result, NewIndexes0#{Index => Result}};
                         false ->
                             case EvalMemo of
@@ -62,7 +66,7 @@ render(Static, Compiled, Memo, NewBindings) ->
                 {[Bin | Acc], Indexes0#{Index => Bin}, NewIndexes, Index + 1}
             end,
             {[], #{}, #{}, 1},
-            Compiled
+            AST
         ),
     Eval = lists:reverse(ReversedEval),
     Render = merge(Static, Eval),
@@ -70,6 +74,7 @@ render(Static, Compiled, Memo, NewBindings) ->
         eval => Eval,
         bindings => Bindings
     },
+    % TODO: Remove Static from the bindings tuple
     {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
 
 %%%=============================================================================
@@ -315,9 +320,7 @@ join(Static, Dynamic) ->
     do_join(Static, Dynamic, [], []).
 
 do_join([S | Static], [D0 | Dynamic], IOList, Siblings) ->
-    % TODO: Dynamic expression must be wrapped with "to_binary_fun".
-    %       Same as iolist_to_binary_fun/2 case,
-    D = erlang:iolist_to_binary(D0),
+    D = erlang:iolist_to_binary(["eel_utils:to_binary(", D0, ")"]),
     do_join(Static, Dynamic, [D, S | IOList], ["~s", "~p" | Siblings]);
 do_join([S | Static], [], IOList, Siblings) ->
     do_join(Static, [], [S | IOList], ["~p" | Siblings]);
@@ -363,32 +366,6 @@ parse(Flattened) ->
         end,
         Flattened
     ).
-
-to_binary(Value) ->
-    to_binary(Value, undefined).
-
-to_binary(Bin, _) when is_binary(Bin) ->
-    Bin;
-to_binary(undefined, _) ->
-    <<>>;
-to_binary(Atom, undefined) when is_atom(Atom) ->
-    erlang:atom_to_binary(Atom);
-to_binary(Atom, Encoding) when is_atom(Atom), is_atom(Encoding) ->
-    erlang:atom_to_binary(Atom, Encoding);
-to_binary(Float, undefined) when is_float(Float) ->
-    erlang:float_to_binary(Float);
-to_binary(Float, Options) when is_float(Float), is_list(Options) ->
-    erlang:float_to_binary(Float, Options);
-to_binary(Int, undefined) when is_integer(Int) ->
-    erlang:integer_to_binary(Int);
-to_binary(Int, Base) when is_integer(Int), is_integer(Base) ->
-    erlang:integer_to_binary(Int, Base);
-to_binary(List, undefined) when is_list(List) ->
-    erlang:iolist_to_binary(List);
-to_binary(Tuple, undefined) when is_tuple(Tuple) ->
-    to_binary(erlang:tuple_to_list(Tuple));
-to_binary(_, _) ->
-    <<>>.
 
 %%%=============================================================================
 %%% Tests
@@ -570,7 +547,7 @@ flatten_test() ->
         {
             <<
                 "case #{foo := Foo} = Map of "
-                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, Bar, <<>>, <<\"</p>\">>]); "
+                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, eel_utils:to_binary(Bar), <<>>, <<\"</p>\">>]); "
                 "foobar -> Foobar; "
                 "Foo -> Foo "
                 "end."
@@ -589,7 +566,7 @@ parse_test() ->
         {
             <<
                 "case #{foo := Foo} = Map of "
-                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, Bar, <<>>, <<\"</p>\">>]); "
+                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, eel_utils:to_binary(Bar), <<>>, <<\"</p>\">>]); "
                 "foobar -> Foobar; "
                 "Foo -> Foo "
                 "end."
@@ -617,7 +594,10 @@ parse_test() ->
                                     {bin, 1, [
                                         {bin_element, 1, {string, 1, "<p>"}, default, default}
                                     ]},
-                                    {cons, 1, {var, 1, 'Bar'},
+                                    {cons, 1,
+                                        {call, 1,
+                                            {remote, 1, {atom, 1, eel_utils}, {atom, 1, to_binary}},
+                                            [{var, 1, 'Bar'}]},
                                         {cons, 1, {bin, 1, []},
                                             {cons, 1,
                                                 {bin, 1, [
@@ -681,7 +661,11 @@ compile_test() ->
                                                 {bin_element, 1, {string, 1, "<p>"}, default,
                                                     default}
                                             ]},
-                                            {cons, 1, {var, 1, 'Bar'},
+                                            {cons, 1,
+                                                {call, 1,
+                                                    {remote, 1, {atom, 1, eel_utils},
+                                                        {atom, 1, to_binary}},
+                                                    [{var, 1, 'Bar'}]},
                                                 {cons, 1,
                                                     {bin, 1, [
                                                         {bin_element, 1, {string, 1, "</p>"},
@@ -709,19 +693,26 @@ render_test() ->
         "<% end, List) .%>"
         "</ul>"
         "<div>Item count: <%= erlang:length(List) .%></div>"
+        "<ul>"
+        "<%= lists:map(fun(N) -> %>"
+        "<li><%= N .%></li>"
+        "<% end, lists:seq(1, erlang:length(List))) .%>"
+        "</ul>"
     >>,
-    {Static, Dynamic} = compile(Bin),
+    {Static, AST} = compile(Bin),
     Bindings = #{
         'Title' => <<"EEL">>,
         'List' => [<<"Foo">>, <<"Bar">>]
     },
-    ExpectedRender = <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+    ExpectedRender =
+        <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
     ExpectedIndexes = #{
         1 => <<"EEL">>,
         2 => <<"<li>Foo</li><li>Bar</li>">>,
-        3 => <<"2">>
+        3 => <<"2">>,
+        4 => <<"<li>1</li><li>2</li>">>
     },
-    {Render, Memo, {_, _, Indexes}} = render(Static, Dynamic, Bindings),
+    {Render, Memo, {_, _, Indexes}} = render(Static, AST, Bindings),
     ?assertEqual(ExpectedRender, Render),
     ?assertEqual(ExpectedIndexes, Indexes),
 
@@ -730,11 +721,11 @@ render_test() ->
             'Title' => <<"Embedded Erlang">>
         },
     ExpectedMemoRender =
-        <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div>">>,
+        <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
     ExpectedMemoIndexes = #{
         1 => <<"Embedded Erlang">>
     },
-    {MemoRender, _, {_, _, MemoIndexes}} = render(Static, Dynamic, Memo, NewBindings),
+    {MemoRender, _, {_, _, MemoIndexes}} = render(Static, AST, Memo, NewBindings),
     ?assertEqual(ExpectedMemoRender, MemoRender),
     ?assertEqual(ExpectedMemoIndexes, MemoIndexes).
 
