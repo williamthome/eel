@@ -693,11 +693,13 @@ render_test() ->
         "<% end, List) .%>"
         "</ul>"
         "<div>Item count: <%= erlang:length(List) .%></div>"
+        "<%= case erlang:length(List) > 0 of true -> %>"
         "<ul>"
         "<%= lists:map(fun(N) -> %>"
         "<li><%= N .%></li>"
         "<% end, lists:seq(1, erlang:length(List))) .%>"
         "</ul>"
+        "<% ; false -> <<>> end .%>"
     >>,
     {Static, AST} = compile(Bin),
     Bindings = #{
