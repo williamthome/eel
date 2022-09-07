@@ -122,7 +122,7 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
 do_tokenize(Bin, {Static, [HD | Dynamic]}, [{ExprRef, _Expr} | _] = TokensAcc, Acc) when
     ExprRef =:= start_expr; ExprRef =:= mid_expr
 ->
-    case nested(Bin, <<>>) of
+    case nested(Bin, 0, <<>>) of
         {ok, {Nested, T}} ->
             Token = {nested_expr, tokenize(Nested)},
             do_tokenize(
@@ -212,11 +212,15 @@ expression(<<H, T/binary>>, StartMarker, Cache, Acc) ->
 expression(<<>>, _StartMarker, _Cache, _Acc) ->
     {error, eof}.
 
-nested(<<"<% ", _/binary>> = T, Expr) ->
+nested(<<"<% ", _/binary>> = T, 0, Expr) ->
     {ok, {Expr, T}};
-nested(<<H, T/binary>>, Expr) ->
-    nested(T, <<Expr/binary, H>>);
-nested(<<>>, _Expr) ->
+nested(<<"<%= ", T/binary>>, ExprCount, Expr) ->
+    nested(T, ExprCount + 1, <<Expr/binary, "<%= ">>);
+nested(<<" .%>", T/binary>>, ExprCount, Expr) ->
+    nested(T, ExprCount - 1, <<Expr/binary, " .%>">>);
+nested(<<H, T/binary>>, ExprCount, Expr) ->
+    nested(T, ExprCount, <<Expr/binary, H>>);
+nested(<<>>, _ExprCount, _Expr) ->
     {error, eof}.
 
 retrieve_marker(<<32, T/binary>>, <<>>) ->
@@ -290,10 +294,8 @@ merge_expression(Expression) ->
                         end,
                     <<Acc/binary, Merged/binary, MaybeSpace/binary>>;
                 ({nested_expr, {{Static, Dynamic}, _}}, Acc) ->
-                    DynamicExpr = extract_dynamic_expression(Dynamic),
-                    {IOList, Siblings} = join(Static, DynamicExpr),
-                    IOListToBinFun = iolist_to_binary_fun(IOList, Siblings),
-                    <<Acc/binary, IOListToBinFun/binary>>
+                    NestedExpression = nested_expression(Static, Dynamic),
+                    <<Acc/binary, NestedExpression/binary, 32>>
             end,
             <<>>,
             Expression
@@ -313,14 +315,23 @@ do_extract_dynamic_expression([], Acc) ->
 
 extract_token_expression([{_, {_, Expr, _, _}} | Tokens], Acc) ->
     extract_token_expression(Tokens, [Expr | Acc]);
+extract_token_expression([{nested_expr, {{Static, Dynamic}, _}} | Tokens], Acc) ->
+    NestedExpression = nested_expression(Static, Dynamic),
+    extract_token_expression(Tokens, [NestedExpression | Acc]);
 extract_token_expression([], Acc) ->
-    Acc.
+    erlang:iolist_to_binary([
+        "eel_utils:to_binary(", lists:join(" ", lists:reverse(Acc)), ")"
+    ]).
+
+nested_expression(Static, Dynamic) ->
+    DynamicExpr = extract_dynamic_expression(Dynamic),
+    {IOList, Siblings} = join(Static, DynamicExpr),
+    iolist_to_binary_fun(IOList, Siblings).
 
 join(Static, Dynamic) ->
     do_join(Static, Dynamic, [], []).
 
-do_join([S | Static], [D0 | Dynamic], IOList, Siblings) ->
-    D = erlang:iolist_to_binary(["eel_utils:to_binary(", D0, ")"]),
+do_join([S | Static], [D | Dynamic], IOList, Siblings) ->
     do_join(Static, Dynamic, [D, S | IOList], ["~s", "~p" | Siblings]);
 do_join([S | Static], [], IOList, Siblings) ->
     do_join(Static, [], [S | IOList], ["~p" | Siblings]);
@@ -375,184 +386,256 @@ parse(Flattened) ->
 
 tokenize_test() ->
     Bin = <<
-        "<%# Comment #%>"
-        "<html>"
-        "<div>"
-        "<%=   Foo = 1, Bar = Foo   .%>"
-        "</div>"
-        "<%# Comment #%>"
-        "<%=   case #{foo := Foo} = Map of %>"
-        "<%   bar -> %>"
-        "<p><%= Bar .%></p>"
-        "<% ; %>"
-        "<%   foobar -> Foobar; %>"
-        "<%   Foo -> Foo end .%>"
-        "</html>"
+        "<h1><%= Title .%></h1>"
+        "<ul>"
+        "<%= lists:map(fun(Item) -> %>"
+        "<li><%= Item .%></li>"
+        "<% end, List) .%>"
+        "</ul>"
+        "<div>Item count: <%= erlang:length(List) .%></div>"
+        "<%= case erlang:length(List) > 0 of true -> %>"
+        "<ul>"
+        "<%= lists:map(fun(N) -> %>"
+        "<li><%= N .%></li>"
+        "<% end, lists:seq(1, erlang:length(List))) .%>"
+        "</ul>"
+        "<% ; false -> <<>> end .%>"
     >>,
     Expected = {
         {
             [
-                <<"<html><div>">>,
-                <<"</div>">>,
-                <<"</html>">>
+                <<"<h1>">>,
+                <<"</h1><ul>">>,
+                <<"</ul><div>Item count: ">>,
+                <<"</div>">>
             ],
             [
+                [
+                    {expr, {{<<"=">>, <<".">>}, <<"Title">>, ['Title'], {[<<>>, <<>>], ['Title']}}}
+                ],
+                [
+                    {start_expr,
+                        {
+                            {<<"=">>, <<" ">>},
+                            <<"lists:map(fun(Item) ->">>,
+                            ['Item'],
+                            {[<<"lists:map(fun(">>, <<") ->">>], ['Item']}
+                        }},
+                    {nested_expr, {
+                        {[<<"<li>">>, <<"</li>">>], [
+                            [
+                                {expr,
+                                    {
+                                        {<<"=">>, <<".">>},
+                                        <<"Item">>,
+                                        ['Item'],
+                                        {[<<>>, <<>>], ['Item']}
+                                    }}
+                            ]
+                        ]},
+                        <<"<li><%= Item .%></li>">>
+                    }},
+                    {end_expr,
+                        {
+                            {<<" ">>, <<".">>},
+                            <<"end, List)">>,
+                            ['List'],
+                            {[<<"end, ">>, <<")">>], ['List']}
+                        }}
+                ],
                 [
                     {expr,
                         {
                             {<<"=">>, <<".">>},
-                            <<"Foo = 1, Bar = Foo">>,
-                            ['Foo', 'Bar'],
-                            {[<<>>, <<" = 1, ">>, <<" = ">>, <<>>], ['Foo', 'Bar', 'Foo']}
+                            <<"erlang:length(List)">>,
+                            ['List'],
+                            {[<<"erlang:length(">>, <<")">>], ['List']}
                         }}
                 ],
                 [
                     {start_expr,
                         {
                             {<<"=">>, <<" ">>},
-                            <<"case #{foo := Foo} = Map of">>,
-                            ['Map'],
-                            {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}
-                        }},
-                    {mid_expr,
-                        {
-                            {<<" ">>, <<" ">>},
-                            <<"bar ->">>,
-                            [],
-                            {[<<"bar ->">>], []}
+                            <<"case erlang:length(List) > 0 of true ->">>,
+                            ['List'],
+                            {[<<"case erlang:length(">>, <<") > 0 of true ->">>], ['List']}
                         }},
                     {nested_expr, {
-                        {
+                        {[<<"<ul>">>, <<"</ul>">>], [
                             [
-                                <<"<p>">>,
-                                <<"</p>">>
-                            ],
-                            [
-                                [
-                                    {expr,
+                                {start_expr,
+                                    {
+                                        {<<"=">>, <<" ">>},
+                                        <<"lists:map(fun(N) ->">>,
+                                        ['N'],
+                                        {[<<"lists:map(fun(">>, <<") ->">>], ['N']}
+                                    }},
+                                {nested_expr, {
+                                    {[<<"<li>">>, <<"</li>">>], [
+                                        [
+                                            {expr,
+                                                {
+                                                    {<<"=">>, <<".">>},
+                                                    <<"N">>,
+                                                    ['N'],
+                                                    {[<<>>, <<>>], ['N']}
+                                                }}
+                                        ]
+                                    ]},
+                                    <<"<li><%= N .%></li>">>
+                                }},
+                                {end_expr,
+                                    {
+                                        {<<" ">>, <<".">>},
+                                        <<"end, lists:seq(1, erlang:length(List)))">>,
+                                        ['List'],
                                         {
-                                            {<<"=">>, <<".">>},
-                                            <<"Bar">>,
-                                            ['Bar'],
-                                            {[<<>>, <<>>], ['Bar']}
-                                        }}
-                                ]
+                                            [
+                                                <<"end, lists:seq(1, erlang:length(">>,
+                                                <<")))">>
+                                            ],
+                                            ['List']
+                                        }
+                                    }}
                             ]
-                        },
-                        <<"<p><%= Bar .%></p>">>
+                        ]},
+                        <<"<ul><%= lists:map(fun(N) -> %><li><%= N .%></li><% end, lists:seq(1, erlang:length(List))) .%></ul>">>
                     }},
-                    {mid_expr,
-                        {
-                            {<<" ">>, <<" ">>},
-                            <<";">>,
-                            [],
-                            {[<<";">>], []}
-                        }},
-                    {mid_expr,
-                        {
-                            {<<" ">>, <<" ">>},
-                            <<"foobar -> Foobar;">>,
-                            ['Foobar'],
-                            {[<<"foobar -> ">>, <<";">>], ['Foobar']}
-                        }},
                     {end_expr,
                         {
                             {<<" ">>, <<".">>},
-                            <<"Foo -> Foo end">>,
-                            ['Foo'],
-                            {[<<>>, <<" -> ">>, <<" end">>], ['Foo', 'Foo']}
+                            <<"; false -> <<>> end">>,
+                            [],
+                            {[<<"; false -> <<>> end">>], []}
                         }}
                 ]
             ]
         },
-        <<"<html><div><%= Foo = 1, Bar = Foo .%></div><%= case #{foo := Foo} = Map of %><% bar -> %><p><%= Bar .%></p><% ; %><% foobar -> Foobar; %><% Foo -> Foo end .%></html>">>
+        <<"<h1><%= Title .%></h1><ul><%= lists:map(fun(Item) -> %><li><%= Item .%></li><% end, List) .%></ul><div>Item count: <%= erlang:length(List) .%></div><%= case erlang:length(List) > 0 of true -> %><ul><%= lists:map(fun(N) -> %><li><%= N .%></li><% end, lists:seq(1, erlang:length(List))) .%></ul><% ; false -> <<>> end .%>">>
     },
     ?assertEqual(Expected, tokenize(Bin)).
 
 flatten_test() ->
     Dynamic = [
         [
+            {expr, {{<<"=">>, <<".">>}, <<"Title">>, ['Title'], {[<<>>, <<>>], ['Title']}}}
+        ],
+        [
+            {start_expr,
+                {
+                    {<<"=">>, <<" ">>},
+                    <<"lists:map(fun(Item) ->">>,
+                    ['Item'],
+                    {[<<"lists:map(fun(">>, <<") ->">>], ['Item']}
+                }},
+            {nested_expr, {
+                {
+                    [<<"<li>">>, <<"</li>">>],
+                    [
+                        [
+                            {expr,
+                                {
+                                    {<<"=">>, <<".">>},
+                                    <<"Item">>,
+                                    ['Item'],
+                                    {[<<>>, <<>>], ['Item']}
+                                }}
+                        ]
+                    ]
+                },
+                <<"<li><%= Item .%></li>">>
+            }},
+            {end_expr,
+                {
+                    {<<" ">>, <<".">>},
+                    <<"end, List)">>,
+                    ['List'],
+                    {[<<"end, ">>, <<")">>], ['List']}
+                }}
+        ],
+        [
             {expr,
                 {
                     {<<"=">>, <<".">>},
-                    <<"Foo = 1, Bar = Foo">>,
-                    ['Foo', 'Bar'],
-                    {[<<>>, <<" = 1, ">>, <<" = ">>, <<>>], ['Foo', 'Bar', 'Foo']}
+                    <<"erlang:length(List)">>,
+                    ['List'],
+                    {[<<"erlang:length(">>, <<")">>], ['List']}
                 }}
         ],
         [
             {start_expr,
                 {
                     {<<"=">>, <<" ">>},
-                    <<"case #{foo := Foo} = Map of">>,
-                    ['Map'],
-                    {[<<"case #{foo := Foo} = ">>, <<" of">>], ['Map']}
-                }},
-            {mid_expr,
-                {
-                    {<<" ">>, <<" ">>},
-                    <<"bar ->">>,
-                    [],
-                    {[<<"bar ->">>], []}
+                    <<"case erlang:length(List) > 0 of true ->">>,
+                    ['List'],
+                    {[<<"case erlang:length(">>, <<") > 0 of true ->">>], ['List']}
                 }},
             {nested_expr, {
-                {
+                {[<<"<ul>">>, <<"</ul>">>], [
                     [
-                        <<"<p>">>,
-                        <<>>,
-                        <<"</p>">>
-                    ],
-                    [
-                        [
-                            {expr,
+                        {start_expr,
+                            {
+                                {<<"=">>, <<" ">>},
+                                <<"lists:map(fun(N) ->">>,
+                                ['N'],
+                                {[<<"lists:map(fun(">>, <<") ->">>], ['N']}
+                            }},
+                        {nested_expr, {
+                            {[<<"<li>">>, <<"</li>">>], [
+                                [
+                                    {expr,
+                                        {
+                                            {<<"=">>, <<".">>},
+                                            <<"N">>,
+                                            ['N'],
+                                            {[<<>>, <<>>], ['N']}
+                                        }}
+                                ]
+                            ]},
+                            <<"<li><%= N .%></li>">>
+                        }},
+                        {end_expr,
+                            {
+                                {<<" ">>, <<".">>},
+                                <<"end, lists:seq(1, erlang:length(List)))">>,
+                                ['List'],
                                 {
-                                    {<<"=">>, <<".">>},
-                                    <<"Bar">>,
-                                    ['Bar'],
-                                    {[<<>>, <<>>], ['Bar']}
-                                }}
-                        ]
+                                    [
+                                        <<"end, lists:seq(1, erlang:length(">>,
+                                        <<")))">>
+                                    ],
+                                    ['List']
+                                }
+                            }}
                     ]
-                },
-                <<"<p><%= Bar .%></p>">>
+                ]},
+                <<"<ul><%= lists:map(fun(N) -> %><li><%= N .%></li><% end, lists:seq(1, erlang:length(List))) .%></ul>">>
             }},
-            {mid_expr,
-                {
-                    {<<" ">>, <<" ">>},
-                    <<";">>,
-                    [],
-                    {[<<";">>], []}
-                }},
-            {mid_expr,
-                {
-                    {<<" ">>, <<" ">>},
-                    <<"foobar -> Foobar;">>,
-                    ['Foobar'],
-                    {[<<"foobar -> ">>, <<";">>], ['Foobar']}
-                }},
             {end_expr,
                 {
                     {<<" ">>, <<".">>},
-                    <<"Foo -> Foo end">>,
-                    ['Foo'],
-                    {[<<>>, <<" -> ">>, <<" end">>], ['Foo', 'Foo']}
+                    <<"; false -> <<>> end">>,
+                    [],
+                    {[<<"; false -> <<>> end">>], []}
                 }}
         ]
     ],
     Expected = [
         {
-            <<"Foo = 1, Bar = Foo.">>,
-            ['Foo', 'Bar']
+            <<"Title.">>,
+            ['Title']
         },
         {
-            <<
-                "case #{foo := Foo} = Map of "
-                "bar -> erlang:iolist_to_binary([<<\"<p>\">>, eel_utils:to_binary(Bar), <<>>, <<\"</p>\">>]); "
-                "foobar -> Foobar; "
-                "Foo -> Foo "
-                "end."
-            >>,
-            ['Map', 'Bar', 'Foobar', 'Foo']
+            <<"lists:map(fun(Item) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_utils:to_binary(Item), <<\"</li>\">>]) end, List).">>,
+            ['Item', 'Item', 'List']
+        },
+        {
+            <<"erlang:length(List).">>,
+            ['List']
+        },
+        {
+            <<"case erlang:length(List) > 0 of true -> erlang:iolist_to_binary([<<\"<ul>\">>, eel_utils:to_binary(lists:map(fun(N) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_utils:to_binary(N), <<\"</li>\">>]) end, lists:seq(1, erlang:length(List)))), <<\"</ul>\">>]) ; false -> <<>> end.">>,
+            ['List', 'List', 'N', 'N']
         }
     ],
     ?assertEqual(Expected, flatten(Dynamic)).
@@ -693,11 +776,13 @@ render_test() ->
         "<% end, List) .%>"
         "</ul>"
         "<div>Item count: <%= erlang:length(List) .%></div>"
+        "<%= case erlang:length(List) > 0 of true -> %>"
         "<ul>"
         "<%= lists:map(fun(N) -> %>"
         "<li><%= N .%></li>"
         "<% end, lists:seq(1, erlang:length(List))) .%>"
         "</ul>"
+        "<% ; false -> <<>> end .%>"
     >>,
     {Static, AST} = compile(Bin),
     Bindings = #{
@@ -710,7 +795,7 @@ render_test() ->
         1 => <<"EEL">>,
         2 => <<"<li>Foo</li><li>Bar</li>">>,
         3 => <<"2">>,
-        4 => <<"<li>1</li><li>2</li>">>
+        4 => <<"<ul><li>1</li><li>2</li></ul>">>
     },
     {Render, Memo, {_, _, Indexes}} = render(Static, AST, Bindings),
     ?assertEqual(ExpectedRender, Render),
