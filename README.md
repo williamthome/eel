@@ -47,43 +47,15 @@ The bindings are the unbound/required variables of the template. The syntax it's
 
 The `erl_eval` expects this syntax.
 
+### Template
+
+The template should have the `.html.eel` extension and a structure like this:
+
+![Template](images/template.png)
+
 ### Highlight
 
-Consider using this [vscode_erlang](https://github.com/williamthome/vscode_erlang/tree/eel) extension fork to have syntax highlighting locally like this:
-![Syntax highlight](images/syntax-highlight.png)
-
-### Simple expression
-
-```
-<%= Foo .%>
-```
-
-### Complex expression
-
-```
-<h1><%= Title .%></h1>
-<ul>
-    <%= lists:map(fun(Item) -> %>
-        <li><%= Item .%></li>
-    <% end, List) .%>
-</ul>
-<%= Length = erlang:length(List), %>
-    <div>Item count: <%= Length .%></div>
-    <%= case Length > 0 of true -> %>
-        <ul>
-            <%= lists:map(fun(Foo) -> %>
-                <li><%= Foo .%></li>
-            <% end, lists:seq(1, Length)) .%>
-        </ul>
-    <% ; false -> <<>> end .%>
-<%  .%>
-```
-
-### Comment
-
-```
-<%# This is a comment #%>
-```
+Consider using this [vscode_erlang](https://github.com/williamthome/vscode_erlang/tree/eel) extension fork for syntax highlighting. An extension is coming soon.
 
 ## Next steps
 
