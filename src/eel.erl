@@ -28,7 +28,7 @@ compile(Bin) ->
 
 compile_file(App, FileName0) ->
     PrivDir = code:priv_dir(App),
-    FileName = filename:join([PrivDir, "templates", FileName0]),
+    FileName = filename:join([PrivDir, FileName0]),
     compile_file(FileName).
 
 compile_file(FileName) ->
