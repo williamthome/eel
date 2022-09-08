@@ -1,4 +1,10 @@
--module(eel_utils).
+%%%---------------------------------------------------------------------------------------
+%%% @doc EEl converter module.
+%%%
+%%% @author William Fank Thomé [https://github.com/williamthome]
+%%% @end
+%%%---------------------------------------------------------------------------------------
+-module(eel_convert).
 
 -export([to_binary/1, to_binary/2]).
 
