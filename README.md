@@ -1,4 +1,4 @@
-# eel
+# Embedded Erlang (EEl)
 
 Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can embed and evaluate Erlang inside binaries.
 
