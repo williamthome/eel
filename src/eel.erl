@@ -6,6 +6,10 @@
 %%%-----------------------------------------------------------------------------
 -module(eel).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 -export([
     compile/1,
     compile_file/1,
@@ -39,10 +43,6 @@
 -type compile_return() :: {static(), ast()}.
 -type render_return() :: {binary(), memo(), {static(), bindings_indexes(), bindings_indexes()}}.
 -type eval_return() :: binary().
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
 
 -define(RE_WS_TRIM, re:compile(<<"^\\s+|\\s+$">>)).
 
