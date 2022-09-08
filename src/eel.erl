@@ -1,9 +1,9 @@
-%%%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------------------
 %%% @doc Embedded Erlang library.
 %%%
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @end
-%%%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------------------
 -module(eel).
 
 -ifdef(TEST).
@@ -46,6 +46,10 @@
 
 -define(RE_WS_TRIM, re:compile(<<"^\\s+|\\s+$">>)).
 
+%%------------------------------------------------------------------------------
+%% @doc Compiles a binary.
+%% @end
+%%------------------------------------------------------------------------------
 -spec compile(binary()) -> compile_return().
 
 compile(Bin) ->
@@ -54,6 +58,10 @@ compile(Bin) ->
     AST = parse(Flattened),
     {Static, AST}.
 
+%%------------------------------------------------------------------------------
+%% @doc Compiles a file joining the priv_dir to the file name.
+%% @end
+%%------------------------------------------------------------------------------
 -spec compile_file(atom(), file:filename_all()) -> compile_return() | {error, term()}.
 
 compile_file(App, FileName0) ->
@@ -61,6 +69,10 @@ compile_file(App, FileName0) ->
     FileName = filename:join([PrivDir, FileName0]),
     compile_file(FileName).
 
+%%------------------------------------------------------------------------------
+%% @doc Compiles a file.
+%% @end
+%%------------------------------------------------------------------------------
 -spec compile_file(file:filename_all()) -> compile_return() | {error, term()}.
 
 compile_file(FileName) ->
@@ -69,11 +81,19 @@ compile_file(FileName) ->
         {error, Reason} -> {error, Reason}
     end.
 
+%%------------------------------------------------------------------------------
+%% @doc Render.
+%% @end
+%%------------------------------------------------------------------------------
 -spec render(static(), ast(), bindings()) -> render_return().
 
 render(Static, AST, Bindings) ->
     render(Static, AST, #{}, Bindings).
 
+%%------------------------------------------------------------------------------
+%% @doc Render passing a memo.
+%% @end
+%%------------------------------------------------------------------------------
 -spec render(static(), ast(), memo(), bindings()) -> render_return().
 
 render(Static, AST, Memo, NewBindings) ->
@@ -111,11 +131,19 @@ render(Static, AST, Memo, NewBindings) ->
     % TODO: Remove Static from the bindings tuple
     {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
 
+%%------------------------------------------------------------------------------
+%% @doc Evaluates.
+%% @end
+%%------------------------------------------------------------------------------
 -spec eval(binary(), bindings()) -> eval_return().
 
 eval(Bin, Bindings) ->
     eval(Bin, #{}, Bindings).
 
+%%------------------------------------------------------------------------------
+%% @doc Evaluates passing a memo.
+%% @end
+%%------------------------------------------------------------------------------
 -spec eval(binary(), memo(), bindings()) -> eval_return().
 
 eval(Bin, Memo, Bindings) when is_binary(Bin) ->
