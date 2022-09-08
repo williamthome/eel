@@ -16,11 +16,37 @@
     eval/3
 ]).
 
+-export_type([
+    compile_return/0,
+    render_return/0,
+    eval_return/0
+]).
+
+-type static() :: [binary()].
+-type ast() :: [{[erl_parse:abstract_expr()], [atom()]}].
+-type accepted_term() ::
+    binary()
+    | atom()
+    | float()
+    | integer()
+    | list()
+    | tuple().
+-type bindings() :: #{atom() => accepted_term()}.
+-type bindings_indexes() :: #{integer() => accepted_term()}.
+-type eval() :: term().
+-type memo() :: #{eval => eval(), bindings => bindings()}.
+
+-type compile_return() :: {static(), ast()}.
+-type render_return() :: {binary(), memo(), {static(), bindings_indexes(), bindings_indexes()}}.
+-type eval_return() :: binary().
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
 -define(RE_WS_TRIM, re:compile(<<"^\\s+|\\s+$">>)).
+
+-spec compile(binary()) -> compile_return().
 
 compile(Bin) ->
     {Static, Dynamic} = tokenize(Bin),
@@ -28,10 +54,14 @@ compile(Bin) ->
     AST = parse(Flattened),
     {Static, AST}.
 
+-spec compile_file(atom(), file:filename_all()) -> compile_return() | {error, term()}.
+
 compile_file(App, FileName0) ->
     PrivDir = code:priv_dir(App),
     FileName = filename:join([PrivDir, FileName0]),
     compile_file(FileName).
+
+-spec compile_file(file:filename_all()) -> compile_return() | {error, term()}.
 
 compile_file(FileName) ->
     case file:read_file(FileName) of
@@ -39,8 +69,12 @@ compile_file(FileName) ->
         {error, Reason} -> {error, Reason}
     end.
 
+-spec render(static(), ast(), bindings()) -> render_return().
+
 render(Static, AST, Bindings) ->
     render(Static, AST, #{}, Bindings).
+
+-spec render(static(), ast(), memo(), bindings()) -> render_return().
 
 render(Static, AST, Memo, NewBindings) ->
     Bindings = maps:merge(maps:get(bindings, Memo, #{}), NewBindings),
@@ -77,8 +111,12 @@ render(Static, AST, Memo, NewBindings) ->
     % TODO: Remove Static from the bindings tuple
     {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
 
+-spec eval(binary(), bindings()) -> eval_return().
+
 eval(Bin, Bindings) ->
     eval(Bin, #{}, Bindings).
+
+-spec eval(binary(), memo(), bindings()) -> eval_return().
 
 eval(Bin, Memo, Bindings) when is_binary(Bin) ->
     {Static, AST} = compile(Bin),
@@ -387,7 +425,6 @@ iolist_to_binary_fun(IOList, Siblings) ->
     List = io_lib:format(Format, IOList),
     erlang:list_to_binary(List).
 
-% TODO: Return ok or error tuple.
 parse(Flattened) ->
     lists:map(
         fun(Expr) ->
