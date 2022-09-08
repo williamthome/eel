@@ -11,7 +11,9 @@
     compile_file/1,
     compile_file/2,
     render/3,
-    render/4
+    render/4,
+    eval/2,
+    eval/3
 ]).
 
 -ifdef(TEST).
@@ -74,6 +76,14 @@ render(Static, AST, Memo, NewBindings) ->
     },
     % TODO: Remove Static from the bindings tuple
     {Render, NewMemo, {Static, BindingsIndexes, NewBindingsIndexes}}.
+
+eval(Bin, Bindings) ->
+    eval(Bin, #{}, Bindings).
+
+eval(Bin, Memo, Bindings) when is_binary(Bin) ->
+    {Static, AST} = compile(Bin),
+    {Eval, _, _} = render(Static, AST, Memo, Bindings),
+    Eval.
 
 %%%=============================================================================
 %%% Internal functions
@@ -1047,5 +1057,11 @@ render_test() ->
     {MemoRender, _, {_, _, MemoIndexes}} = render(Static, AST, Memo, NewBindings),
     ?assertEqual(ExpectedMemoRender, MemoRender),
     ?assertEqual(ExpectedMemoIndexes, MemoIndexes).
+
+eval_test() ->
+    ?assertEqual(
+        <<"Hello, World!">>,
+        eval(<<"Hello, <%= Name .%>!">>, #{'Name' => <<"World">>})
+    ).
 
 -endif.
