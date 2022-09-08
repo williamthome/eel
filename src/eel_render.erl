@@ -146,10 +146,9 @@ compiled_test() ->
     ?assertEqual(ExpectedRender, Render),
     ?assertEqual(ExpectedIndexes, Indexes),
 
-    NewBindings =
-        Bindings = #{
-            'Title' => <<"Embedded Erlang">>
-        },
+    NewBindings = #{
+        'Title' => <<"Embedded Erlang">>
+    },
     ExpectedMemoRender =
         <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
     ExpectedMemoIndexes = #{
