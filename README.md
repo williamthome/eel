@@ -69,14 +69,14 @@ Consider using this [vscode_erlang](https://github.com/williamthome/vscode_erlan
 </ul>
 <%= Length = erlang:length(List), %>
     <div>Item count: <%= Length .%></div>
-    <%= case erlang:length(List) > 0 of true -> %>
+    <%= case Length > 0 of true -> %>
         <ul>
             <%= lists:map(fun(Foo) -> %>
                 <li><%= Foo .%></li>
-            <% end, lists:seq(1, erlang:length(List))) .%>
+            <% end, lists:seq(1, Length)) .%>
         </ul>
     <% ; false -> <<>> end .%>
-<% .%>
+<%  .%>
 ```
 
 ### Comment
