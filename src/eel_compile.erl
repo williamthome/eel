@@ -69,11 +69,11 @@ file(FileName) ->
 %%%=============================================================================
 
 tokenize(Bin) ->
-    do_tokenize(Bin, {[], []}, [], <<>>).
+    do_tokenize(Bin, {[], []}, []).
 
-do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
-    case tokenize_expr(Bin, Acc0) of
-        {ok, {ExprRef, Token, Rest, Acc}} ->
+do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc) ->
+    case tokenize_expr(Bin) of
+        {ok, {ExprRef, Token, Rest}} ->
             Static =
                 case TokensAcc of
                     [{ExprRef, _} | _] when ExprRef =:= expr; ExprRef =:= start_expr ->
@@ -97,16 +97,16 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc, Acc0) ->
                     false ->
                         Dynamic1
                 end,
-            do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc], Acc);
-        {ok, {_Comment, Rest, _Acc}} ->
+            do_tokenize(Rest, {Static, Dynamic}, [Token | TokensAcc]);
+        {ok, {_Comment, Rest}} ->
             % TODO: Maybe the comment supress can be optional
             % Token = {comment, Comment},
             % Dynamic = [Token | Dynamic0],
-            do_tokenize(Rest, {Static0, Dynamic0}, TokensAcc, Acc0);
+            do_tokenize(Rest, {Static0, Dynamic0}, TokensAcc);
         {error, Reason} ->
             {error, Reason}
     end;
-do_tokenize(Bin, {Static, [HD | Dynamic]}, [{ExprRef, _Expr} | _] = TokensAcc, Acc) when
+do_tokenize(Bin, {Static, [HD | Dynamic]}, [{ExprRef, _Expr} | _] = TokensAcc) when
     ExprRef =:= start_expr; ExprRef =:= mid_expr
 ->
     case nested(Bin, 0, <<>>) of
@@ -115,13 +115,12 @@ do_tokenize(Bin, {Static, [HD | Dynamic]}, [{ExprRef, _Expr} | _] = TokensAcc, A
             do_tokenize(
                 T,
                 {Static, [[Token | HD] | Dynamic]},
-                [Token | TokensAcc],
-                <<Acc/binary, Nested/binary>>
+                [Token | TokensAcc]
             );
         {error, Reason} ->
             {error, Reason}
     end;
-do_tokenize(<<H, T/binary>>, {Static0, Dynamic}, TokensAcc0, Acc) ->
+do_tokenize(<<H, T/binary>>, {Static0, Dynamic}, TokensAcc0) ->
     {TokenStatic, Static} =
         case Static0 of
             [] ->
@@ -138,67 +137,66 @@ do_tokenize(<<H, T/binary>>, {Static0, Dynamic}, TokensAcc0, Acc) ->
             [{text, _} | TT] -> [Token | TT];
             _ -> [Token | TokensAcc0]
         end,
-    do_tokenize(T, {Static, Dynamic}, TokensAcc, <<Acc/binary, H>>);
-do_tokenize(<<>>, {Static, Dynamic}, _TokensAcc, _Acc) ->
+    do_tokenize(T, {Static, Dynamic}, TokensAcc);
+do_tokenize(<<>>, {Static, Dynamic}, _TokensAcc) ->
     {lists:reverse(Static), lists:reverse(Dynamic)}.
 
-tokenize_expr(<<"<%", T0/binary>>, Acc0) ->
-    {StartMarker, MaybeSpace, T} = retrieve_marker(T0, <<>>),
-    Acc1 = <<Acc0/binary, "<%", StartMarker/binary, MaybeSpace/binary>>,
-    tokenize_by_marker(StartMarker, T, Acc1).
+tokenize_expr(<<"<%", T0/binary>>) ->
+    {StartMarker, T} = retrieve_marker(T0, <<>>),
+    tokenize_by_marker(StartMarker, T).
 
-tokenize_by_marker(<<"#">>, Bin, Acc0) ->
-    comment(Bin, <<>>, Acc0);
-tokenize_by_marker(StartMarker, Bin, Acc1) ->
-    case expression(Bin, StartMarker, <<>>, Acc1) of
-        {ok, {ExprRef, Expr, EndMarker, Rest, Acc}} ->
+tokenize_by_marker(<<"#">>, Bin) ->
+    comment(Bin, <<>>);
+tokenize_by_marker(StartMarker, Bin) ->
+    case expression(Bin, StartMarker, <<>>) of
+        {ok, {ExprRef, Expr, EndMarker, Rest}} ->
             Token = {ExprRef, {{StartMarker, EndMarker}, Expr}},
-            {ok, {ExprRef, Token, Rest, Acc}};
+            {ok, {ExprRef, Token, Rest}};
         {error, Reason} ->
             {error, Reason}
     end.
 
-comment(<<32, "#%>", T/binary>>, Cache, Acc0) ->
+comment(<<32, "#%>", T/binary>>, Cache) ->
     Comment = trim(Cache),
-    {ok, {Comment, T, <<Acc0/binary, Comment/binary, " #%>">>}};
-comment(<<"#%>", _/binary>>, _Cache, _Acc) ->
+    {ok, {Comment, T}};
+comment(<<"#%>", _/binary>>, _Cache) ->
     % TODO: Handle missing_space
     {error, missing_space};
-comment(<<H, T/binary>>, Cache, Acc) ->
-    comment(T, <<Cache/binary, H>>, Acc);
-comment(<<>>, _Cache, _Acc) ->
+comment(<<H, T/binary>>, Cache) ->
+    comment(T, <<Cache/binary, H>>);
+comment(<<>>, _Cache) ->
     {error, eof}.
 
-expression(<<32, "%>", T/binary>>, StartMarker, Cache, Acc) ->
+expression(<<32, "%>", T/binary>>, StartMarker, Cache) ->
     Expr = trim(Cache),
     ExprRef =
         case StartMarker of
             <<32>> -> mid_expr;
             _ -> start_expr
         end,
-    {ok, {ExprRef, Expr, <<32>>, T, <<Acc/binary, Expr/binary, " %>">>}};
-expression(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache, Acc) ->
+    {ok, {ExprRef, Expr, <<32>>, T}};
+expression(<<32, EndMarker, "%>", T/binary>>, StartMarker, Cache) ->
     Expr = trim(Cache),
     ExprRef =
         case StartMarker of
             <<32>> -> end_expr;
             _ -> expr
         end,
-    {ok, {ExprRef, Expr, <<EndMarker>>, T, <<Acc/binary, Expr/binary, 32, EndMarker, "%>">>}};
-expression(<<"<%", _/binary>>, _StartMarker, _Cache, _Acc) ->
+    {ok, {ExprRef, Expr, <<EndMarker>>, T}};
+expression(<<"<%", _/binary>>, _StartMarker, _Cache) ->
     % TODO: Handle unknown start marker
     {error, unknown_start_marker};
-expression(<<"%>", T/binary>>, _StartMarker, Cache, Acc) ->
+expression(<<"%>", T/binary>>, _StartMarker, Cache) ->
     case is_cache_empty(Cache) of
         true ->
-            {ok, {end_expr, <<>>, <<".">>, T, <<Acc/binary, 32, ".%>">>}};
+            {ok, {end_expr, <<>>, <<".">>, T}};
         false ->
             % TODO: Handle unknown end marker
             {error, unknown_end_marker}
     end;
-expression(<<H, T/binary>>, StartMarker, Cache, Acc) ->
-    expression(T, StartMarker, <<Cache/binary, H>>, Acc);
-expression(<<>>, _StartMarker, _Cache, _Acc) ->
+expression(<<H, T/binary>>, StartMarker, Cache) ->
+    expression(T, StartMarker, <<Cache/binary, H>>);
+expression(<<>>, _StartMarker, _Cache) ->
     {error, eof}.
 
 is_cache_empty(<<".">>) ->
@@ -222,9 +220,9 @@ nested(<<>>, _ExprCount, _Expr) ->
     {error, eof}.
 
 retrieve_marker(<<32, T/binary>>, <<>>) ->
-    {<<32>>, <<>>, T};
+    {<<32>>, T};
 retrieve_marker(<<32, _/binary>> = T, Marker) ->
-    {Marker, <<32>>, T};
+    {Marker, T};
 retrieve_marker(<<H, T/binary>>, Marker) ->
     retrieve_marker(T, <<Marker/binary, H>>);
 retrieve_marker(<<>>, _Marker) ->
