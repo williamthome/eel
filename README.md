@@ -55,7 +55,7 @@ The template should have the `.html.eel` extension and a structure like this:
 
 ### Highlight
 
-Consider using this [vscode_erlang](https://github.com/williamthome/vscode_erlang/tree/eel) extension fork for syntax highlighting. An extension is coming soon.
+If you use VSCode, there is an [Embedded Erlang (EEl)](https://marketplace.visualstudio.com/items?itemName=williamthome.eel) extension in the Marketplace.
 
 ## Next steps
 
