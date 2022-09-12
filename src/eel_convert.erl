@@ -33,5 +33,7 @@ to_binary(List, undefined) when is_list(List) ->
     erlang:iolist_to_binary(List);
 to_binary(Tuple, undefined) when is_tuple(Tuple) ->
     to_binary(erlang:tuple_to_list(Tuple));
+to_binary(PID, undefined) when is_pid(PID) ->
+    erlang:list_to_binary(erlang:pid_to_list(PID));
 to_binary(_, _) ->
     <<>>.
