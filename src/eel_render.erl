@@ -55,8 +55,13 @@ compiled({Static, AST}, Memo0, NewBindings) ->
     {ReversedEval, _BindingsIndexes, Indexes, _} =
         lists:foldl(
             fun({Exprs, Vars}, {Acc, Indexes0, NewIndexes0, Index}) ->
+                IsVarsValid =
+                    case Vars of
+                        [] -> true;
+                        _ -> lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars)
+                    end,
                 {Bin, NewIndexes} =
-                    case lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars) of
+                    case IsVarsValid of
                         true ->
                             {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
                             % TODO: to_binary options
@@ -129,6 +134,7 @@ compiled_test() ->
         "</ul>"
         "<% ; false -> <<>> end .%>"
         "<% .%>"
+        "<h2>Node: <%= erlang:node() .%></h2>"
     >>,
     Compiled = eel_compile:binary(Bin),
     Bindings = #{
@@ -136,11 +142,12 @@ compiled_test() ->
         'List' => [<<"Foo">>, <<"Bar">>]
     },
     ExpectedRender =
-        <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
+        <<"<h1>EEL</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul><h2>Node: nonode@nohost</h2>">>,
     ExpectedIndexes = #{
         1 => <<"EEL">>,
         2 => <<"<li>Foo</li><li>Bar</li>">>,
-        3 => <<"<div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>
+        3 => <<"<div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
+        4 => <<"nonode@nohost">>
     },
     {Render, Memo, Indexes} = compiled(Compiled, Bindings),
     ?assertEqual(ExpectedRender, Render),
@@ -150,9 +157,10 @@ compiled_test() ->
         'Title' => <<"Embedded Erlang">>
     },
     ExpectedMemoRender =
-        <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul>">>,
+        <<"<h1>Embedded Erlang</h1><ul><li>Foo</li><li>Bar</li></ul><div>Item count: 2</div><ul><li>1</li><li>2</li></ul><h2>Node: nonode@nohost</h2>">>,
     ExpectedMemoIndexes = #{
-        1 => <<"Embedded Erlang">>
+        1 => <<"Embedded Erlang">>,
+        4 => <<"nonode@nohost">>
     },
     {MemoRender, _, MemoIndexes} = compiled(Compiled, Memo, NewBindings),
     ?assertEqual(ExpectedMemoRender, MemoRender),
