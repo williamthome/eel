@@ -16,6 +16,11 @@
 ]).
 
 -export_type([
+    accepted_term/0,
+    bindings/0,
+    bindings_indexes/0,
+    eval/0,
+    memo/0,
     return/0
 ]).
 
@@ -30,7 +35,6 @@
 -type bindings_indexes() :: #{integer() => accepted_term()}.
 -type eval() :: term().
 -type memo() :: #{eval => eval(), bindings => bindings()}.
-
 -type return() :: {binary(), memo(), bindings_indexes()}.
 
 %%------------------------------------------------------------------------------

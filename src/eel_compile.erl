@@ -24,7 +24,6 @@
 
 -type static() :: [binary()].
 -type ast() :: [{[erl_parse:abstract_expr()], [atom()]}].
-
 -type return() :: {static(), ast()}.
 
 -define(RE_WS_TRIM, re:compile(<<"^\\s+|\\s+$">>)).
