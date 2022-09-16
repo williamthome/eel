@@ -68,8 +68,7 @@ compiled({Static, AST}, Memo0, NewBindings) ->
                     case IsVarsValid of
                         true ->
                             {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
-                            % TODO: to_binary options
-                            Result = eel_convert:to_binary(Result0),
+                            Result = eval_result(Result0, Bindings),
                             {Result, NewIndexes0#{Index => Result}};
                         false ->
                             case EvalMemo of
@@ -114,6 +113,39 @@ do_merge([], [], Acc) ->
 do_merge([], Dynamic, Acc) ->
     erlang:iolist_to_binary([Acc, Dynamic]).
 
+eval_result(Fun, Bindings) when is_function(Fun, 0) ->
+    eval_result(Fun(), Bindings);
+eval_result(Fun, Bindings) when is_function(Fun) ->
+    {env, [Env]} = erlang:fun_info(Fun, env),
+    AST = element(erlang:size(Env), Env),
+    Str = erl_pp:expr({'fun', 1, {clauses, AST}}),
+    Expr = erlang:iolist_to_binary([Str, "."]),
+    {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
+    Vars = retrieve_vars(Tokens),
+    Args = lists:map(fun(Key) -> maps:get(Key, Bindings) end, Vars),
+    eval_result(erlang:apply(Fun, Args), Bindings);
+eval_result(Bin, _Bindings) when is_binary(Bin) ->
+    Bin;
+eval_result(Result, _Bindings) ->
+    % TODO: to_binary options
+    eel_convert:to_binary(Result).
+
+retrieve_vars(Tokens) ->
+    do_retrieve_vars(Tokens, 1, []).
+
+do_retrieve_vars(_Tokens, 0, Acc) ->
+    Acc;
+do_retrieve_vars([{'fun', _}, {'(', _} | Tokens], 1, Acc) ->
+    do_retrieve_vars(Tokens, 1, Acc);
+do_retrieve_vars([{')', _} | Tokens], Count, Acc) ->
+    do_retrieve_vars(Tokens, Count - 1, Acc);
+do_retrieve_vars([{'(', _} | Tokens], Count, Acc) ->
+    do_retrieve_vars(Tokens, Count + 1, Acc);
+do_retrieve_vars([{var, _, Var} | Tokens], Count, Acc) ->
+    do_retrieve_vars(Tokens, Count, [Var | Acc]);
+do_retrieve_vars([_ | Tokens], Count, Acc) ->
+    do_retrieve_vars(Tokens, Count, Acc).
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -122,7 +154,7 @@ do_merge([], Dynamic, Acc) ->
 
 compiled_test() ->
     Bin = <<
-        "<h1><%= Title .%></h1>"
+        "<h1><%= fun() -> fun(Title) -> Title end end .%></h1>"
         "<ul>"
         "<%= lists:map(fun(Item) -> %>"
         "<li><%= Item .%></li>"
