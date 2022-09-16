@@ -6,9 +6,9 @@
 %%%---------------------------------------------------------------------------------------
 -module(eel_convert).
 
--export([to_binary/1, to_binary/2]).
-
 -dialyzer({nowarn_function, to_binary/2}).
+
+-export([to_binary/1, to_binary/2]).
 
 to_binary(Value) ->
     to_binary(Value, undefined).

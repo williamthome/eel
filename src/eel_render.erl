@@ -6,6 +6,8 @@
 %%%---------------------------------------------------------------------------------------
 -module(eel_render).
 
+-dialyzer({nowarn_function, [eval_result/2, retrieve_vars/1, do_retrieve_vars/3]}).
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
