@@ -6,10 +6,9 @@
 %%%---------------------------------------------------------------------------------------
 -module(eel_render).
 
--dialyzer({nowarn_function, [eval_result/2, retrieve_vars/1, do_retrieve_vars/3]}).
-
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-export([echo/1]).
 -endif.
 
 -export([
@@ -117,36 +116,13 @@ do_merge([], Dynamic, Acc) ->
 
 eval_result(Fun, Bindings) when is_function(Fun, 0) ->
     eval_result(Fun(), Bindings);
-eval_result(Fun, Bindings) when is_function(Fun) ->
-    {env, [Env]} = erlang:fun_info(Fun, env),
-    AST = element(erlang:size(Env), Env),
-    Str = erl_pp:expr({'fun', 1, {clauses, AST}}),
-    Expr = erlang:iolist_to_binary([Str, "."]),
-    {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
-    Vars = retrieve_vars(Tokens),
-    Args = lists:map(fun(Key) -> maps:get(Key, Bindings) end, Vars),
-    eval_result(erlang:apply(Fun, Args), Bindings);
+eval_result(Fun, Bindings) when is_function(Fun, 1) ->
+    eval_result(Fun(Bindings), Bindings);
 eval_result(Bin, _Bindings) when is_binary(Bin) ->
     Bin;
 eval_result(Result, _Bindings) ->
     % TODO: to_binary options
     eel_convert:to_binary(Result).
-
-retrieve_vars(Tokens) ->
-    do_retrieve_vars(Tokens, 1, []).
-
-do_retrieve_vars(_Tokens, 0, Acc) ->
-    Acc;
-do_retrieve_vars([{'fun', _}, {'(', _} | Tokens], 1, Acc) ->
-    do_retrieve_vars(Tokens, 1, Acc);
-do_retrieve_vars([{')', _} | Tokens], Count, Acc) ->
-    do_retrieve_vars(Tokens, Count - 1, Acc);
-do_retrieve_vars([{'(', _} | Tokens], Count, Acc) ->
-    do_retrieve_vars(Tokens, Count + 1, Acc);
-do_retrieve_vars([{var, _, Var} | Tokens], Count, Acc) ->
-    do_retrieve_vars(Tokens, Count, [Var | Acc]);
-do_retrieve_vars([_ | Tokens], Count, Acc) ->
-    do_retrieve_vars(Tokens, Count, Acc).
 
 %%%=============================================================================
 %%% Tests
@@ -154,9 +130,17 @@ do_retrieve_vars([_ | Tokens], Count, Acc) ->
 
 -ifdef(TEST).
 
+echo(Title) -> Title.
+
 compiled_test() ->
     Bin = <<
-        "<h1><%= fun() -> fun(Title) -> Title end end .%></h1>"
+        "<h1>"
+        "<%= fun() -> %>"
+        "<%# Local funs are only accepted with arity 0 or 1."
+        "    If arity 1, it will receives bindings as args. #%>"
+        "<% fun(#{'Title' := Title}) -> eel_render:echo(Title) end %>"
+        "<% end .%>"
+        "</h1>"
         "<ul>"
         "<%= lists:map(fun(Item) -> %>"
         "<li><%= Item .%></li>"
