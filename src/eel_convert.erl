@@ -17,6 +17,8 @@ to_binary(Bin, _) when is_binary(Bin) ->
     Bin;
 to_binary(undefined, _) ->
     <<>>;
+to_binary([], _) ->
+    <<>>;
 to_binary(Atom, undefined) when is_atom(Atom) ->
     erlang:atom_to_binary(Atom);
 to_binary(Atom, Encoding) when is_atom(Atom), is_atom(Encoding) ->
@@ -35,5 +37,5 @@ to_binary(Tuple, undefined) when is_tuple(Tuple) ->
     to_binary(erlang:tuple_to_list(Tuple));
 to_binary(PID, undefined) when is_pid(PID) ->
     erlang:list_to_binary(erlang:pid_to_list(PID));
-to_binary(_, _) ->
-    <<>>.
+to_binary(Term, _) ->
+    erlang:iolist_to_binary(io_lib:format("~p", [Term])).
