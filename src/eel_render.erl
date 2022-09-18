@@ -136,8 +136,8 @@ compiled_test() ->
     Bin = <<
         "<h1>"
         "<%= fun() -> %>"
-        "<%# Local funs are only accepted with arity 0 or 1."
-        "    If arity 1, it will receives bindings as args. #%>"
+        "<%% Local funs are only accepted with arity 0 or 1."
+        "    If arity 1, it will receives bindings as args. %%>"
         "<% fun(#{'Title' := Title}) -> eel_render:echo(Title) end %>"
         "<% end .%>"
         "</h1>"
