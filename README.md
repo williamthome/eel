@@ -36,8 +36,8 @@ The Erlang code it's written between section punctuations. These section punctua
 - `.%>` indicates that the expression ends;
 - `%>` indicates that the expression continues;
 - `<%` continues the last expression if it ends with `%>`;
-- `<%#` starts a comment;
-- `#%>` ends a comment.
+- `<%%` starts a comment;
+- `%%>` ends a comment.
 
 The bindings are the unbound/required variables of the template. The syntax it's a map with keys as atoms starting with upper case, e.g:
 

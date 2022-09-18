@@ -144,7 +144,7 @@ tokenize_expr(<<"<%", T0/binary>>) ->
     {StartMarker, T} = retrieve_marker(T0, <<>>),
     tokenize_by_marker(StartMarker, T).
 
-tokenize_by_marker(<<"#">>, Bin) ->
+tokenize_by_marker(<<"%">>, Bin) ->
     comment(Bin, <<>>);
 tokenize_by_marker(StartMarker, Bin) ->
     case expression(Bin, StartMarker, <<>>) of
@@ -155,10 +155,10 @@ tokenize_by_marker(StartMarker, Bin) ->
             {error, Reason}
     end.
 
-comment(<<32, "#%>", T/binary>>, Cache) ->
+comment(<<32, "%%>", T/binary>>, Cache) ->
     Comment = trim(Cache),
     {ok, {Comment, T}};
-comment(<<"#%>", _/binary>>, _Cache) ->
+comment(<<"%%>", _/binary>>, _Cache) ->
     % TODO: Handle missing_space
     {error, missing_space};
 comment(<<H, T/binary>>, Cache) ->
