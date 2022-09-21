@@ -371,11 +371,11 @@ tokenize_test() ->
         "</ul>"
         "<%= Length = erlang:length(List), %>"
         "<div>Item count: <%= Length .%></div>"
-        "<%= case erlang:length(List) > 0 of true -> %>"
+        "<%= case Length > 0 of true -> %>"
         "<ul>"
         "<%= lists:map(fun(N) -> %>"
         "<li><%= N .%></li>"
-        "<% end, lists:seq(1, erlang:length(List))) .%>"
+        "<% end, lists:seq(1, Length)) .%>"
         "</ul>"
         "<% ; false -> <<>> end .%>"
         "<% .%>"
@@ -395,7 +395,7 @@ tokenize_test() ->
                     [{expr, {{<<"=">>, <<".">>}, <<"Length">>}}],
                     [
                         {start_expr, {
-                            {<<"=">>, <<" ">>}, <<"case erlang:length(List) > 0 of true ->">>
+                            {<<"=">>, <<" ">>}, <<"case Length > 0 of true ->">>
                         }},
                         {nested_expr,
                             {[<<"<ul>">>, <<"</ul>">>], [
@@ -407,7 +407,7 @@ tokenize_test() ->
                                         ]}},
                                     {end_expr, {
                                         {<<" ">>, <<".">>},
-                                        <<"end, lists:seq(1, erlang:length(List)))">>
+                                        <<"end, lists:seq(1, Length))">>
                                     }}
                                 ]
                             ]}},
