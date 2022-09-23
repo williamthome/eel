@@ -35,10 +35,9 @@
 -spec binary(binary()) -> return().
 
 binary(Bin) ->
-    {Static, Dynamic} = tokenize(Bin),
+    {Static0, Dynamic} = tokenize(Bin),
     Flattened = flatten(Dynamic),
-    AST = parse(Flattened),
-    {Static, AST}.
+    parse(Static0, Flattened).
 
 %%------------------------------------------------------------------------------
 %% @doc Compiles a file joining the priv_dir to the file name.
@@ -196,9 +195,6 @@ expression(<<"<%", T/binary>>, StartMarker, text, Cache) ->
     expression(T, StartMarker, text, <<Cache/binary, "<%">>);
 expression(<<"%>", T/binary>>, StartMarker, text, Cache) ->
     expression(T, StartMarker, expr, <<Cache/binary, "%>">>);
-% expression(<<"eel_compile:binary(", T/binary>>, StartMarker, In, Cache0) ->
-%     {ok, {Rest, Cache}} = ignore_fun_expr(T, 1, <<Cache0/binary, "eel_compile:binary(">>),
-%     expression(Rest, StartMarker, In, Cache);
 expression(<<H, T/binary>>, StartMarker, In, Cache) ->
     expression(T, StartMarker, In, <<Cache/binary, H>>);
 expression(<<>>, _StartMarker, _In, _Cache) ->
@@ -212,15 +208,6 @@ is_cache_empty(<<_, _/binary>>) ->
     false;
 is_cache_empty(<<>>) ->
     true.
-
-% ignore_fun_expr(Bin, 0, Cache) ->
-%     {ok, {Bin, Cache}};
-% ignore_fun_expr(<<"(", T/binary>>, Count, Cache) ->
-%     ignore_fun_expr(T, Count + 1, <<Cache/binary, "(">>);
-% ignore_fun_expr(<<")", T/binary>>, Count, Cache) ->
-%     ignore_fun_expr(T, Count - 1, <<Cache/binary, ")">>);
-% ignore_fun_expr(<<H, T/binary>>, Count, Cache) ->
-%     ignore_fun_expr(T, Count, <<Cache/binary, H>>).
 
 nested(<<"<% ", _/binary>> = T, 0, Expr) ->
     {ok, {Expr, T}};
@@ -359,24 +346,34 @@ iolist_to_binary_fun(IOList, Siblings) ->
     List = io_lib:format(Format, IOList),
     erlang:list_to_binary(List).
 
-parse(Flattened) ->
-    lists:map(
-        fun(Expr) ->
-            Vars = retrieve_vars(Expr),
-            {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
-            {ok, Exprs} = erl_parse:parse_exprs(Tokens),
+parse(Static0, Flattened) ->
+    {SRes, FRes, _} =
+        lists:foldl(
+            fun(Expr, {SAcc0, FAcc0, Index0}) ->
+                Vars = retrieve_vars(Expr),
+                {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
+                {ok, Exprs} = erl_parse:parse_exprs(Tokens),
 
-            case compile_exprs(Exprs) of
-                {true, _} ->
-                    {Exprs, Vars};
-                false ->
-                    {Exprs, Vars}
-            end
-        end,
-        Flattened
-    ).
+                case is_compile_expr(Exprs) of
+                    {true, Bin} ->
+                        {CStatic, CDynamic} = binary(Bin),
+                        NewStatic = concat_static(SAcc0, CStatic, Index0),
+                        Index = Index0 + erlang:length(CDynamic),
+                        {NewStatic, lists:reverse(CDynamic) ++ FAcc0, Index};
+                    false ->
+                        {SAcc0, [{Exprs, Vars} | FAcc0], Index0 + 1}
+                end
+            end,
+            {Static0, [], 1},
+            Flattened
+        ),
 
-compile_exprs([{call, _, {remote, _, {atom, _, Mod}, {atom, _, Fun}}, _}] = Exprs) ->
+    {SRes, lists:reverse(FRes)}.
+
+is_compile_expr(Exprs) ->
+    is_compile_expr(Exprs, #{}).
+
+is_compile_expr([{call, _, {remote, _, {atom, _, Mod}, {atom, _, Fun}}, VarExpr} | _], Vars) ->
     CompileModFuns = [
         {eel, compile_binary},
         {eel, compile_file},
@@ -387,13 +384,72 @@ compile_exprs([{call, _, {remote, _, {atom, _, Mod}, {atom, _, Fun}}, _}] = Expr
     ],
     case lists:member({Mod, Fun}, CompileModFuns) of
         true ->
-            {value, {Static, AST}, []} = erl_eval:exprs(Exprs, []),
-            {true, {Static, AST}};
+            case VarExpr of
+                [{bin, _, [{bin_element, _, {string, _, Bin}, default, default}]}] ->
+                    {true, Bin};
+                [{var, 1, Var}] ->
+                    case maps:find(Var, Vars) of
+                        {ok, Bin} ->
+                            {true, Bin};
+                        error ->
+                            false
+                    end
+            end;
         false ->
             false
     end;
-compile_exprs(_Exprs) ->
+is_compile_expr(
+    [
+        {match, _, {var, _, Key},
+            {bin, _, [
+                {bin_element, _, {string, _, Value}, default, default}
+            ]}}
+        | T
+    ],
+    Vars
+) ->
+    is_compile_expr(T, Vars#{Key => erlang:list_to_binary(Value)});
+is_compile_expr([_ | T], Vars) ->
+    is_compile_expr(T, Vars);
+is_compile_expr([], _) ->
     false.
+
+concat_static(A, [], _) ->
+    A;
+concat_static([], B, _) ->
+    B;
+concat_static(A, B, I) ->
+    concat_static(A, B, I, 1, []).
+
+concat_static([AF, AL | T], B, I, I, Prev) ->
+    BF = fist_bin(B),
+    BL = last_bin(B),
+    F = <<AF/binary, BF/binary>>,
+    M = middle_bins(B),
+    L = <<BL/binary, AL/binary>>,
+    Prev ++ lists:flatten([F, M, L | T]);
+concat_static([H | A], B, I, IAcc, Prev) when IAcc < I ->
+    concat_static(A, B, I, IAcc + 1, [H | Prev]).
+
+fist_bin(L) ->
+    case L of
+        [X | _] -> X;
+        [] -> <<>>
+    end.
+
+last_bin(L) ->
+    case L of
+        [_] -> <<>>;
+        [_ | X] -> hd(lists:reverse(X));
+        [] -> <<>>
+    end.
+
+middle_bins(L) ->
+    case L of
+        [_] -> [];
+        [_, _] -> [];
+        [_ | X] -> lists:droplast(X)
+    end.
 
 %%%=============================================================================
 %%% Tests
@@ -533,25 +589,17 @@ retrieve_vars_test() ->
     ].
 
 parse_test() ->
+    Static = [<<"<h1>">>, <<"</h1><h2>">>, <<"</h2><ul>">>, <<"</ul>">>],
     Flattened = [
         <<"Title.">>,
         <<"Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin).">>,
         <<"lists:map(fun(Item) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin Item end), <<\"</li>\">>]) end, List).">>,
         <<"Length = erlang:length(List), erlang:iolist_to_binary([<<\"<div>Item count: \">>, eel_convert:to_binary(begin Length end), <<\"</div>\">>, eel_convert:to_binary(begin case Length > 0 of true -> erlang:iolist_to_binary([<<\"<ul>\">>, eel_convert:to_binary(begin lists:map(fun(N) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin N end), <<\"</li>\">>]) end, lists:seq(1, Length)) end), <<\"</ul>\">>]) ; false -> <<>> end end)]) .">>
     ],
-    Expected = [
+    Expected = {[<<"<h1>">>, <<"</h1><h2><b>">>, <<" | ">>, <<"</b></h2><ul>">>, <<"</ul>">>], [
         {[{var, 1, 'Title'}], ['Title']},
-        {
-            [
-                {match, 1, {var, 1, 'Bin'},
-                    {bin, 1, [
-                        {bin_element, 1, {string, 1, "<b><%= Foo .%> | <%= Bar .%></b>"}, default,
-                            default}
-                    ]}},
-                {call, 1, {remote, 1, {atom, 1, eel_compile}, {atom, 1, binary}}, [{var, 1, 'Bin'}]}
-            ],
-            []
-        },
+        {[{var, 1, 'Foo'}], ['Foo']},
+        {[{var, 1, 'Bar'}], ['Bar']},
         {
             [
                 {call, 1, {remote, 1, {atom, 1, lists}, {atom, 1, map}}, [
@@ -758,263 +806,7 @@ parse_test() ->
             ],
             ['List']
         }
-    ],
-    ?assertEqual(Expected, parse(Flattened)).
-
-% compile_test() ->
-%     Bin =
-%         <<
-%             "<h1><%= Title .%></h1>"
-%             "<ul>"
-%             "<%= lists:map(fun(Item) -> %>"
-%             "<li><%= Item .%></li>"
-%             "<% end, List) .%>"
-%             "</ul>"
-%             "<%= Length = erlang:length(List), %>"
-%             "<div>Item count: <%= Length .%></div>"
-%             "<%= case erlang:length(List) > 0 of true -> %>"
-%             "<ul>"
-%             "<%= lists:map(fun(N) -> %>"
-%             "<li><%= N .%></li>"
-%             "<% end, lists:seq(1, erlang:length(List))) .%>"
-%             "</ul>"
-%             "<% ; false -> <<>> end .%>"
-%             "<% .%>"
-%         >>,
-%     Expected = {[<<"<h1>">>, <<"</h1><ul>">>, <<"</ul>">>], [
-%         {[{var, 1, 'Title'}], ['Title']},
-%         {
-%             [
-%                 {call, 1, {remote, 1, {atom, 1, lists}, {atom, 1, map}}, [
-%                     {'fun', 1,
-%                         {clauses, [
-%                             {clause, 1, [{var, 1, 'Item'}], [], [
-%                                 {call, 1,
-%                                     {remote, 1, {atom, 1, erlang}, {atom, 1, iolist_to_binary}}, [
-%                                         {cons, 1,
-%                                             {bin, 1, [
-%                                                 {bin_element, 1, {string, 1, "<li>"}, default,
-%                                                     default}
-%                                             ]},
-%                                             {cons, 1,
-%                                                 {call, 1,
-%                                                     {remote, 1, {atom, 1, eel_convert},
-%                                                         {atom, 1, to_binary}},
-%                                                     [{block, 1, [{var, 1, 'Item'}]}]},
-%                                                 {cons, 1,
-%                                                     {bin, 1, [
-%                                                         {bin_element, 1, {string, 1, "</li>"},
-%                                                             default, default}
-%                                                     ]},
-%                                                     {nil, 1}}}}
-%                                     ]}
-%                             ]}
-%                         ]}},
-%                     {var, 1, 'List'}
-%                 ]}
-%             ],
-%             ['List']
-%         },
-%         {
-%             [
-%                 {match, 1, {var, 1, 'Length'},
-%                     {call, 1, {remote, 1, {atom, 1, erlang}, {atom, 1, length}}, [
-%                         {var, 1, 'List'}
-%                     ]}},
-%                 {call, 1, {remote, 1, {atom, 1, erlang}, {atom, 1, iolist_to_binary}}, [
-%                     {cons, 1,
-%                         {bin, 1, [
-%                             {bin_element, 1, {string, 1, "<div>Item count: "}, default, default}
-%                         ]},
-%                         {cons, 1,
-%                             {call, 1, {remote, 1, {atom, 1, eel_convert}, {atom, 1, to_binary}}, [
-%                                 {block, 1, [{var, 1, 'Length'}]}
-%                             ]},
-%                             {cons, 1,
-%                                 {bin, 1, [
-%                                     {bin_element, 1, {string, 1, "</div>"}, default, default}
-%                                 ]},
-%                                 {cons, 1,
-%                                     {call, 1,
-%                                         {remote, 1, {atom, 1, eel_convert}, {atom, 1, to_binary}}, [
-%                                             {block, 1, [
-%                                                 {'case', 1,
-%                                                     {op, 1, '>',
-%                                                         {call, 1,
-%                                                             {remote, 1, {atom, 1, erlang},
-%                                                                 {atom, 1, length}},
-%                                                             [{var, 1, 'List'}]},
-%                                                         {integer, 1, 0}},
-%                                                     [
-%                                                         {clause, 1, [{atom, 1, true}], [], [
-%                                                             {call, 1,
-%                                                                 {remote, 1, {atom, 1, erlang},
-%                                                                     {atom, 1, iolist_to_binary}},
-%                                                                 [
-%                                                                     {cons, 1,
-%                                                                         {bin, 1, [
-%                                                                             {bin_element, 1,
-%                                                                                 {string, 1, "<ul>"},
-%                                                                                 default, default}
-%                                                                         ]},
-%                                                                         {cons, 1,
-%                                                                             {call, 1,
-%                                                                                 {remote, 1,
-%                                                                                     {atom, 1,
-%                                                                                         eel_convert},
-%                                                                                     {atom, 1,
-%                                                                                         to_binary}},
-%                                                                                 [
-%                                                                                     {block, 1, [
-%                                                                                         {call, 1,
-%                                                                                             {remote,
-%                                                                                                 1,
-%                                                                                                 {atom,
-%                                                                                                     1,
-%                                                                                                     lists},
-%                                                                                                 {atom,
-%                                                                                                     1,
-%                                                                                                     map}},
-%                                                                                             [
-%                                                                                                 {'fun',
-%                                                                                                     1,
-%                                                                                                     {clauses,
-%                                                                                                         [
-%                                                                                                             {clause,
-%                                                                                                                 1,
-%                                                                                                                 [
-%                                                                                                                     {var,
-%                                                                                                                         1,
-%                                                                                                                         'N'}
-%                                                                                                                 ],
-%                                                                                                                 [],
-%                                                                                                                 [
-%                                                                                                                     {call,
-%                                                                                                                         1,
-%                                                                                                                         {remote,
-%                                                                                                                             1,
-%                                                                                                                             {atom,
-%                                                                                                                                 1,
-%                                                                                                                                 erlang},
-%                                                                                                                             {atom,
-%                                                                                                                                 1,
-%                                                                                                                                 iolist_to_binary}},
-%                                                                                                                         [
-%                                                                                                                             {cons,
-%                                                                                                                                 1,
-%                                                                                                                                 {bin,
-%                                                                                                                                     1,
-%                                                                                                                                     [
-%                                                                                                                                         {bin_element,
-%                                                                                                                                             1,
-%                                                                                                                                             {string,
-%                                                                                                                                                 1,
-%                                                                                                                                                 "<li>"},
-%                                                                                                                                             default,
-%                                                                                                                                             default}
-%                                                                                                                                     ]},
-%                                                                                                                                 {cons,
-%                                                                                                                                     1,
-%                                                                                                                                     {call,
-%                                                                                                                                         1,
-%                                                                                                                                         {remote,
-%                                                                                                                                             1,
-%                                                                                                                                             {atom,
-%                                                                                                                                                 1,
-%                                                                                                                                                 eel_convert},
-%                                                                                                                                             {atom,
-%                                                                                                                                                 1,
-%                                                                                                                                                 to_binary}},
-%                                                                                                                                         [
-%                                                                                                                                             {block,
-%                                                                                                                                                 1,
-%                                                                                                                                                 [
-%                                                                                                                                                     {var,
-%                                                                                                                                                         1,
-%                                                                                                                                                         'N'}
-%                                                                                                                                                 ]}
-%                                                                                                                                         ]},
-%                                                                                                                                     {cons,
-%                                                                                                                                         1,
-%                                                                                                                                         {bin,
-%                                                                                                                                             1,
-%                                                                                                                                             [
-%                                                                                                                                                 {bin_element,
-%                                                                                                                                                     1,
-%                                                                                                                                                     {string,
-%                                                                                                                                                         1,
-%                                                                                                                                                         "</li>"},
-%                                                                                                                                                     default,
-%                                                                                                                                                     default}
-%                                                                                                                                             ]},
-%                                                                                                                                         {nil,
-%                                                                                                                                             1}}}}
-%                                                                                                                         ]}
-%                                                                                                                 ]}
-%                                                                                                         ]}},
-%                                                                                                 {call,
-%                                                                                                     1,
-%                                                                                                     {remote,
-%                                                                                                         1,
-%                                                                                                         {atom,
-%                                                                                                             1,
-%                                                                                                             lists},
-%                                                                                                         {atom,
-%                                                                                                             1,
-%                                                                                                             seq}},
-%                                                                                                     [
-%                                                                                                         {integer,
-%                                                                                                             1,
-%                                                                                                             1},
-%                                                                                                         {call,
-%                                                                                                             1,
-%                                                                                                             {remote,
-%                                                                                                                 1,
-%                                                                                                                 {atom,
-%                                                                                                                     1,
-%                                                                                                                     erlang},
-%                                                                                                                 {atom,
-%                                                                                                                     1,
-%                                                                                                                     length}},
-%                                                                                                             [
-%                                                                                                                 {var,
-%                                                                                                                     1,
-%                                                                                                                     'List'}
-%                                                                                                             ]}
-%                                                                                                     ]}
-%                                                                                             ]}
-%                                                                                     ]}
-%                                                                                 ]},
-%                                                                             {cons, 1,
-%                                                                                 {bin, 1, [
-%                                                                                     {bin_element, 1,
-%                                                                                         {string, 1,
-%                                                                                             "</ul>"},
-%                                                                                         default,
-%                                                                                         default}
-%                                                                                 ]},
-%                                                                                 {nil, 1}}}}
-%                                                                 ]}
-%                                                         ]},
-%                                                         {clause, 1, [{atom, 1, false}], [], [
-%                                                             {bin, 1, []}
-%                                                         ]}
-%                                                     ]}
-%                                             ]}
-%                                         ]},
-%                                     {nil, 1}}}}}
-%                 ]}
-%             ],
-%             ['List', 'List', 'List']
-%         }
-%     ]},
-%     ?assertEqual(Expected, binary(Bin)).
-
-the_test() ->
-    {Static, Dynamic} = tokenize(
-        <<"eel_compile:binary(<<\"<b><%= Foo .%> | <%= Bar .%></b>\">>).">>
-    ),
-    Flattened = flatten(Dynamic),
-    ?debugFmt("~p", [{Static, Flattened}]).
+    ]},
+    ?assertEqual(Expected, parse(Static, Flattened)).
 
 -endif.
