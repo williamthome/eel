@@ -404,7 +404,7 @@ compile_exprs(_Exprs) ->
 tokenize_test() ->
     Bin = <<
         "<h1><%= Title .%></h1>"
-        "<h2><%= Bin = <<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>, eel_compile:binary(Bin) .%></h2>"
+        "<h2><%= Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin) .%></h2>"
         "<ul>"
         "<%= lists:map(fun(Item) -> %>"
         "<li><%= Item .%></li>"
@@ -426,7 +426,7 @@ tokenize_test() ->
         [
             {expr, {
                 {<<"=">>, <<".">>},
-                <<"Bin = <<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>, eel_compile:binary(Bin)">>
+                <<"Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin)">>
             }}
         ],
         [
@@ -469,7 +469,7 @@ flatten_test() ->
         [
             {expr, {
                 {<<"=">>, <<".">>},
-                <<"Bin = <<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>, eel_compile:binary(Bin)">>
+                <<"Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin)">>
             }}
         ],
         [
@@ -506,7 +506,7 @@ flatten_test() ->
     ],
     Expected = [
         <<"Title.">>,
-        <<"Bin = <<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>, eel_compile:binary(Bin).">>,
+        <<"Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin).">>,
         <<"lists:map(fun(Item) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin Item end), <<\"</li>\">>]) end, List).">>,
         <<"Length = erlang:length(List), erlang:iolist_to_binary([<<\"<div>Item count: \">>, eel_convert:to_binary(begin Length end), <<\"</div>\">>, eel_convert:to_binary(begin case Length > 0 of true -> erlang:iolist_to_binary([<<\"<ul>\">>, eel_convert:to_binary(begin lists:map(fun(N) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin N end), <<\"</li>\">>]) end, lists:seq(1, Length)) end), <<\"</ul>\">>]) ; false -> <<>> end end)]) .">>
     ],
@@ -535,7 +535,7 @@ retrieve_vars_test() ->
 parse_test() ->
     Flattened = [
         <<"Title.">>,
-        <<"Bin = <<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>, eel_compile:binary(Bin).">>,
+        <<"Bin = <<\"<b><%= Foo .%> | <%= Bar .%></b>\">>, eel_compile:binary(Bin).">>,
         <<"lists:map(fun(Item) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin Item end), <<\"</li>\">>]) end, List).">>,
         <<"Length = erlang:length(List), erlang:iolist_to_binary([<<\"<div>Item count: \">>, eel_convert:to_binary(begin Length end), <<\"</div>\">>, eel_convert:to_binary(begin case Length > 0 of true -> erlang:iolist_to_binary([<<\"<ul>\">>, eel_convert:to_binary(begin lists:map(fun(N) -> erlang:iolist_to_binary([<<\"<li>\">>, eel_convert:to_binary(begin N end), <<\"</li>\">>]) end, lists:seq(1, Length)) end), <<\"</ul>\">>]) ; false -> <<>> end end)]) .">>
     ],
@@ -545,7 +545,7 @@ parse_test() ->
             [
                 {match, 1, {var, 1, 'Bin'},
                     {bin, 1, [
-                        {bin_element, 1, {string, 1, "<h1><%= Foo .%> | <%= Bar .%></h1>"}, default,
+                        {bin_element, 1, {string, 1, "<b><%= Foo .%> | <%= Bar .%></b>"}, default,
                             default}
                     ]}},
                 {call, 1, {remote, 1, {atom, 1, eel_compile}, {atom, 1, binary}}, [{var, 1, 'Bin'}]}
@@ -1012,7 +1012,7 @@ parse_test() ->
 
 the_test() ->
     {Static, Dynamic} = tokenize(
-        <<"eel_compile:binary(<<\"<h1><%= Foo .%> | <%= Bar .%></h1>\">>).">>
+        <<"eel_compile:binary(<<\"<b><%= Foo .%> | <%= Bar .%></b>\">>).">>
     ),
     Flattened = flatten(Dynamic),
     ?debugFmt("~p", [{Static, Flattened}]).
