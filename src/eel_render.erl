@@ -59,30 +59,26 @@ compiled({Static, AST}, Memo0, NewBindings) ->
     EvalMemo = maps:get(eval, Memo0, []),
     {ReversedEval, _BindingsIndexes, Indexes, _} =
         lists:foldl(
-            fun
-                ({component, Component}, {Acc, Indexes0, NewIndexes0, Index}) ->
-                    {CRendered, _CMemo, _CIndexes} = compiled(Component, Memo0, Bindings),
-                    {[CRendered | Acc], Indexes0, NewIndexes0, Index + 1};
-                ({Exprs, Vars}, {Acc, Indexes0, NewIndexes0, Index}) ->
-                    IsVarsValid =
-                        case Vars of
-                            [] -> true;
-                            _ -> lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars)
-                        end,
-                    {Bin, NewIndexes} =
-                        case IsVarsValid of
-                            true ->
-                                {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
-                                Result = eval_result(Result0, Bindings),
-                                {Result, NewIndexes0#{Index => Result}};
-                            false ->
-                                case EvalMemo of
-                                    % TODO: Return custom error or maybe empty binary
-                                    [] -> erlang:error(badarg);
-                                    _ -> {lists:nth(Index, EvalMemo), NewIndexes0}
-                                end
-                        end,
-                    {[Bin | Acc], Indexes0#{Index => Bin}, NewIndexes, Index + 1}
+            fun({Exprs, Vars}, {Acc, Indexes0, NewIndexes0, Index}) ->
+                IsVarsValid =
+                    case Vars of
+                        [] -> true;
+                        _ -> lists:any(fun(Var) -> lists:member(Var, VarsToRender) end, Vars)
+                    end,
+                {Bin, NewIndexes} =
+                    case IsVarsValid of
+                        true ->
+                            {value, Result0, _} = erl_eval:exprs(Exprs, Bindings),
+                            Result = eval_result(Result0, Bindings),
+                            {Result, NewIndexes0#{Index => Result}};
+                        false ->
+                            case EvalMemo of
+                                % TODO: Return custom error or maybe empty binary
+                                [] -> erlang:error(badarg);
+                                _ -> {lists:nth(Index, EvalMemo), NewIndexes0}
+                            end
+                    end,
+                {[Bin | Acc], Indexes0#{Index => Bin}, NewIndexes, Index + 1}
             end,
             {[], #{}, #{}, 1},
             AST
