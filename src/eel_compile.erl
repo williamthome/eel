@@ -353,10 +353,9 @@ parse(Static0, Flattened) ->
                 Vars = retrieve_vars(Expr),
                 {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Expr)),
                 {ok, Exprs} = erl_parse:parse_exprs(Tokens),
-
                 case is_compile_expr(Exprs) of
-                    {true, Bin} ->
-                        {CStatic, CDynamic} = binary(Bin),
+                    true ->
+                        {value, {CStatic, CDynamic}, _} = erl_eval:exprs(Exprs, []),
                         NewStatic = concat_static(SAcc0, CStatic, Index0),
                         Index = Index0 + erlang:length(CDynamic),
                         {NewStatic, lists:reverse(CDynamic) ++ FAcc0, Index};
@@ -367,51 +366,28 @@ parse(Static0, Flattened) ->
             {Static0, [], 1},
             Flattened
         ),
-
     {SRes, lists:reverse(FRes)}.
 
-is_compile_expr(Exprs) ->
-    is_compile_expr(Exprs, #{}).
-
-is_compile_expr([{call, _, {remote, _, {atom, _, Mod}, {atom, _, Fun}}, VarExpr} | _], Vars) ->
+is_compile_expr([{call, _, {remote, _, {atom, _, Mod}, {atom, _, Fun}}, _} | _]) ->
+    CompileFuns = [
+        compile_binary,
+        compile_file,
+        compile_priv_file
+    ],
     CompileModFuns = [
-        {eel, compile_binary},
-        {eel, compile_file},
-        {eel, compile_priv_file},
         {eel_compile, binary},
         {eel_compile, file},
         {eel_compile, priv_file}
     ],
-    case lists:member({Mod, Fun}, CompileModFuns) of
+    case lists:member(Fun, CompileFuns) of
         true ->
-            case VarExpr of
-                [{bin, _, [{bin_element, _, {string, _, Bin}, default, default}]}] ->
-                    {true, Bin};
-                [{var, 1, Var}] ->
-                    case maps:find(Var, Vars) of
-                        {ok, Bin} ->
-                            {true, Bin};
-                        error ->
-                            false
-                    end
-            end;
+            true;
         false ->
-            false
+            lists:member({Mod, Fun}, CompileModFuns)
     end;
-is_compile_expr(
-    [
-        {match, _, {var, _, Key},
-            {bin, _, [
-                {bin_element, _, {string, _, Value}, default, default}
-            ]}}
-        | T
-    ],
-    Vars
-) ->
-    is_compile_expr(T, Vars#{Key => erlang:list_to_binary(Value)});
-is_compile_expr([_ | T], Vars) ->
-    is_compile_expr(T, Vars);
-is_compile_expr([], _) ->
+is_compile_expr([_ | T]) ->
+    is_compile_expr(T);
+is_compile_expr([]) ->
     false.
 
 concat_static(A, [], _) ->
