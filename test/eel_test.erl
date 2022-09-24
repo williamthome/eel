@@ -25,4 +25,6 @@ file_to_module_test() ->
     FileName = <<"greetings.html.eel">>,
     Template = eel_test_support:get_template(FileName),
     {ok, Module} = eel:file_to_module(Template),
-    ?assertEqual(greetings_html_eel, Module).
+    ?assertEqual(greetings_html_eel, Module),
+    ?assertEqual(Template, Module:filename()),
+    ?assertEqual(<<"<p>Hello, World!</p>">>, Module:eval(#{'Who' => <<"World">>})).
