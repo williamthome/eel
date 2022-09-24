@@ -22,6 +22,7 @@
     return/0
 ]).
 
+-type filename() :: binary().
 -type static() :: [binary()].
 -type ast() :: [{[erl_parse:abstract_expr()], [atom()]}].
 -type return() :: {static(), ast()}.
@@ -34,7 +35,7 @@
 %%------------------------------------------------------------------------------
 -spec binary(binary()) -> return().
 
-binary(Bin) ->
+binary(Bin) when is_binary(Bin) ->
     {Static0, Dynamic} = tokenize(Bin),
     Flattened = flatten(Dynamic),
     parse(Static0, Flattened).
@@ -43,7 +44,7 @@ binary(Bin) ->
 %% @doc Compiles a file joining the priv_dir to the file name.
 %% @end
 %%------------------------------------------------------------------------------
--spec priv_file(atom(), file:filename_all()) -> return() | {error, term()}.
+-spec priv_file(atom(), filename()) -> return() | {error, term()}.
 
 priv_file(App, FileName0) ->
     PrivDir = code:priv_dir(App),
@@ -54,9 +55,9 @@ priv_file(App, FileName0) ->
 %% @doc Compiles a file.
 %% @end
 %%------------------------------------------------------------------------------
--spec file(file:filename_all()) -> return() | {error, term()}.
+-spec file(filename()) -> return() | {error, term()}.
 
-file(FileName) ->
+file(FileName) when is_binary(FileName) ->
     case file:read_file(FileName) of
         {ok, Bin} -> binary(Bin);
         {error, Reason} -> {error, Reason}
