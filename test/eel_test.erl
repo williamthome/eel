@@ -2,8 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-eel_test() ->
-    Template = eel_test_support:get_template("foo.html.eel"),
+compile_file_test() ->
+    Template = eel_test_support:get_template(<<"foo.html.eel">>),
     Compiled = eel:compile_file(Template),
     ExpectedCompiled = {
         [<<"<h1>">>, <<"</h1>\n<h2>">>, <<"</h2>\n\n">>],
@@ -20,3 +20,9 @@ eel_test() ->
     {HTML, _, _} = eel:render(Compiled, Bindings),
     ExpectedHTML = <<"<h1>foo</h1>\n<h2>bar</h2>\n\n">>,
     ?assertEqual(ExpectedHTML, HTML).
+
+file_to_module_test() ->
+    FileName = <<"greetings.html.eel">>,
+    Template = eel_test_support:get_template(FileName),
+    {ok, Module} = eel:file_to_module(Template),
+    ?assertEqual(greetings_html_eel, Module).
