@@ -75,6 +75,8 @@ do_tokenize(<<"<%", _/binary>> = Bin, {Static0, Dynamic0}, TokensAcc) ->
         {ok, {ExprRef, Token, Rest}} ->
             Static =
                 case TokensAcc of
+                    [] ->
+                        [<<>> | Static0];
                     [{ExprRef, _} | _] when ExprRef =:= expr; ExprRef =:= start_expr ->
                         [<<>> | Static0];
                     _ ->
