@@ -7,12 +7,12 @@
     get_template/1
 ]).
 
-compile_file(Filename) ->
-    Template = get_template(Filename),
+compile_file(FileName) ->
+    Template = get_template(FileName),
     eel:compile_file(Template).
 
-get_template(Filename) ->
-    get_support_file(["templates", Filename]).
+get_template(FileName) ->
+    get_support_file(["templates", FileName]).
 
 get_support_file(Components) ->
     filename:join([get_cwd(), "test", "support", filename:join(Components)]).
