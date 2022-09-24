@@ -13,7 +13,7 @@
 -include_lib("syntax_tools/include/merl.hrl").
 
 -type app() :: atom().
--type filename() :: binary().
+-type filename() :: binary() | atom().
 
 %%------------------------------------------------------------------------------
 %% @doc Compiles code to a module.
@@ -36,12 +36,20 @@ to_module({priv_file, App}, FileName) ->
     Compiled = eel_compile:priv_file(App, FileName),
     to_module(Compiled, FileName);
 to_module({Static, AST}, FileName) ->
-    Basename = filename:basename(FileName),
-    ModuleBin = binary:replace(Basename, <<".">>, <<"_">>, [global]),
-    Module =
-        case catch erlang:binary_to_existing_atom(ModuleBin) of
-            Atom when is_atom(Atom) -> Atom;
-            _ -> erlang:binary_to_atom(ModuleBin)
+    {ModuleBin, Module} =
+        case FileName of
+            FileName when is_binary(FileName) ->
+                Basename = filename:basename(FileName),
+                ModName = binary:replace(Basename, <<".">>, <<"_">>, [global]),
+                Mod =
+                    case catch erlang:binary_to_existing_atom(ModName) of
+                        Atom when is_atom(Atom) -> Atom;
+                        _ -> erlang:binary_to_atom(ModName)
+                    end,
+                {ModName, Mod};
+            ModName when is_atom(ModName) ->
+                Mod = erlang:atom_to_binary(FileName),
+                {ModName, Mod}
         end,
     case erlang:module_loaded(Module) of
         true ->
