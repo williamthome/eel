@@ -29,6 +29,12 @@ The evaluator module evaluates a binary.
 <<"Hello, World!">>
 ```
 
+### Outputing
+
+A template or a binary can be output to a module.
+
+![Priv file to module](images/priv_file_to_module.gif)
+
 ## Syntax
 
 The Erlang code it's written between section punctuations. These section punctuations are:
