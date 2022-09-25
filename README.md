@@ -35,6 +35,24 @@ A template or a binary can be output to a module.
 
 ![Priv file to module](images/priv_file_to_module.gif)
 
+### OTP
+
+The eel_template is a gen_server, it holds the last render information and only update the changes.
+
+```console
+1> {ok, Tpl} = eel:start_priv_file_template(eel, <<"greetings.html.eel">>).
+{ok,<0.162.0>}
+2> eel_template:render(Tpl, #{'Who' => 'Erlang', 'Msg' => <<"Hello, EEl!">>}).
+{<<"<p>Me: \"Hello, Erlang!\"</p>\n<p>You: \"Hello, EEl!\"</p>">>,
+ #{1 => <<"Erlang">>,2 => <<"Hello, EEl!">>}}
+3> eel_template:render(Tpl).
+{<<"<p>Me: \"Hello, Erlang!\"</p>\n<p>You: \"Hello, EEl!\"</p>">>,
+ #{}}
+4> eel_template:render(Tpl, #{'Msg' => <<"Hello again!">>}).
+{<<"<p>Me: \"Hello, Erlang!\"</p>\n<p>You: \"Hello again!\"</p>">>,
+ #{2 => <<"Hello again!">>}}
+```
+
 ## Syntax
 
 The Erlang code it's written between section punctuations. These section punctuations are:
