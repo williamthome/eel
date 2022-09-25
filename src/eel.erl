@@ -17,7 +17,11 @@
     compiled_to_module/2,
     bin_to_module/2,
     file_to_module/1,
-    priv_file_to_module/2
+    priv_file_to_module/2,
+    start_template/2,
+    start_bin_template/2,
+    start_file_template/1,
+    start_priv_file_template/2
 ]).
 
 compile(Bin) ->
@@ -52,3 +56,15 @@ file_to_module(FileName) ->
 
 priv_file_to_module(App, FileName) ->
     eel_output:to_module({priv_file, App}, FileName).
+
+start_template({Static, AST}, FileOrModName) ->
+    eel_template_sup:start_child({Static, AST}, FileOrModName).
+
+start_bin_template(Bin, ModName) ->
+    eel_template_sup:start_child({binary, Bin}, ModName).
+
+start_file_template(FileName) ->
+    eel_template_sup:start_child(file, FileName).
+
+start_priv_file_template(App, FileName) ->
+    eel_template_sup:start_child({priv_file, App}, FileName).

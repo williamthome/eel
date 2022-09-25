@@ -10,21 +10,28 @@
     to_module/2
 ]).
 
+-export_type([
+    app/0,
+    filename/0,
+    module_def/0
+]).
+
 -include_lib("syntax_tools/include/merl.hrl").
 
 -type app() :: atom().
 -type filename() :: binary().
+-type module_def() ::
+    {binary, binary()}
+    | file
+    | {priv_file, app()}
+    | eel_compile:return().
 
 %%------------------------------------------------------------------------------
 %% @doc Compiles code to a module.
 %% @end
 %%------------------------------------------------------------------------------
--spec to_module(What, filename() | module()) -> {ok, module()} | {error, term()} when
-    What ::
-        {binary, binary()}
-        | file
-        | {priv_file, app()}
-        | eel_compile:return().
+-spec to_module(module_def(), filename() | module()) ->
+    {ok, module()} | {error, term()}.
 
 to_module({binary, Bin}, ModName) ->
     Compiled = eel_compile:binary(Bin),
