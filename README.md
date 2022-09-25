@@ -29,7 +29,7 @@ The evaluator module evaluates a binary.
 <<"Hello, World!">>
 ```
 
-### Outputing
+### Outputting
 
 A template or a binary can be output to a module.
 
