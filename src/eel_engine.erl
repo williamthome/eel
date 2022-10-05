@@ -1,72 +1,12 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl engine behaviour.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_engine).
 
-%%%=============================================================================
-%%% Types
-%%%=============================================================================
+-type line() :: pos_integer().
+-type column() :: pos_integer().
+-type marker() :: binary().
+-type expression() :: binary().
 
--type index()         :: pos_integer().
--type line()          :: pos_integer().
--type column()        :: pos_integer().
--type expression()    :: binary().
--type state()         :: term().
--type token()         :: term().
--type static()        :: [binary()].
--type dynamic()       :: [token()].
--type ast()           :: erl_syntax:syntaxTree().
--type position()      :: {line(), column()}.
--type marker_id()     :: atom().
--type marker_symbol() :: nonempty_string().
--type marker()        :: {marker_id(), { Start :: marker_symbol()
-                                       , End   :: marker_symbol() }}.
--type expressions()   :: {Outer :: expression(), Inner :: expression()}.
--type options()       :: map().
+-type cursor() :: {line(), column()}.
+-type markers() :: {Start :: marker(), End :: marker()}.
+-type expressions() :: {Outside :: expression(), Inside :: expression()}.
 
--export_type([ index/0
-             , line/0
-             , column/0
-             , expression/0
-             , state/0
-             , token/0
-             , static/0
-             , dynamic/0
-             , ast/0
-             , position/0
-             , marker_id/0
-             , marker_symbol/0
-             , marker/0
-             , expressions/0
-             , options/0
-             ]).
-
-%%%=============================================================================
-%%% Callbacks
-%%%=============================================================================
-
--callback markers() -> [marker()].
-
--callback init(options()) -> {ok, state()} | {error, term()}.
-
-%% tokenize
--callback handle_expr( index()
-                     , position()
-                     , marker_id()
-                     , expressions()
-                     , state() ) -> {ok, state()} | {error, term()}.
-
--callback handle_text( index()
-                     , position()
-                     , binary()
-                     , state() ) -> {ok, state()} | {error, term()}.
-
--callback handle_body( state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
-
-%% compile
--callback handle_compile(token(), state()) -> {ok, state()} | {error, term()}.
-
--callback handle_ast( state() ) -> {ok, ast()} | {error, term()}.
+-callback handle_expr({cursor(), markers(), expressions()}, list()) -> list().
