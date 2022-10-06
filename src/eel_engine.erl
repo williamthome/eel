@@ -10,3 +10,7 @@
 -type expressions() :: {Outside :: expression(), Inside :: expression()}.
 
 -callback handle_expr({cursor(), markers(), expressions()}, list()) -> list().
+
+-callback handle_text({cursor(), binary()}, list()) -> list().
+
+-callback handle_end(list()) -> {ok, list()} | {error, term()}.
