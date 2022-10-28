@@ -9,8 +9,13 @@
 -type markers() :: {Start :: marker(), End :: marker()}.
 -type expressions() :: {Outside :: expression(), Inside :: expression()}.
 
--callback handle_expr({cursor(), markers(), expressions()}, list()) -> list().
+-callback init(term()) -> term().
 
--callback handle_text({cursor(), binary()}, list()) -> list().
+-callback handle_expr({cursor(), markers(), expressions()}, list(), term()) ->
+    {ok, {list(), term()}} | {error, term()}.
 
--callback handle_end(list()) -> {ok, list()} | {error, term()}.
+-callback handle_text({cursor(), binary()}, list(), term()) ->
+    {ok, {list(), term()}} | {error, term()}.
+
+-callback handle_body(list(), term()) ->
+    {ok, list()} | {error, term()}.
