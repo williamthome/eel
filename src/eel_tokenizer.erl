@@ -27,8 +27,12 @@ tokenize(Bin) ->
 -spec tokenize(binary(), module(), term()) -> {ok, list()} | {error, term()}.
 
 tokenize(Bin, Eng, Opts) ->
-    State = Eng:init(Opts),
-    do_tokenize(Bin, in_root, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, [], State).
+    case Eng:init(Opts) of
+        {ok, State} ->
+            do_tokenize(Bin, in_root, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, [], State);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%%=============================================================================
 %%% Internal functions
@@ -213,7 +217,7 @@ do_tokenize(<<H, T/binary>>, In, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, Exp
         State
     );
 do_tokenize(<<>>, in_root, Eng, {_Ln, _Col}, {<<>>, _SLn, _SCol}, {<<>>, <<>>}, _Buf, Acc, State) ->
-    Eng:handle_body(lists:reverse(Acc), State);
+    Eng:handle_body(Acc, State);
 do_tokenize(<<>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, Acc0, State0) ->
     case Eng:handle_text({{SLn, SCol}, Text}, Acc0, State0) of
         {ok, {Acc, State}} ->
@@ -272,7 +276,7 @@ tokenize_test() ->
 
 % Engine
 
-init([]) -> [].
+init([]) -> {ok, []}.
 
 handle_expr({{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}, Acc, State) ->
     {ok, {[{expr, {{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}} | Acc], State}}.
@@ -281,6 +285,6 @@ handle_text({{Ln, Col}, Text}, Acc, State) ->
     {ok, {[{text, {{Ln, Col}, Text}} | Acc], State}}.
 
 handle_body(Tokens, _State) ->
-    {ok, Tokens}.
+    {ok, lists:reverse(Tokens)}.
 
 -endif.
