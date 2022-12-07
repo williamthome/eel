@@ -9,7 +9,7 @@
 %% Includes
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--export([init/1, handle_expr/3, handle_text/3, handle_body/2]).
+-export([init/1, handle_expr/2, handle_text/2, handle_body/1]).
 -endif.
 
 %% Defines
@@ -29,7 +29,7 @@ tokenize(Bin) ->
 tokenize(Bin, Eng, Opts) ->
     case Eng:init(Opts) of
         {ok, State} ->
-            do_tokenize(Bin, in_root, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, [], State);
+            do_tokenize(Bin, in_root, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, State);
         {error, Reason} ->
             {error, Reason}
     end.
@@ -39,7 +39,7 @@ tokenize(Bin, Eng, Opts) ->
 %%%=============================================================================
 
 do_tokenize(
-    <<"<%", T/binary>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {<<>>, <<>>}, Buf, Acc, State
+    <<"<%", T/binary>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {<<>>, <<>>}, Buf, State
 ) ->
     do_tokenize(
         T,
@@ -49,14 +49,13 @@ do_tokenize(
         {<<>>, SLn, SCol},
         {<<"<%">>, <<>>},
         <<Buf/binary, "<%">>,
-        Acc,
         State
     );
 do_tokenize(
-    <<"<%", T/binary>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, Acc0, State0
+    <<"<%", T/binary>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0
 ) ->
-    case Eng:handle_text({{SLn, SCol}, Text}, Acc0, State0) of
-        {ok, {Acc, State}} ->
+    case Eng:handle_text({{SLn, SCol}, Text}, State0) of
+        {ok, State} ->
             do_tokenize(
                 <<"<%", T/binary>>,
                 in_root,
@@ -65,14 +64,13 @@ do_tokenize(
                 {<<>>, Ln, Col},
                 {<<>>, <<>>},
                 Buf,
-                Acc,
                 State
             );
         {error, Reason} ->
             {error, Reason}
     end;
 do_tokenize(
-    <<32, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc, State
+    <<32, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State
 ) ->
     do_tokenize(
         T,
@@ -82,15 +80,14 @@ do_tokenize(
         {SMkr, SLn, SCol},
         {<<ExpOut/binary, 32>>, ExpIn},
         <<Buf/binary, 32>>,
-        Acc,
         State
     );
 do_tokenize(
-    <<"%>", T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc0, State0
+    <<"%>", T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State0
 ) ->
     EMkr = <<>>,
-    case Eng:handle_expr({{SLn, SCol}, {SMkr, EMkr}, {<<ExpOut/binary, "%>">>, ExpIn}}, Acc0, State0) of
-        {ok, {Acc, State}} ->
+    case Eng:handle_expr({{SLn, SCol}, {SMkr, EMkr}, {<<ExpOut/binary, "%>">>, ExpIn}}, State0) of
+        {ok, State} ->
             do_tokenize(
                 T,
                 in_root,
@@ -99,25 +96,24 @@ do_tokenize(
                 {<<>>, Ln, Col + 2},
                 {<<>>, <<>>},
                 <<Buf/binary, "%>">>,
-                Acc,
                 State
             );
         {error, Reason} ->
             {error, Reason}
     end;
 do_tokenize(
-    <<32, T/binary>>, in_expr, Eng, {Ln0, Col0}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc0, State0
+    <<32, T/binary>>, in_expr, Eng, {Ln0, Col0}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State0
 ) ->
     case is_end_of_expr(T, {Ln0, Col0 + 1}) of
         {true, {Rest, {Ln, Col}, EMkr}} ->
             case
                 Eng:handle_expr(
-                    {{SLn, SCol}, {SMkr, EMkr}, {<<ExpOut/binary, 32, EMkr/binary, "%>">>, ExpIn}},
-                    Acc0,
+                    {{SLn, SCol}, {SMkr, EMkr},
+                     {<<ExpOut/binary, 32, EMkr/binary, "%>">>, ExpIn}},
                     State0
                 )
             of
-                {ok, {Acc, State}} ->
+                {ok, State} ->
                     do_tokenize(
                         Rest,
                         in_root,
@@ -126,7 +122,6 @@ do_tokenize(
                         {<<>>, Ln, Col},
                         {<<>>, <<>>},
                         <<Buf/binary, 32, EMkr/binary, "%>">>,
-                        Acc,
                         State
                     );
                 {error, Reason} ->
@@ -141,14 +136,13 @@ do_tokenize(
                 {SMkr, SLn, SCol},
                 {<<ExpOut/binary, 32>>, <<ExpIn/binary, 32>>},
                 <<Buf/binary, 32>>,
-                Acc0,
                 State0
             );
         eof ->
             {error, eof}
     end;
 do_tokenize(
-    <<H, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc, State
+    <<H, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State
 ) ->
     do_tokenize(
         T,
@@ -158,15 +152,14 @@ do_tokenize(
         {<<SMkr/binary, H>>, SLn, SCol},
         {<<ExpOut/binary, H>>, ExpIn},
         <<Buf/binary, H>>,
-        Acc,
         State
     );
 do_tokenize(
-    <<"%>", T/binary>>, in_expr, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc0, State0
+    <<"%>", T/binary>>, in_expr, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State0
 ) ->
     EMkr = ExpIn,
-    case Eng:handle_expr({{SLn, SCol}, {SMkr, EMkr}, {<<ExpOut/binary, "%>">>, <<>>}}, Acc0, State0) of
-        {ok, {Acc, State}} ->
+    case Eng:handle_expr({{SLn, SCol}, {SMkr, EMkr}, {<<ExpOut/binary, "%>">>, <<>>}}, State0) of
+        {ok, State} ->
             do_tokenize(
                 T,
                 in_root,
@@ -175,17 +168,16 @@ do_tokenize(
                 {<<>>, Ln, Col + 2},
                 {<<>>, <<>>},
                 <<Buf/binary, "%>">>,
-                Acc,
                 State
             );
         {error, Reason} ->
             {error, Reason}
     end;
 do_tokenize(
-    <<"\n", T/binary>>, in_root, Eng, {Ln, _Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, Acc0, State0
+    <<"\n", T/binary>>, in_root, Eng, {Ln, _Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0
 ) ->
-    case Eng:handle_text({{SLn, SCol}, Text}, Acc0, State0) of
-        {ok, {Acc, State}} ->
+    case Eng:handle_text({{SLn, SCol}, Text}, State0) of
+        {ok, State} ->
             do_tokenize(
                 T,
                 in_root,
@@ -194,17 +186,16 @@ do_tokenize(
                 {<<>>, SLn + 1, 1},
                 {<<>>, <<>>},
                 Buf,
-                Acc,
                 State
             );
         {error, Reason} ->
             {error, Reason}
     end;
 do_tokenize(
-    <<"\n", T/binary>>, in_expr, Eng, {Ln, _Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc, State
+    <<"\n", T/binary>>, in_expr, Eng, {Ln, _Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State
 ) ->
-    do_tokenize(T, in_expr, Eng, {Ln + 1, 1}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc, State);
-do_tokenize(<<H, T/binary>>, In, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, Acc, State) ->
+    do_tokenize(T, in_expr, Eng, {Ln + 1, 1}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State);
+do_tokenize(<<H, T/binary>>, In, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State) ->
     do_tokenize(
         T,
         In,
@@ -213,14 +204,13 @@ do_tokenize(<<H, T/binary>>, In, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, Exp
         {SMkr, SLn, SCol},
         {<<ExpOut/binary, H>>, <<ExpIn/binary, H>>},
         <<Buf/binary, H>>,
-        Acc,
         State
     );
-do_tokenize(<<>>, in_root, Eng, {_Ln, _Col}, {<<>>, _SLn, _SCol}, {<<>>, <<>>}, _Buf, Acc, State) ->
-    Eng:handle_body(Acc, State);
-do_tokenize(<<>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, Acc0, State0) ->
-    case Eng:handle_text({{SLn, SCol}, Text}, Acc0, State0) of
-        {ok, {Acc, State}} ->
+do_tokenize(<<>>, in_root, Eng, {_Ln, _Col}, {<<>>, _SLn, _SCol}, {<<>>, <<>>}, _Buf, State) ->
+    Eng:handle_body(State);
+do_tokenize(<<>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0) ->
+    case Eng:handle_text({{SLn, SCol}, Text}, State0) of
+        {ok, State} ->
             do_tokenize(
                 <<>>,
                 in_root,
@@ -229,13 +219,12 @@ do_tokenize(<<>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf,
                 {<<>>, Ln, Col},
                 {<<>>, <<>>},
                 Buf,
-                Acc,
                 State
             );
         {error, Reason} ->
             {error, Reason}
     end;
-do_tokenize(<<>>, _In, _Eng, {_Ln, _Col}, {_SMkr, _SLn, _SCol}, {_ExpOut, _ExpIn}, _Buf, _Acc, _State) ->
+do_tokenize(<<>>, _In, _Eng, {_Ln, _Col}, {_SMkr, _SLn, _SCol}, {_ExpOut, _ExpIn}, _Buf, _State) ->
     {error, eof}.
 
 is_end_of_expr(Bin, Cursor) ->
@@ -247,10 +236,10 @@ is_end_of_expr(<<32, _/binary>>, _, _) ->
     false;
 is_end_of_expr(<<"<%", _/binary>>, _, _) ->
     false;
-is_end_of_expr(<<"\n", T/binary>>, {Ln, _Col}, Acc) ->
-    is_end_of_expr(T, {Ln + 1, 1}, Acc);
-is_end_of_expr(<<H, T/binary>>, {Ln, Col}, Acc) ->
-    is_end_of_expr(T, {Ln, Col + 1}, <<Acc/binary, H>>);
+is_end_of_expr(<<"\n", T/binary>>, {Ln, _Col}, Marker) ->
+    is_end_of_expr(T, {Ln + 1, 1}, Marker);
+is_end_of_expr(<<H, T/binary>>, {Ln, Col}, Marker) ->
+    is_end_of_expr(T, {Ln, Col + 1}, <<Marker/binary, H>>);
 is_end_of_expr(<<>>, _, _) ->
     eof.
 
@@ -276,15 +265,16 @@ tokenize_test() ->
 
 % Engine
 
-init([]) -> {ok, []}.
+init([]) ->
+    {ok, []}.
 
-handle_expr({{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}, Acc, State) ->
-    {ok, {[{expr, {{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}} | Acc], State}}.
+handle_expr({{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}, Acc) ->
+    {ok, [{expr, {{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}} | Acc]}.
 
-handle_text({{Ln, Col}, Text}, Acc, State) ->
-    {ok, {[{text, {{Ln, Col}, Text}} | Acc], State}}.
+handle_text({{Ln, Col}, Text}, Acc) ->
+    {ok, [{text, {{Ln, Col}, Text}} | Acc]}.
 
-handle_body(Tokens, _State) ->
+handle_body(Tokens) ->
     {ok, lists:reverse(Tokens)}.
 
 -endif.
