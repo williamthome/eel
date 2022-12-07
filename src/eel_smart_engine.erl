@@ -5,9 +5,9 @@
 %% eel_engine callbacks
 -export([
     init/1,
-    handle_expr/3,
-    handle_text/3,
-    handle_body/2
+    handle_expr/2,
+    handle_text/2,
+    handle_body/1
 ]).
 
 %% Includes
@@ -56,28 +56,35 @@ end).
 %%% eel_engine callbacks
 %%%=============================================================================
 
-init([]) -> {ok, {0, 0}}.
+init([]) ->
+    {ok, {[], 0, 0}}.
 
-handle_expr({{_Ln, _Col}, {<<"=">>, <<".">>}, {_ExpOut, <<>>}}, Acc, State) ->
-    {ok, {Acc, State}};
-handle_expr({Pos, {<<"=">>, <<".">>}, Expr}, Acc, {EIdx, CIdx}) ->
-    {ok, {[?expr({EIdx, CIdx + 1}, Pos, Expr) | Acc], {EIdx, CIdx + 1}}};
-handle_expr({Pos, {<<"=">>, <<"">>}, Expr}, Acc, {EIdx, CIdx}) ->
-    {ok, {[?start({EIdx + 1, CIdx + 1}, Pos, Expr) | Acc], {EIdx + 1, CIdx + 1}}};
-handle_expr({Pos, {<<"">>, <<"">>}, Expr}, Acc, {EIdx, CIdx}) ->
-    {ok, {[?mid({EIdx, CIdx + 1}, Pos, Expr) | Acc], {EIdx, CIdx + 1}}};
-handle_expr({Pos, {<<"">>, <<".">>}, Expr}, Acc, {EIdx, CIdx}) ->
-    {ok, {[?'end'({EIdx, CIdx + 1}, Pos, Expr) | Acc], {EIdx - 1, CIdx + 1}}};
-handle_expr({{_Ln, _Col}, {<<"%">>, <<".">>}, {_ExpOut, _ExpIn}}, Acc, State) ->
-    {ok, {Acc, State}};
-handle_expr(Token, Acc, State) ->
-    {error, {unknown_marker, {Token, Acc, State}}}.
+handle_expr({{_Ln, _Col}, {<<"=">>, <<".">>}, {_ExpOut, <<>>}}, State) ->
+    {ok, State};
+handle_expr({Pos, {<<"=">>, <<".">>}, Expr}, {Acc, EIdx, CIdx}) ->
+    {ok, {[?expr({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx, CIdx + 1}};
+handle_expr({Pos, {<<"=">>, <<"">>}, Expr}, {Acc, EIdx, CIdx}) ->
+    {ok, {[?start({EIdx + 1, CIdx + 1}, Pos, Expr) | Acc], EIdx + 1, CIdx + 1}};
+handle_expr({Pos, {<<"">>, <<"">>}, Expr}, {Acc, EIdx, CIdx}) ->
+    {ok, {[?mid({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx, CIdx + 1}};
+handle_expr({Pos, {<<"">>, <<".">>}, Expr}, {Acc, EIdx, CIdx}) ->
+    {ok, {[?'end'({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx - 1, CIdx + 1}};
+handle_expr({{_Ln, _Col}, {<<"%">>, <<".">>}, {_ExpOut, _ExpIn}}, State) ->
+    {ok, State};
+handle_expr(Token, State) ->
+    {error, {unknown_marker, {Token, State}}}.
 
-handle_text({Pos, Text}, Acc, {EIdx, CIdx}) ->
-    {ok, {[?text({EIdx, CIdx + 1}, Pos, Text) | Acc], {EIdx, CIdx + 1}}}.
+handle_text({Pos, Text}, {Acc, EIdx, CIdx}) ->
+    {ok, {[?text({EIdx, CIdx + 1}, Pos, Text) | Acc], EIdx, CIdx + 1}}.
 
-handle_body(Tokens, _State) ->
+handle_body({Tokens, _, _}) ->
     {ok, lists:reverse(Tokens)}.
+
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+
 
 %%%=============================================================================
 %%% Tests
@@ -90,50 +97,50 @@ handle_expr_test() ->
         {
             "Should return empty if no expression",
             ?assertEqual(
-                {ok, {[], {0, 0}}},
-                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<>>, <<>>}}, [], {0, 0})
+                {ok, {[], 0, 0}},
+                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<>>, <<>>}}, {[], 0, 0})
             )
         },
         {
             "Should return expr token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {expr, <<"Foo">>}, ['Foo']}], {0, 1}}},
-                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, [], {0, 0})
+                {ok, {[{{0, 1}, {1, 1}, {expr, <<"Foo">>}, ['Foo']}], 0, 1}},
+                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
-                {ok, {[{{1, 1}, {1, 1}, {start_expr, <<"Foo">>}, ['Foo']}], {1, 1}}},
-                handle_expr({{1, 1}, {<<"=">>, <<"">>}, {<<"<%= Foo %>">>, <<"Foo">>}}, [], {0, 0})
+                {ok, {[{{1, 1}, {1, 1}, {start_expr, <<"Foo">>}, ['Foo']}], 1, 1}},
+                handle_expr({{1, 1}, {<<"=">>, <<"">>}, {<<"<%= Foo %>">>, <<"Foo">>}}, {[], 0, 0})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {mid_expr, <<"Foo">>}, ['Foo']}], {0, 1}}},
-                handle_expr({{1, 1}, {<<"">>, <<"">>}, {<<"<% Foo %>">>, <<"Foo">>}}, [], {0, 0})
+                {ok, {[{{0, 1}, {1, 1}, {mid_expr, <<"Foo">>}, ['Foo']}], 0, 1}},
+                handle_expr({{1, 1}, {<<"">>, <<"">>}, {<<"<% Foo %>">>, <<"Foo">>}}, {[], 0, 0})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
-                {ok, {[{{1, 1}, {1, 1}, {end_expr, <<"Foo">>}, ['Foo']}], {0, 1}}},
-                handle_expr({{1, 1}, {<<"">>, <<".">>}, {<<"<% Foo .%>">>, <<"Foo">>}}, [], {1, 0})
+                {ok, {[{{1, 1}, {1, 1}, {end_expr, <<"Foo">>}, ['Foo']}], 0, 1}},
+                handle_expr({{1, 1}, {<<"">>, <<".">>}, {<<"<% Foo .%>">>, <<"Foo">>}}, {[], 1, 0})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
-                {ok, {[], {0, 0}}},
-                handle_expr({{1, 1}, {<<"%">>, <<".">>}, {<<"<%% Foo .%>">>, <<"Foo">>}}, [], {0, 0})
+                {ok, {[], 0, 0}},
+                handle_expr({{1, 1}, {<<"%">>, <<".">>}, {<<"<%% Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
             )
         },
         {
             "Should return unknown marker error",
             ?assertEqual(
-                {error, {unknown_marker, {{{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, [], {0, 0}}}},
-                handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, [], {0, 0})
+                {error, {unknown_marker, {{{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, {[], 0, 0}}}},
+                handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
             )
         }
     ].
@@ -143,8 +150,8 @@ handle_text_test() ->
         {
             "Should return text token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {text, <<"Foo">>}, []}], {0, 1}}},
-                handle_text({{1, 1}, <<"Foo">>}, [], {0, 0})
+                {ok, {[{{0, 1}, {1, 1}, {text, <<"Foo">>}, []}], 0, 1}},
+                handle_text({{1, 1}, <<"Foo">>}, {[], 0, 0})
             )
         }
     ].
