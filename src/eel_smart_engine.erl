@@ -43,8 +43,8 @@
     Vars
 end).
 -define(token(Name), fun
-    (Index, {Ln, Col}, {_, Bin}) -> {Index, {Ln, Col}, {Name, Bin}, ?vars(Bin)};
-    (Index, {Ln, Col}, Bin) -> {Index, {Ln, Col}, {Name, Bin}, []}
+    ({Ln, Col}, {_, Bin}) -> {{Ln, Col}, {Name, Bin}, ?vars(Bin)};
+    ({Ln, Col}, Bin) -> {{Ln, Col}, {Name, Bin}, []}
 end).
 -define(text, ?token(text)).
 -define(expr, ?token(expr)).
@@ -52,39 +52,45 @@ end).
 -define(mid, ?token(mid_expr)).
 -define('end', ?token(end_expr)).
 
+%% State
+-record(state, {
+    tokens = [] :: list()
+}).
+
 %%%=============================================================================
 %%% eel_engine callbacks
 %%%=============================================================================
 
 init([]) ->
-    {ok, {[], 0, 0}}.
+    {ok, #state{}}.
 
 handle_expr({{_Ln, _Col}, {<<"=">>, <<".">>}, {_ExpOut, <<>>}}, State) ->
     {ok, State};
-handle_expr({Pos, {<<"=">>, <<".">>}, Expr}, {Acc, EIdx, CIdx}) ->
-    {ok, {[?expr({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx, CIdx + 1}};
-handle_expr({Pos, {<<"=">>, <<"">>}, Expr}, {Acc, EIdx, CIdx}) ->
-    {ok, {[?start({EIdx + 1, CIdx + 1}, Pos, Expr) | Acc], EIdx + 1, CIdx + 1}};
-handle_expr({Pos, {<<"">>, <<"">>}, Expr}, {Acc, EIdx, CIdx}) ->
-    {ok, {[?mid({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx, CIdx + 1}};
-handle_expr({Pos, {<<"">>, <<".">>}, Expr}, {Acc, EIdx, CIdx}) ->
-    {ok, {[?'end'({EIdx, CIdx + 1}, Pos, Expr) | Acc], EIdx - 1, CIdx + 1}};
+handle_expr({Pos, {<<"=">>, <<".">>}, Expr}, State) ->
+    {ok, push(?expr(Pos, Expr), State)};
+handle_expr({Pos, {<<"=">>, <<"">>}, Expr}, State) ->
+    {ok, push(?start(Pos, Expr), State)};
+handle_expr({Pos, {<<"">>, <<"">>}, Expr}, State) ->
+    {ok, push(?mid(Pos, Expr), State)};
+handle_expr({Pos, {<<"">>, <<".">>}, Expr}, State) ->
+    {ok, push(?'end'(Pos, Expr), State)};
 handle_expr({{_Ln, _Col}, {<<"%">>, <<".">>}, {_ExpOut, _ExpIn}}, State) ->
     {ok, State};
 handle_expr(Token, State) ->
     {error, {unknown_marker, {Token, State}}}.
 
-handle_text({Pos, Text}, {Acc, EIdx, CIdx}) ->
-    {ok, {[?text({EIdx, CIdx + 1}, Pos, Text) | Acc], EIdx, CIdx + 1}}.
+handle_text({Pos, Text}, State) ->
+    {ok, push(?text(Pos, Text), State)}.
 
-handle_body({Tokens, _, _}) ->
+handle_body(#state{tokens = Tokens}) ->
     {ok, lists:reverse(Tokens)}.
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
-
+push(Token, #state{tokens = Tokens}) ->
+    #state{tokens = [Token | Tokens]}.
 
 %%%=============================================================================
 %%% Tests
@@ -97,50 +103,50 @@ handle_expr_test() ->
         {
             "Should return empty if no expression",
             ?assertEqual(
-                {ok, {[], 0, 0}},
-                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<>>, <<>>}}, {[], 0, 0})
+                {ok, #state{}},
+                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<>>, <<>>}}, #state{})
             )
         },
         {
             "Should return expr token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {expr, <<"Foo">>}, ['Foo']}], 0, 1}},
-                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
+                {ok, #state{tokens = [{{1, 1}, {expr, <<"Foo">>}, ['Foo']}]}},
+                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, #state{})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
-                {ok, {[{{1, 1}, {1, 1}, {start_expr, <<"Foo">>}, ['Foo']}], 1, 1}},
-                handle_expr({{1, 1}, {<<"=">>, <<"">>}, {<<"<%= Foo %>">>, <<"Foo">>}}, {[], 0, 0})
+                {ok, #state{tokens = [{{1, 1}, {start_expr, <<"Foo">>}, ['Foo']}]}},
+                handle_expr({{1, 1}, {<<"=">>, <<"">>}, {<<"<%= Foo %>">>, <<"Foo">>}}, #state{})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {mid_expr, <<"Foo">>}, ['Foo']}], 0, 1}},
-                handle_expr({{1, 1}, {<<"">>, <<"">>}, {<<"<% Foo %>">>, <<"Foo">>}}, {[], 0, 0})
+                {ok, #state{tokens = [{{1, 1}, {mid_expr, <<"Foo">>}, ['Foo']}]}},
+                handle_expr({{1, 1}, {<<"">>, <<"">>}, {<<"<% Foo %>">>, <<"Foo">>}}, #state{})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
-                {ok, {[{{1, 1}, {1, 1}, {end_expr, <<"Foo">>}, ['Foo']}], 0, 1}},
-                handle_expr({{1, 1}, {<<"">>, <<".">>}, {<<"<% Foo .%>">>, <<"Foo">>}}, {[], 1, 0})
+                {ok, #state{tokens = [{{1, 1}, {end_expr, <<"Foo">>}, ['Foo']}]}},
+                handle_expr({{1, 1}, {<<"">>, <<".">>}, {<<"<% Foo .%>">>, <<"Foo">>}}, #state{})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
-                {ok, {[], 0, 0}},
-                handle_expr({{1, 1}, {<<"%">>, <<".">>}, {<<"<%% Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
+                {ok, #state{}},
+                handle_expr({{1, 1}, {<<"%">>, <<".">>}, {<<"<%% Foo .%>">>, <<"Foo">>}}, #state{})
             )
         },
         {
             "Should return unknown marker error",
             ?assertEqual(
-                {error, {unknown_marker, {{{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, {[], 0, 0}}}},
-                handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, {[], 0, 0})
+                {error, {unknown_marker, {{{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{}}}},
+                handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{})
             )
         }
     ].
@@ -150,8 +156,8 @@ handle_text_test() ->
         {
             "Should return text token",
             ?assertEqual(
-                {ok, {[{{0, 1}, {1, 1}, {text, <<"Foo">>}, []}], 0, 1}},
-                handle_text({{1, 1}, <<"Foo">>}, {[], 0, 0})
+                {ok, #state{tokens = [{{1, 1}, {text, <<"Foo">>}, []}]}},
+                handle_text({{1, 1}, <<"Foo">>}, #state{})
             )
         }
     ].
@@ -180,27 +186,27 @@ handle_body_test() ->
         "<% end .%>"
     >>,
     Expected = [
-        {{0, 1},{1,1},{text,<<"<h1>Title</h1>">>}, []},
-        {{1, 2},{1,15},{start_expr,<<"case 1 of">>}, []},
-        {{1, 3},{1,31},{mid_expr,<<"2 ->">>}, []},
-        {{1, 4},{1,41},{text,<<"<p>Foo</p>">>}, []},
-        {{1, 5},{1,51},{mid_expr,<<"; Bar ->">>}, ['Bar']},
-        {{1, 6},{1,65},{text,<<"<p>">>}, []},
-        {{2, 7},{1,68},{start_expr,<<"case hello =:= world of">>}, []},
-        {{2, 8},{1,98},{mid_expr,<<"true ->">>}, []},
-        {{2, 9},{1,111},{expr,<<"hello">>}, []},
-        {{2, 10},{1,124},{mid_expr,<<"; false ->">>}, []},
-        {{2, 11},{1,140},{text,<<"<p>">>}, []},
-        {{3, 12},{1,143},{start_expr,<<"case car =:= bus of">>}, []},
-        {{3, 13},{1,169},{mid_expr,<<"true ->">>}, []},
-        {{3, 14},{1,182},{text,<<"Car">>}, []},
-        {{3, 15},{1,185},{mid_expr,<<"; false ->">>}, []},
-        {{3, 16},{1,201},{expr,<<"bus">>}, []},
-        {{3, 17},{1,212},{end_expr,<<"end">>}, []},
-        {{2, 18},{1,222},{text,<<"</p>">>}, []},
-        {{2, 19},{1,226},{end_expr,<<"end">>}, []},
-        {{1, 20},{1,236},{text,<<"</p>">>}, []},
-        {{1, 21},{1,240},{end_expr,<<"end">>}, []}
+        {{1,1},{text,<<"<h1>Title</h1>">>}, []},
+        {{1,15},{start_expr,<<"case 1 of">>}, []},
+        {{1,31},{mid_expr,<<"2 ->">>}, []},
+        {{1,41},{text,<<"<p>Foo</p>">>}, []},
+        {{1,51},{mid_expr,<<"; Bar ->">>}, ['Bar']},
+        {{1,65},{text,<<"<p>">>}, []},
+        {{1,68},{start_expr,<<"case hello =:= world of">>}, []},
+        {{1,98},{mid_expr,<<"true ->">>}, []},
+        {{1,111},{expr,<<"hello">>}, []},
+        {{1,124},{mid_expr,<<"; false ->">>}, []},
+        {{1,140},{text,<<"<p>">>}, []},
+        {{1,143},{start_expr,<<"case car =:= bus of">>}, []},
+        {{1,169},{mid_expr,<<"true ->">>}, []},
+        {{1,182},{text,<<"Car">>}, []},
+        {{1,185},{mid_expr,<<"; false ->">>}, []},
+        {{1,201},{expr,<<"bus">>}, []},
+        {{1,212},{end_expr,<<"end">>}, []},
+        {{1,222},{text,<<"</p>">>}, []},
+        {{1,226},{end_expr,<<"end">>}, []},
+        {{1,236},{text,<<"</p>">>}, []},
+        {{1,240},{end_expr,<<"end">>}, []}
     ],
     {ok, Tokens} = eel_tokenizer:tokenize(Bin, ?MODULE, []),
     ?assertEqual(Expected, Tokens).
