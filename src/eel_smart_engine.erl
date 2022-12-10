@@ -51,6 +51,7 @@ end).
 -define(start, ?token(start_expr)).
 -define(mid, ?token(mid_expr)).
 -define('end', ?token(end_expr)).
+-define(echo, ?token(echo)).
 
 %% State
 -record(state, {
@@ -74,6 +75,8 @@ handle_expr({Pos, {<<"">>, <<"">>}, Expr}, State) ->
     {ok, push(?mid(Pos, Expr), State)};
 handle_expr({Pos, {<<"">>, <<".">>}, Expr}, State) ->
     {ok, push(?'end'(Pos, Expr), State)};
+handle_expr({Pos, {<<":">>, <<".">>}, Expr}, State) ->
+    {ok, push(?echo(Pos, Expr), State)};
 handle_expr({{_Ln, _Col}, {<<"%">>, <<>>}, {_ExpOut, _ExpIn}}, State) ->
     {ok, State};
 handle_expr(Token, State) ->
@@ -136,6 +139,13 @@ handle_expr_test() ->
             )
         },
         {
+            "Should return echo token",
+            ?assertEqual(
+                {ok, #state{tokens = [{{1, 1}, {echo, <<"io:format(Foo)">>}, ['Foo']}]}},
+                handle_expr({{1, 1}, {<<":">>, <<".">>}, {<<"<%: io:format(Foo) .%>">>, <<"io:format(Foo)">>}}, #state{})
+            )
+        },
+        {
             "Should ignore comment",
             ?assertEqual(
                 {ok, #state{}},
@@ -168,6 +178,7 @@ handle_body_test() ->
         "<%= case 1 of %>"
         "<% 2 -> %><p>Foo</p>"
         "<% ; Bar -> %>"
+            "<%: io:format(\"Print but not render me!~n\") .%>"
             "<p>"
                 "<%= case hello =:= world of %>"
                 "<% true -> %>"
@@ -185,28 +196,29 @@ handle_body_test() ->
             "</p>"
         "<% end .%>"
     >>,
-    Expected = [
-        {{1,1},{text,<<"<h1>Title</h1>">>}, []},
-        {{1,15},{start_expr,<<"case 1 of">>}, []},
-        {{1,31},{mid_expr,<<"2 ->">>}, []},
-        {{1,41},{text,<<"<p>Foo</p>">>}, []},
-        {{1,51},{mid_expr,<<"; Bar ->">>}, ['Bar']},
-        {{1,65},{text,<<"<p>">>}, []},
-        {{1,68},{start_expr,<<"case hello =:= world of">>}, []},
-        {{1,98},{mid_expr,<<"true ->">>}, []},
-        {{1,111},{expr,<<"hello">>}, []},
-        {{1,124},{mid_expr,<<"; false ->">>}, []},
-        {{1,140},{text,<<"<p>">>}, []},
-        {{1,143},{start_expr,<<"case car =:= bus of">>}, []},
-        {{1,169},{mid_expr,<<"true ->">>}, []},
-        {{1,182},{text,<<"Car">>}, []},
-        {{1,185},{mid_expr,<<"; false ->">>}, []},
-        {{1,201},{expr,<<"bus">>}, []},
-        {{1,212},{end_expr,<<"end">>}, []},
-        {{1,222},{text,<<"</p>">>}, []},
-        {{1,226},{end_expr,<<"end">>}, []},
-        {{1,236},{text,<<"</p>">>}, []},
-        {{1,240},{end_expr,<<"end">>}, []}
+    Expected =  [
+        {{1,1},{text,<<"<h1>Title</h1>">>},[]},
+        {{1,15},{start_expr,<<"case 1 of">>},[]},
+        {{1,31},{mid_expr,<<"2 ->">>},[]},
+        {{1,41},{text,<<"<p>Foo</p>">>},[]},
+        {{1,51},{mid_expr,<<"; Bar ->">>},['Bar']},
+        {{1,65},{echo,<<"io:format(\"Print but not render me!~n\")">>},[]},
+        {{1,112},{text,<<"<p>">>},[]},
+        {{1,115},{start_expr,<<"case hello =:= world of">>},[]},
+        {{1,145},{mid_expr,<<"true ->">>},[]},
+        {{1,158},{expr,<<"hello">>},[]},
+        {{1,171},{mid_expr,<<"; false ->">>},[]},
+        {{1,187},{text,<<"<p>">>},[]},
+        {{1,190},{start_expr,<<"case car =:= bus of">>},[]},
+        {{1,216},{mid_expr,<<"true ->">>},[]},
+        {{1,229},{text,<<"Car">>},[]},
+        {{1,232},{mid_expr,<<"; false ->">>},[]},
+        {{1,248},{expr,<<"bus">>},[]},
+        {{1,259},{end_expr,<<"end">>},[]},
+        {{1,269},{text,<<"</p>">>},[]},
+        {{1,273},{end_expr,<<"end">>},[]},
+        {{1,283},{text,<<"</p>">>},[]},
+        {{1,287},{end_expr,<<"end">>},[]}
     ],
     {ok, Tokens} = eel_tokenizer:tokenize(Bin, ?MODULE, []),
     ?assertEqual(Expected, Tokens).
