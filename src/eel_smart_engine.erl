@@ -74,7 +74,7 @@ handle_expr({Pos, {<<"">>, <<"">>}, Expr}, State) ->
     {ok, push(?mid(Pos, Expr), State)};
 handle_expr({Pos, {<<"">>, <<".">>}, Expr}, State) ->
     {ok, push(?'end'(Pos, Expr), State)};
-handle_expr({{_Ln, _Col}, {<<"%">>, <<".">>}, {_ExpOut, _ExpIn}}, State) ->
+handle_expr({{_Ln, _Col}, {<<"%">>, <<>>}, {_ExpOut, _ExpIn}}, State) ->
     {ok, State};
 handle_expr(Token, State) ->
     {error, {unknown_marker, {Token, State}}}.
@@ -139,7 +139,7 @@ handle_expr_test() ->
             "Should ignore comment",
             ?assertEqual(
                 {ok, #state{}},
-                handle_expr({{1, 1}, {<<"%">>, <<".">>}, {<<"<%% Foo .%>">>, <<"Foo">>}}, #state{})
+                handle_expr({{1, 1}, {<<"%">>, <<>>}, {<<"<%% Foo %>">>, <<"Foo">>}}, #state{})
             )
         },
         {
