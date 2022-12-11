@@ -73,7 +73,7 @@ handle_expr({_Pos, {<<>>, <<>>}, Expr}, #state{in = {_, debug}} = State) ->
     {ok, push(?mid_debug(Expr), State)};
 handle_expr({_Pos, {<<>>, <<":">>}, Expr}, #state{in = {In, debug}} = State) ->
     {ok, push(?end_debug(Expr), State#state{in = In})};
-handle_expr({_Pos, {<<"%">>, <<>>}, _Expr}, State) ->
+handle_expr({_Pos, {<<"%">>, <<"%">>}, _Expr}, State) ->
     {ok, State};
 handle_expr(Token, State) ->
     {error, {unknown_marker, {Token, State}}}.
@@ -225,7 +225,7 @@ handle_expr_test() ->
             "Should ignore comment",
             ?assertEqual(
                 {ok, #state{}},
-                handle_expr({{1, 1}, {<<"%">>, <<>>}, {<<"<%% Foo %>">>, <<"Foo">>}}, #state{})
+                handle_expr({{1, 1}, {<<"%">>, <<"%">>}, {<<"<%% Foo %%>">>, <<"Foo">>}}, #state{})
             )
         },
         {
@@ -268,6 +268,7 @@ handle_body_test() ->
                     "<%= hello .%>"
                 "<% ; false -> %>"
                     "<p>"
+                        "<%% This is a comment and does not generate any token %%>"
                         "<%= case car =:= bus of %>"
                         "<% true -> %>"
                             "<%: One = 1, %>"
