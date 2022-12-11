@@ -88,27 +88,34 @@ push(Token, #state{tokens = Tokens} = State) ->
 -spec parse_sd(Tokens :: [token()]) -> {static(), dynamic()}.
 
 parse_sd(Tokens) ->
-    {[], SD} = parse_sd(Tokens, in_text, {[], []}),
-    SD.
+    parse_sd(Tokens, {[], []}).
 
-parse_sd([{expr, _} = H | T], In, {S, D}) ->
-    parse_sd(T, In, {S, [H | D]});
-parse_sd([{start_expr, _} = H | T], in_text, {S, D}) ->
-    parse_sd(T, in_expr, {S, [H | D]});
-parse_sd([{start_expr, _} | _] = T, in_expr, {S, D}) ->
-    {Tokens, SD} = parse_sd(T, in_text, {[], []}),
-    parse_sd(Tokens, in_expr, {S, [{nested_expr, SD} | D]});
-parse_sd([{mid_expr, _} = H | T], in_expr, {S, D}) ->
-    parse_sd(T, in_expr, {S, [H | D]});
-parse_sd([{end_expr, _} = H | T], in_expr, {S, D}) ->
+parse_sd(Tokens, SDIn) ->
+    case do_parse_sd(Tokens, in_text, SDIn) of
+        {[], SDOut} ->
+            SDOut;
+        {RestTokens, AccSD} ->
+            parse_sd(RestTokens, AccSD)
+    end.
+
+do_parse_sd([{expr, _} = H | T], In, {S, D}) ->
+    do_parse_sd(T, In, {S, [H | D]});
+do_parse_sd([{start_expr, _} = H | T], in_text, {S, D}) ->
+    do_parse_sd(T, in_expr, {S, [H | D]});
+do_parse_sd([{start_expr, _} | _] = T, in_expr, {S, D}) ->
+    {Tokens, SD} = do_parse_sd(T, in_text, {[], []}),
+    do_parse_sd(Tokens, in_expr, {S, [{nested_expr, SD} | D]});
+do_parse_sd([{mid_expr, _} = H | T], in_expr, {S, D}) ->
+    do_parse_sd(T, in_expr, {S, [H | D]});
+do_parse_sd([{end_expr, _} = H | T], in_expr, {S, D}) ->
     {T, {lists:reverse(S), lists:reverse([H | D])}};
-parse_sd([{text, _} = H | T], in_text, {S, D}) ->
-    parse_sd(T, in_text, {[H | S], D});
-parse_sd([{text, _} = H | T], in_expr, {S, D}) ->
-    parse_sd(T, in_expr, {S, [H | D]});
-parse_sd([{debug, _} = H | T], Where, {S, D}) ->
-    parse_sd(T, Where, {S, [H | D]});
-parse_sd([], _, SD) ->
+do_parse_sd([{text, _} = H | T], in_text, {S, D}) ->
+    do_parse_sd(T, in_text, {[H | S], D});
+do_parse_sd([{text, _} = H | T], in_expr, {S, D}) ->
+    do_parse_sd(T, in_expr, {S, [H | D]});
+do_parse_sd([{debug, _} = H | T], In, {S, D}) ->
+    do_parse_sd(T, In, {S, [H | D]});
+do_parse_sd([], _, SD) ->
     {[], SD}.
 
 % TODO: Retrieve funs vars
@@ -232,6 +239,7 @@ handle_body_test() ->
                 "<% end .%>"
             "</p>"
         "<% end .%>"
+        "<footer>Footer</footer>"
     >>,
     Expected = [
         {text,<<"<h1>Title</h1>">>},
@@ -255,7 +263,8 @@ handle_body_test() ->
         {text,<<"</p>">>},
         {end_expr,<<"end">>},
         {text,<<"</p>">>},
-        {end_expr,<<"end">>}
+        {end_expr,<<"end">>},
+        {text,<<"<footer>Footer</footer>">>}
     ],
     {ok, Tokens} = eel_tokenizer:tokenize(Bin, ?MODULE, []),
     ?assertEqual(Expected, Tokens).
