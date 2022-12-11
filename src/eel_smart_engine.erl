@@ -218,10 +218,10 @@ handle_text_test() ->
 handle_body_test() ->
     Bin = <<
         "<h1>Title</h1>"
+        "<%: io:format(\"Print but not render me!~n\") :%>"
         "<%= case 1 of %>"
         "<% 2 -> %><p>Foo</p>"
         "<% ; Bar -> %>"
-            "<%: io:format(\"Print but not render me!~n\") :%>"
             "<p>"
                 "<%= case hello =:= world of %>"
                 "<% true -> %>"
@@ -229,6 +229,7 @@ handle_body_test() ->
                 "<% ; false -> %>"
                     "<p>"
                         "<%% This is a comment and does not generate any token %%>"
+                        "<%: ignore_me :%>"
                         "<%= case car =:= bus of %>"
                         "<% true -> %>"
                             "Car"
@@ -243,17 +244,18 @@ handle_body_test() ->
     >>,
     Expected = [
         {text,<<"<h1>Title</h1>">>},
+        {debug,<<"io:format(\"Print but not render me!~n\")">>},
         {start_expr,<<"case 1 of">>},
         {mid_expr,<<"2 ->">>},
         {text,<<"<p>Foo</p>">>},
         {mid_expr,<<"; Bar ->">>},
-        {debug,<<"io:format(\"Print but not render me!~n\")">>},
         {text,<<"<p>">>},
         {start_expr,<<"case hello =:= world of">>},
         {mid_expr,<<"true ->">>},
         {expr,<<"hello">>},
         {mid_expr,<<"; false ->">>},
         {text,<<"<p>">>},
+        {debug,<<"ignore_me">>},
         {start_expr,<<"case car =:= bus of">>},
         {mid_expr,<<"true ->">>},
         {text,<<"Car">>},
