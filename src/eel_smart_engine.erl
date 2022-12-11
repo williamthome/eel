@@ -57,6 +57,8 @@ end).
 init([]) ->
     {ok, #state{}}.
 
+handle_expr({_, {<<"=">>, <<".">>}, _} = Token, #state{in = {_, debug}}) ->
+    not_allowed_when_debugging_error(Token);
 handle_expr({_Pos, {<<"=">>, <<".">>}, Expr}, State) ->
     {ok, push(?expr(Expr), State)};
 handle_expr({_Pos, {<<"=">>, <<>>}, Expr}, State) ->
@@ -75,10 +77,12 @@ handle_expr({_Pos, {<<>>, <<":">>}, Expr}, #state{in = {In, debug}} = State) ->
     {ok, push(?end_debug(Expr), State#state{in = In})};
 handle_expr({_Pos, {<<"%">>, <<"%">>}, _Expr}, State) ->
     {ok, State};
-handle_expr(Token, State) ->
-    {error, {unknown_marker, {Token, State}}}.
+handle_expr(Token, _State) ->
+    eel_tokenizer:unknown_marker_error(Token).
 
-handle_text({_Pos, Text}, #state{in = In} = State) when In =:= text; In =:= expr ->
+handle_text(Token, #state{in = {_, debug}}) ->
+    not_allowed_when_debugging_error(Token);
+handle_text({_Pos, Text}, State) ->
     {ok, push(?text(Text), State)}.
 
 handle_body(#state{tokens = Tokens}) ->
@@ -157,6 +161,21 @@ parse_sd([], _, SD) ->
 %         ),
 %     Vars.
 
+not_allowed_when_debugging_error({Pos, {SMkr, EMkr}, Expr}) ->
+    eel_tokenizer:error(
+        Pos,
+        badarg,
+        <<"Expression is not allowed when debugging">>,
+        #{start_marker => SMkr, end_marker => EMkr, expression => Expr}
+    );
+not_allowed_when_debugging_error({Pos, Text}) ->
+    eel_tokenizer:error(
+        Pos,
+        badarg,
+        <<"Text is not allowed when debugging">>,
+        #{text => Text}
+    ).
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -229,9 +248,16 @@ handle_expr_test() ->
             )
         },
         {
+            "Should return error if expr token when debugging",
+            ?assertEqual(
+                not_allowed_when_debugging_error({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}),
+                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, #state{in = {expr, debug}})
+            )
+        },
+        {
             "Should return unknown marker error",
             ?assertEqual(
-                {error, {unknown_marker, {{{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{}}}},
+                eel_tokenizer:unknown_marker_error({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}),
                 handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{})
             )
         }
@@ -247,9 +273,9 @@ handle_text_test() ->
             )
         },
         {
-            "Should throw error if text token when debugging",
-            ?assertError(
-                function_clause,
+            "Should return error if text token when debugging",
+            ?assertEqual(
+                not_allowed_when_debugging_error({{1, 1}, <<"Foo">>}),
                 handle_text({{1, 1}, <<"Foo">>}, #state{in = {text, debug}})
             )
         }
