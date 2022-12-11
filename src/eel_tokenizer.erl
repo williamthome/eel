@@ -6,6 +6,12 @@
     tokenize/3
 ]).
 
+%% Helper functions
+-export([
+    error/4,
+    unknown_marker_error/1
+]).
+
 %% Includes
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -33,6 +39,26 @@ tokenize(Bin, Eng, Opts) ->
         {error, Reason} ->
             {error, Reason}
     end.
+
+%%%=============================================================================
+%%% Helper functions
+%%%=============================================================================
+
+error({Ln, Col}, Reason, Msg, Extra) ->
+    {error, maps:merge(#{
+        reason => Reason,
+        msg => Msg,
+        line => Ln,
+        column => Col
+    }, Extra)}.
+
+unknown_marker_error({Pos, {SMkr, EMkr}, Expr}) ->
+    error(
+        Pos,
+        unknown_marker,
+        <<"Unknown marker">>,
+        #{start_marker => SMkr, end_marker => EMkr, expression => Expr}
+    ).
 
 %%%=============================================================================
 %%% Internal functions
