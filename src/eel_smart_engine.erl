@@ -90,10 +90,10 @@ push(Token, #state{tokens = Tokens} = State) ->
 parse_sd(Tokens) ->
     parse_sd(Tokens, {[], []}).
 
-parse_sd(Tokens, SDIn) ->
-    case do_parse_sd(Tokens, in_text, SDIn) of
-        {[], SDOut} ->
-            SDOut;
+parse_sd(Tokens, SD) ->
+    case do_parse_sd(Tokens, in_text, SD) of
+        {[], {S, D}} ->
+            {lists:reverse(S), D};
         {RestTokens, AccSD} ->
             parse_sd(RestTokens, AccSD)
     end.
