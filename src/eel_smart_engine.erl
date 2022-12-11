@@ -25,11 +25,16 @@ end).
 -define(start, ?token(start_expr)).
 -define(mid, ?token(mid_expr)).
 -define('end', ?token(end_expr)).
--define(echo, ?token(echo)).
+-define(debug, ?token(debug)).
+
+%% Types
+-type token() :: {text | expr | start_expr | mid_expr | end_expr | debug, binary()}.
+-type static() :: list().
+-type dynamic() :: list().
 
 %% State
 -record(state, {
-    tokens = [] :: list()
+    tokens = [] :: [token()]
 }).
 
 %%%=============================================================================
@@ -50,7 +55,7 @@ handle_expr({_Pos, {<<>>, <<>>}, Expr}, State) ->
 handle_expr({_Pos, {<<>>, <<".">>}, Expr}, State) ->
     {ok, push(?'end'(Expr), State)};
 handle_expr({_Pos, {<<":">>, <<".">>}, Expr}, State) ->
-    {ok, push(?echo(Expr), State)};
+    {ok, push(?debug(Expr), State)};
 handle_expr({_Pos, {<<"%">>, <<>>}, _Expr}, State) ->
     {ok, State};
 handle_expr(Token, State) ->
@@ -60,6 +65,8 @@ handle_text({_Pos, Text}, State) ->
     {ok, push(?text(Text), State)}.
 
 handle_body(#state{tokens = Tokens}) ->
+    _SD = parse_sd(lists:reverse(Tokens)),
+    % TODO: Continue parsing tokens to AST
     {ok, lists:reverse(Tokens)}.
 
 %%%=============================================================================
@@ -68,6 +75,37 @@ handle_body(#state{tokens = Tokens}) ->
 
 push(Token, #state{tokens = Tokens}) ->
     #state{tokens = [Token | Tokens]}.
+
+%% -----------------------------------------------------------------------------
+%% @private
+%% @doc Parses tokens to statics and dynamics.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec parse_sd(Tokens :: [token()]) -> {static(), dynamic()}.
+
+parse_sd(Tokens) ->
+    {[], SD} = parse_sd(Tokens, in_text, {[], []}),
+    SD.
+
+parse_sd([{expr, _} = H | T], Where, {S, D}) ->
+    parse_sd(T, Where, {S, [H | D]});
+parse_sd([{start_expr, _} = H | T], in_text, {S, D}) ->
+    parse_sd(T, in_expr, {S, [H | D]});
+parse_sd([{start_expr, _} | _] = T, in_expr, {S, D}) ->
+    {Tokens, SD} = parse_sd(T, in_text, {[], []}),
+    parse_sd(Tokens, in_expr, {S, [{nested_expr, SD} | D]});
+parse_sd([{mid_expr, _} = H | T], in_expr, {S, D}) ->
+    parse_sd(T, in_expr, {S, [H | D]});
+parse_sd([{end_expr, _} = H | T], in_expr, {S, D}) ->
+    {T, {lists:reverse(S), lists:reverse([H | D])}};
+parse_sd([{text, _} = H | T], in_text, {S, D}) ->
+    parse_sd(T, in_text, {[H | S], D});
+parse_sd([{text, _} = H | T], in_expr, {S, D}) ->
+    parse_sd(T, in_expr, {S, [H | D]});
+parse_sd([{debug, _} = H | T], Where, {S, D}) ->
+    parse_sd(T, Where, {S, [H | D]});
+parse_sd([], _, SD) ->
+    {[], SD}.
 
 % TODO: Retrieve funs vars
 % retrieve_vars(Bin) ->
@@ -140,9 +178,9 @@ handle_expr_test() ->
             )
         },
         {
-            "Should return echo token",
+            "Should return debug token",
             ?assertEqual(
-                {ok, #state{tokens = [{echo, <<"io:format(Foo)">>}]}},
+                {ok, #state{tokens = [{debug, <<"io:format(Foo)">>}]}},
                 handle_expr({{1, 1}, {<<":">>, <<".">>}, {<<"<%: io:format(Foo) .%>">>, <<"io:format(Foo)">>}}, #state{})
             )
         },
@@ -203,7 +241,7 @@ handle_body_test() ->
         {mid_expr,<<"2 ->">>},
         {text,<<"<p>Foo</p>">>},
         {mid_expr,<<"; Bar ->">>},
-        {echo,<<"io:format(\"Print but not render me!~n\")">>},
+        {debug,<<"io:format(\"Print but not render me!~n\")">>},
         {text,<<"<p>">>},
         {start_expr,<<"case hello =:= world of">>},
         {mid_expr,<<"true ->">>},
