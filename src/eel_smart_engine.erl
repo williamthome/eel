@@ -26,6 +26,7 @@ end).
 -define(start_expr, ?token(start_expr)).
 -define(mid_expr,   ?token(mid_expr)).
 -define(end_expr,   ?token(end_expr)).
+-define(comment,    ?token(comment)).
 -define(debug,      ?token(debug)).
 
 %% Types
@@ -34,6 +35,7 @@ end).
                       | start_expr
                       | mid_expr
                       | end_expr
+                      | comment
                       | debug.
 -type token()   :: {token_name(), binary()}.
 -type static()  :: list().
@@ -61,8 +63,8 @@ handle_expr({_Pos, {<<>>, <<".">>}, Expr}, State) ->
     {ok, push(?end_expr(Expr), State)};
 handle_expr({_Pos, {<<":">>, <<":">>}, Expr}, State) ->
     {ok, push(?debug(Expr), State)};
-handle_expr({_Pos, {<<"%">>, <<"%">>}, _Expr}, State) ->
-    {ok, State};
+handle_expr({_Pos, {<<"%">>, <<"%">>}, Expr}, State) ->
+    {ok, push(?comment(Expr), State)};
 handle_expr(Token, _State) ->
     ?unknown_marker_error(Token).
 
@@ -114,6 +116,8 @@ do_parse_sd([{text, _} = H | T], in_text, {S, D}) ->
     do_parse_sd(T, in_text, {[H | S], D});
 do_parse_sd([{text, _} = H | T], in_expr, {S, D}) ->
     do_parse_sd(T, in_expr, {S, [H | D]});
+do_parse_sd([{comment, _} | T], In, {S, D}) ->
+    do_parse_sd(T, In, {S, D});
 do_parse_sd([{debug, _} = H | T], In, {S, D}) ->
     do_parse_sd(T, In, {S, [H | D]});
 do_parse_sd([], _, SD) ->
@@ -192,7 +196,7 @@ handle_expr_test() ->
         {
             "Should ignore comment",
             ?assertEqual(
-                {ok, #state{}},
+                {ok, #state{tokens = [{comment, <<"Foo">>}]}},
                 handle_expr({{1, 1}, {<<"%">>, <<"%">>}, {<<"<%% Foo %%>">>, <<"Foo">>}}, #state{})
             )
         },
@@ -229,7 +233,7 @@ handle_body_test() ->
                     "<%= hello .%>"
                 "<% ; false -> %>"
                     "<p>"
-                        "<%% This is a comment and does not generate any token %%>"
+                        "<%% This is a comment %%>"
                         "<%: ignore_me :%>"
                         "<%= case car =:= bus of %>"
                         "<% true -> %>"
@@ -256,6 +260,7 @@ handle_body_test() ->
         {expr,<<"hello">>},
         {mid_expr,<<"; false ->">>},
         {text,<<"<p>">>},
+        {comment,<<"This is a comment">>},
         {debug,<<"ignore_me">>},
         {start_expr,<<"case car =:= bus of">>},
         {mid_expr,<<"true ->">>},
