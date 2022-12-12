@@ -48,7 +48,7 @@ do_tokenize(
         T,
         in_marker,
         Eng,
-        {Ln, Col + 2},
+        {Ln, Col + length(?EXPR_START_MARKER)},
         {<<>>, SLn, SCol},
         {<<?EXPR_START_MARKER>>, <<>>},
         <<Buf/binary, ?EXPR_START_MARKER>>,
@@ -95,8 +95,8 @@ do_tokenize(
                 T,
                 in_root,
                 Eng,
-                {Ln, Col + 2},
-                {<<>>, Ln, Col + 2},
+                {Ln, Col + length(?EXPR_END_MARKER)},
+                {<<>>, Ln, Col + length(?EXPR_END_MARKER)},
                 {<<>>, <<>>},
                 <<Buf/binary, ?EXPR_END_MARKER>>,
                 State
@@ -167,8 +167,8 @@ do_tokenize(
                 T,
                 in_root,
                 Eng,
-                {Ln, Col + 2},
-                {<<>>, Ln, Col + 2},
+                {Ln, Col + length(?EXPR_END_MARKER)},
+                {<<>>, Ln, Col + length(?EXPR_END_MARKER)},
                 {<<>>, <<>>},
                 <<Buf/binary, ?EXPR_END_MARKER>>,
                 State
@@ -234,7 +234,7 @@ is_end_of_expr(Bin, Cursor) ->
     is_end_of_expr(Bin, Cursor, <<>>).
 
 is_end_of_expr(<<?EXPR_END_MARKER, T/binary>>, {Ln, Col}, Marker) ->
-    {true, {T, {Ln, Col + 2}, Marker}};
+    {true, {T, {Ln, Col + length(?EXPR_END_MARKER)}, Marker}};
 is_end_of_expr(<<?SPACE, _/binary>>, _, _) ->
     false;
 is_end_of_expr(<<?EXPR_START_MARKER, _/binary>>, _, _) ->
