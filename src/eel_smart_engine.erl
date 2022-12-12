@@ -11,6 +11,7 @@
 ]).
 
 %% Includes
+-include("eel.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -63,7 +64,7 @@ handle_expr({_Pos, {<<":">>, <<":">>}, Expr}, State) ->
 handle_expr({_Pos, {<<"%">>, <<"%">>}, _Expr}, State) ->
     {ok, State};
 handle_expr(Token, _State) ->
-    eel_tokenizer:unknown_marker_error(Token).
+    ?unknown_marker_error(Token).
 
 handle_text({_Pos, Text}, State) ->
     {ok, push(?text(Text), State)}.
@@ -196,9 +197,9 @@ handle_expr_test() ->
             )
         },
         {
-            "Should return unknown marker error",
-            ?assertEqual(
-                eel_tokenizer:unknown_marker_error({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}),
+            "Should raise unknown marker error",
+            ?assertError(
+                unknown_marker,
                 handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{})
             )
         }
