@@ -14,7 +14,8 @@
 
 %% Defines
 -define(EXPR_START_MARKER, "<%").
--define(EXPR_END_MARKER,   "%>").
+-define(EXPR_END_MARKER, "%>").
+-define(SPACE, 32).
 -define(DEFAULT_ENGINE, eel_smart_engine).
 
 %%%=============================================================================
@@ -72,7 +73,7 @@ do_tokenize(
             {error, Reason}
     end;
 do_tokenize(
-    <<32, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State
+    <<?SPACE, T/binary>>, in_marker, Eng, {Ln, Col}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State
 ) ->
     do_tokenize(
         T,
@@ -80,8 +81,8 @@ do_tokenize(
         Eng,
         {Ln, Col + 1},
         {SMkr, SLn, SCol},
-        {<<ExpOut/binary, 32>>, ExpIn},
-        <<Buf/binary, 32>>,
+        {<<ExpOut/binary, ?SPACE>>, ExpIn},
+        <<Buf/binary, ?SPACE>>,
         State
     );
 do_tokenize(
@@ -104,14 +105,14 @@ do_tokenize(
             {error, Reason}
     end;
 do_tokenize(
-    <<32, T/binary>>, in_expr, Eng, {Ln0, Col0}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State0
+    <<?SPACE, T/binary>>, in_expr, Eng, {Ln0, Col0}, {SMkr, SLn, SCol}, {ExpOut, ExpIn}, Buf, State0
 ) ->
     case is_end_of_expr(T, {Ln0, Col0 + 1}) of
         {true, {Rest, {Ln, Col}, EMkr}} ->
             case
                 Eng:handle_expr(
                     {{SLn, SCol}, {SMkr, EMkr},
-                     {<<ExpOut/binary, 32, EMkr/binary, ?EXPR_END_MARKER>>, ExpIn}},
+                     {<<ExpOut/binary, ?SPACE, EMkr/binary, ?EXPR_END_MARKER>>, ExpIn}},
                     State0
                 )
             of
@@ -123,7 +124,7 @@ do_tokenize(
                         {Ln, Col},
                         {<<>>, Ln, Col},
                         {<<>>, <<>>},
-                        <<Buf/binary, 32, EMkr/binary, ?EXPR_END_MARKER>>,
+                        <<Buf/binary, ?SPACE, EMkr/binary, ?EXPR_END_MARKER>>,
                         State
                     );
                 {error, Reason} ->
@@ -136,8 +137,8 @@ do_tokenize(
                 Eng,
                 {Ln0, Col0 + 1},
                 {SMkr, SLn, SCol},
-                {<<ExpOut/binary, 32>>, <<ExpIn/binary, 32>>},
-                <<Buf/binary, 32>>,
+                {<<ExpOut/binary, ?SPACE>>, <<ExpIn/binary, ?SPACE>>},
+                <<Buf/binary, ?SPACE>>,
                 State0
             );
         eof ->
@@ -234,7 +235,7 @@ is_end_of_expr(Bin, Cursor) ->
 
 is_end_of_expr(<<?EXPR_END_MARKER, T/binary>>, {Ln, Col}, Marker) ->
     {true, {T, {Ln, Col + 2}, Marker}};
-is_end_of_expr(<<32, _/binary>>, _, _) ->
+is_end_of_expr(<<?SPACE, _/binary>>, _, _) ->
     false;
 is_end_of_expr(<<?EXPR_START_MARKER, _/binary>>, _, _) ->
     false;
