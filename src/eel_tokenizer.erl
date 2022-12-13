@@ -279,23 +279,19 @@ is_end_of_expr(StartMarker, EndMarker, Bin, {Ln, Col}, Acc) ->
 -ifdef(TEST).
 
 tokenize_test() ->
-    Bin = <<"<html>\n    <%= .%>Foo<%= Bar \n.%>     \n</html>">>,
+    Bin = <<"Hello,\n{{ World }}!">>,
     Expected =
         {ok, [
-            {text, {{1, 1}, <<"<html>">>}},
-            {text, {{2, 1}, <<"    ">>}},
-            {expr, {{2, 5}, {<<"=">>, <<".">>}, {<<"<%= .%>">>, <<>>}}},
-            {text, {{2, 12}, <<"Foo">>}},
-            {expr, {{2, 15}, {<<"=">>, <<".">>}, {<<"<%= Bar .%>">>, <<"Bar">>}}},
-            {text, {{3, 4}, <<"     ">>}},
-            {text, {{4, 1}, <<"</html>">>}}
+            {text, {{1, 1}, <<"Hello,">>}},
+            {expr, {{2, 1}, {<<>>, <<>>}, {<<"{{ World }}">>, <<"World">>}}},
+            {text, {{2, 12}, <<"!">>}}
         ]},
     ?assertEqual(Expected, tokenize(Bin, ?MODULE, [])).
 
 % Engine
 
 init([]) ->
-    {ok, {"<%", "%>", []}}.
+    {ok, {"{{", "}}", []}}.
 
 handle_expr({{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}, Acc) ->
     {ok, [{expr, {{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}} | Acc]}.
