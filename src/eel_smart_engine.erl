@@ -5,8 +5,9 @@
 %% eel_engine callbacks
 -export([
     init/1,
-    handle_expr/2,
-    handle_text/2,
+    markers/0,
+    handle_expr/4,
+    handle_text/3,
     handle_body/1
 ]).
 
@@ -17,10 +18,7 @@
 -endif.
 
 %% Defines
--define(token(Name), fun
-    ({_, Bin}) -> {Name, Bin};
-    (Bin) ->      {Name, Bin}
-end).
+-define(token(Name), fun (Bin) -> {Name, Bin} end).
 -define(text,       ?token(text)).
 -define(expr,       ?token(expr)).
 -define(start_expr, ?token(start_expr)).
@@ -50,31 +48,37 @@ end).
 %%% eel_engine callbacks
 %%%=============================================================================
 
-init([]) ->
-    {ok, {{"<%", "%>"}, #state{}}}.
+init([]) -> #state{}.
 
-handle_expr({_Pos, {<<"=">>, <<".">>}, Expr}, State) ->
-    {ok, push(?expr(Expr), State)};
-handle_expr({_Pos, {<<"=">>, <<>>}, Expr}, State) ->
-    {ok, push(?start_expr(Expr), State)};
-handle_expr({_Pos, {<<>>, <<>>}, Expr}, State) ->
-    {ok, push(?mid_expr(Expr), State)};
-handle_expr({_Pos, {<<>>, <<".">>}, Expr}, State) ->
-    {ok, push(?end_expr(Expr), State)};
-handle_expr({_Pos, {<<":">>, <<":">>}, Expr}, State) ->
-    {ok, push(?debug(Expr), State)};
-handle_expr({_Pos, {<<"%">>, <<"%">>}, Expr}, State) ->
-    {ok, push(?comment(Expr), State)};
-handle_expr(Token, _State) ->
-    ?unknown_marker_error(Token).
+markers() -> [{"<%=", ".%>"},
+              {"<%=",  "%>"},
+              {"<%",   "%>"},
+              {"<%",  ".%>"},
+              {"<%:", ":%>"},
+              {"<%%", "%%>"}].
 
-handle_text({_Pos, Text}, State) ->
-    {ok, push(?text(Text), State)}.
+handle_expr(_Pos, {"<%=", ".%>"}, Expr, State) ->
+    push(?expr(Expr), State);
+handle_expr(_Pos, {"<%=", "%>"}, Expr, State) ->
+    push(?start_expr(Expr), State);
+handle_expr(_Pos, {"<%", "%>"}, Expr, State) ->
+    push(?mid_expr(Expr), State);
+handle_expr(_Pos, {"<%", ".%>"}, Expr, State) ->
+    push(?end_expr(Expr), State);
+handle_expr(_Pos, {"<%:", ":%>"}, Expr, State) ->
+    push(?debug(Expr), State);
+handle_expr(_Pos, {"<%%", "%%>"}, Expr, State) ->
+    push(?comment(Expr), State);
+handle_expr(Pos, Marker, Expr, _State) ->
+    ?unknown_marker_error({Pos, Marker, Expr}).
+
+handle_text(_Pos, Text, State) ->
+    push(?text(Text), State).
 
 handle_body(#state{tokens = Tokens}) ->
     _SD = parse_sd(lists:reverse(Tokens)),
     % TODO: Continue parsing tokens to AST
-    {ok, lists:reverse(Tokens)}.
+    lists:reverse(Tokens).
 
 %%%=============================================================================
 %%% Internal functions
@@ -161,50 +165,50 @@ handle_expr_test() ->
         {
             "Should return expr token",
             ?assertEqual(
-                {ok, #state{tokens = [{expr, <<"Foo">>}]}},
-                handle_expr({{1, 1}, {<<"=">>, <<".">>}, {<<"<%= Foo .%>">>, <<"Foo">>}}, #state{})
+                #state{tokens = [{expr, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%=", ".%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
-                {ok, #state{tokens = [{start_expr, <<"Foo">>}]}},
-                handle_expr({{1, 1}, {<<"=">>, <<>>}, {<<"<%= Foo %>">>, <<"Foo">>}}, #state{})
+                #state{tokens = [{start_expr, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%=", "%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
-                {ok, #state{tokens = [{mid_expr, <<"Foo">>}]}},
-                handle_expr({{1, 1}, {<<>>, <<>>}, {<<"<% Foo %>">>, <<"Foo">>}}, #state{})
+                #state{tokens = [{mid_expr, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%", "%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
-                {ok, #state{tokens = [{end_expr, <<"Foo">>}]}},
-                handle_expr({{1, 1}, {<<>>, <<".">>}, {<<"<% Foo .%>">>, <<"Foo">>}}, #state{})
+                #state{tokens = [{end_expr, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%", ".%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return debug token",
             ?assertEqual(
-                {ok, #state{tokens = [{debug, <<"io:format(Foo)">>}]}},
-                handle_expr({{1, 1}, {<<":">>, <<":">>}, {<<"<%: io:format(Foo) :%>">>, <<"io:format(Foo)">>}}, #state{})
+                #state{tokens = [{debug, <<"io:format(Foo)">>}]},
+                handle_expr({1, 1}, {"<%:", ":%>"}, <<"io:format(Foo)">>, #state{})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
-                {ok, #state{tokens = [{comment, <<"Foo">>}]}},
-                handle_expr({{1, 1}, {<<"%">>, <<"%">>}, {<<"<%% Foo %%>">>, <<"Foo">>}}, #state{})
+                #state{tokens = [{comment, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%%", "%%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should raise unknown marker error",
             ?assertError(
                 unknown_marker,
-                handle_expr({{1, 1}, {<<".">>, <<".">>}, {<<"<%. Foo .%>">>, <<"Foo">>}}, #state{})
+                handle_expr({1, 1}, {"<%.", ".%>"}, <<"Foo">>, #state{})
             )
         }
     ].
@@ -214,8 +218,8 @@ handle_text_test() ->
         {
             "Should return text token",
             ?assertEqual(
-                {ok, #state{tokens = [{text, <<"Foo">>}]}},
-                handle_text({{1, 1}, <<"Foo">>}, #state{})
+                #state{tokens = [{text, <<"Foo">>}]},
+                handle_text({1, 1}, <<"Foo">>, #state{})
             )
         }
     ].
@@ -274,7 +278,7 @@ handle_body_test() ->
         {end_expr,<<"end">>},
         {text,<<"<footer>Footer</footer>">>}
     ],
-    {ok, Tokens} = eel_tokenizer:tokenize(Bin, ?MODULE, []),
+    Tokens = eel_tokenizer:tokenize(Bin, ?MODULE, []),
     ?assertEqual(Expected, Tokens).
 
 -endif.
