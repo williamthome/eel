@@ -28,7 +28,7 @@ tokenize(Bin) ->
 
 tokenize(Bin, Eng, Opts) ->
     case Eng:init(Opts) of
-        {ok, {StartMarker, EndMarker, State}} ->
+        {ok, {{StartMarker, EndMarker}, State}} ->
             do_tokenize(StartMarker, EndMarker, Bin, in_text, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, State);
         {error, Reason} ->
             {error, Reason}
@@ -291,7 +291,7 @@ tokenize_test() ->
 % Engine
 
 init([]) ->
-    {ok, {"{{", "}}", []}}.
+    {ok, {{"{{", "}}"}, []}}.
 
 handle_expr({{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}, Acc) ->
     {ok, [{expr, {{Ln, Col}, {SMkr, EMkr}, {ExpOut, ExpIn}}} | Acc]}.
