@@ -44,13 +44,13 @@ do_tokenize(<<>>, Pos, Text, Eng, State) ->
     Eng:handle_body(StateEOF);
 do_tokenize(Bin, Pos, Text, Eng, State) ->
     case retrieve_marker(Eng:markers(), Bin) of
-        {true, {{StartMarker, EndMarker}, Expr, BinRest}} ->
+        {true, {Marker, Expr, BinRest}} ->
             StateText =
                 case Text =:= <<>> of
                     true -> State;
                     false -> Eng:handle_text(Pos, Text, State)
                 end,
-            StateExpr = Eng:handle_expr(Pos, {StartMarker, EndMarker}, Expr, StateText),
+            StateExpr = Eng:handle_expr(Pos, Marker, Expr, StateText),
             do_tokenize(BinRest, Pos, <<>>, Eng, StateExpr);
         false ->
             {BinRest, TextAcc} =
@@ -79,7 +79,9 @@ match_markers_start(Markers, Bin) ->
         fun({StartMarker, _} = Marker) ->
             StartMarkerLength = length(StartMarker),
             case size(Bin) >= StartMarkerLength andalso
-                 binary:split(Bin, list_to_binary(StartMarker), [{scope, {0, StartMarkerLength}}])
+                 binary:split(Bin,
+                              list_to_binary(StartMarker),
+                              [{scope, {0, StartMarkerLength}}])
             of
                 [<<>>, Rest] -> {true, {Marker, Rest}};
                 _ -> false
@@ -90,12 +92,11 @@ match_markers_start(Markers, Bin) ->
 
 match_markers_end(Markers) ->
     lists:filtermap(
-        fun({{StartMarker, EndMarker}, Bin}) ->
+        fun({{_, EndMarker} = Marker, Bin}) ->
             case size(Bin) >= length(EndMarker) andalso
                  binary:split(Bin, list_to_binary(EndMarker))
             of
-                [Expr, Rest] ->
-                    {true, {{StartMarker, EndMarker}, string:trim(Expr), Rest}};
+                [Expr, Rest] -> {true, {Marker, string:trim(Expr), Rest}};
                 _ -> false
             end
         end,
