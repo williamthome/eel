@@ -19,13 +19,13 @@
 
 %% Defines
 -define(token(Name), fun (Bin) -> {Name, Bin} end).
--define(text,       ?token(text)).
--define(expr,       ?token(expr)).
--define(start_expr, ?token(start_expr)).
--define(mid_expr,   ?token(mid_expr)).
--define(end_expr,   ?token(end_expr)).
--define(comment,    ?token(comment)).
--define(debug,      ?token(debug)).
+-define(text,        ?token(text)).
+-define(expr,        ?token(expr)).
+-define(start_expr,  ?token(start_expr)).
+-define(mid_expr,    ?token(mid_expr)).
+-define(end_expr,    ?token(end_expr)).
+-define(comment,     ?token(comment)).
+-define(debug,       ?token(debug)).
 
 %% Types
 -type token_name() :: text
@@ -193,8 +193,8 @@ handle_expr_test() ->
         {
             "Should return debug token",
             ?assertEqual(
-                #state{tokens = [{debug, <<"io:format(Foo)">>}]},
-                handle_expr({1, 1}, {"<%:", ":%>"}, <<"io:format(Foo)">>, #state{})
+                #state{tokens = [{debug, <<"Foo">>}]},
+                handle_expr({1, 1}, {"<%:", ":%>"}, <<"Foo">>, #state{})
             )
         },
         {
