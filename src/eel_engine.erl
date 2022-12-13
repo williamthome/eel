@@ -12,7 +12,7 @@
 -type expressions() :: {Outside :: expression(), Inside :: expression()}.
 
 -callback init(term()) ->
-    {ok, {nonempty_string(), nonempty_string(), state()}} | {error, term()}.
+    {ok, {{nonempty_string(), nonempty_string()}, state()}} | {error, term()}.
 
 -callback handle_expr({cursor(), markers(), expressions()}, state()) ->
     {ok, state()} | {error, term()}.
