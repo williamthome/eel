@@ -29,7 +29,7 @@ tokenize(Bin) ->
 tokenize(Bin, Eng, Opts) ->
     case Eng:init(Opts) of
         {ok, {StartMarker, EndMarker, State}} ->
-            do_tokenize(StartMarker, EndMarker, Bin, in_root, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, State);
+            do_tokenize(StartMarker, EndMarker, Bin, in_text, Eng, {1, 1}, {<<>>, 1, 1}, {<<>>, <<>>}, <<>>, State);
         {error, Reason} ->
             {error, Reason}
     end.
@@ -51,7 +51,7 @@ do_tokenize(StartMarker, EndMarker, Bin, In, Eng, Pos, Acc, Expr, Buf, State) ->
             end
     end.
 
-handle_start_marker(StartMarker, EndMarker, T, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {<<>>, <<>>}, Buf, State) ->
+handle_start_marker(StartMarker, EndMarker, T, in_text, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {<<>>, <<>>}, Buf, State) ->
     do_tokenize(
         StartMarker,
         EndMarker,
@@ -64,14 +64,14 @@ handle_start_marker(StartMarker, EndMarker, T, in_root, Eng, {Ln, Col}, {<<>>, S
         iolist_to_binary([Buf, StartMarker]),
         State
     );
-handle_start_marker(StartMarker, EndMarker, T, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0) ->
+handle_start_marker(StartMarker, EndMarker, T, in_text, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0) ->
     case Eng:handle_text({{SLn, SCol}, Text}, State0) of
         {ok, State} ->
             do_tokenize(
                 StartMarker,
                 EndMarker,
                 iolist_to_binary([StartMarker, T]),
-                in_root,
+                in_text,
                 Eng,
                 {Ln, Col},
                 {<<>>, Ln, Col},
@@ -91,7 +91,7 @@ handle_end_marker(StartMarker, EndMarker, T, in_marker, Eng, {Ln, Col}, {SMkr, S
                 StartMarker,
                 EndMarker,
                 T,
-                in_root,
+                in_text,
                 Eng,
                 {Ln, Col + length(EndMarker)},
                 {<<>>, Ln, Col + length(EndMarker)},
@@ -110,7 +110,7 @@ handle_end_marker(StartMarker, EndMarker, T, in_expr, Eng, {Ln, Col}, {SMkr, SLn
                 StartMarker,
                 EndMarker,
                 T,
-                in_root,
+                in_text,
                 Eng,
                 {Ln, Col + length(EndMarker)},
                 {<<>>, Ln, Col + length(EndMarker)},
@@ -150,7 +150,7 @@ handle_text(StartMarker, EndMarker, <<32, T/binary>>, in_expr, Eng, {Ln0, Col0},
                         StartMarker,
                         EndMarker,
                         Rest,
-                        in_root,
+                        in_text,
                         Eng,
                         {Ln, Col},
                         {<<>>, Ln, Col},
@@ -191,7 +191,7 @@ handle_text(StartMarker, EndMarker, <<H, T/binary>>, in_marker, Eng, {Ln, Col}, 
         State
     );
 handle_text(StartMarker, EndMarker,
-    <<"\n", T/binary>>, in_root, Eng, {Ln, _Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0
+    <<"\n", T/binary>>, in_text, Eng, {Ln, _Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0
 ) ->
     case Eng:handle_text({{SLn, SCol}, Text}, State0) of
         {ok, State} ->
@@ -199,7 +199,7 @@ handle_text(StartMarker, EndMarker,
                 StartMarker,
                 EndMarker,
                 T,
-                in_root,
+                in_text,
                 Eng,
                 {Ln + 1, 1},
                 {<<>>, SLn + 1, 1},
@@ -227,16 +227,16 @@ handle_text(StartMarker, EndMarker, <<H, T/binary>>, In, Eng, {Ln, Col}, {SMkr, 
         <<Buf/binary, H>>,
         State
     );
-handle_text(_StartMarker, _EndMarker, <<>>, in_root, Eng, {_Ln, _Col}, {<<>>, _SLn, _SCol}, {<<>>, <<>>}, _Buf, State) ->
+handle_text(_StartMarker, _EndMarker, <<>>, in_text, Eng, {_Ln, _Col}, {<<>>, _SLn, _SCol}, {<<>>, <<>>}, _Buf, State) ->
     Eng:handle_body(State);
-handle_text(StartMarker, EndMarker, <<>>, in_root, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0) ->
+handle_text(StartMarker, EndMarker, <<>>, in_text, Eng, {Ln, Col}, {<<>>, SLn, SCol}, {Text, Text}, Buf, State0) ->
     case Eng:handle_text({{SLn, SCol}, Text}, State0) of
         {ok, State} ->
             do_tokenize(
                 StartMarker,
                 EndMarker,
                 <<>>,
-                in_root,
+                in_text,
                 Eng,
                 {Ln, Col},
                 {<<>>, Ln, Col},
