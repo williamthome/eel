@@ -1,10 +1,7 @@
 -module(eel_tokenizer).
 
 %% API functions
--export([
-    tokenize/1,
-    tokenize/3
-]).
+-export([tokenize/1, tokenize/3, compile/1, compile/3]).
 
 %% Includes
 -ifdef(TEST).
@@ -29,6 +26,12 @@ tokenize(Bin) ->
 tokenize(Bin, Eng, Opts) ->
     State = Eng:init(Opts),
     do_tokenize(Bin, {1, 1}, <<>>, Eng, State).
+
+compile(Tokens) ->
+    compile(Tokens, ?DEFAULT_ENGINE, []).
+
+compile(Tokens, Eng, Opts) ->
+    Eng:compile(Tokens, Opts).
 
 %%%=============================================================================
 %%% Internal functions
