@@ -19,12 +19,13 @@
 -endif.
 
 %% Defines
--define(token(Name), fun (Bin) -> {Name, Bin} end).
+-define(token(Name), fun(BinOrSD) -> {Name, BinOrSD} end).
 -define(text,        ?token(text)).
 -define(expr,        ?token(expr)).
 -define(start_expr,  ?token(start_expr)).
 -define(mid_expr,    ?token(mid_expr)).
 -define(end_expr,    ?token(end_expr)).
+-define(nested_expr, ?token(nested_expr)).
 -define(comment,     ?token(comment)).
 -define(debug,       ?token(debug)).
 -define(is_expr(Token), is_tuple(Token) andalso
@@ -40,10 +41,11 @@
                       | start_expr
                       | mid_expr
                       | end_expr
+                      | nested_expr
                       | comment
                       | debug.
 -type token()   :: {token_name(), binary()}.
--type static()  :: list().
+-type static()  :: eel_engine:static().
 -type dynamic() :: list().
 
 %% State
@@ -55,7 +57,7 @@
 %%% eel_engine callbacks
 %%%=============================================================================
 
-init([]) -> #state{}.
+init(#{}) -> #state{}.
 
 markers() -> [{"<%=", ".%>"},
               {"<%=",  "%>"},
@@ -85,7 +87,7 @@ handle_text(_Pos, Text, State) ->
 handle_body(#state{tokens = Tokens}) ->
     lists:reverse(Tokens).
 
-compile(Tokens, []) ->
+compile(Tokens, #{}) ->
     parse_sd(Tokens).
 
 %%%=============================================================================
@@ -155,6 +157,7 @@ do_parse_sd_2(Tokens, Curr, In, Prev, {S, D}) ->
          end,
     do_parse_sd_1(Tokens, In, Curr, SD).
 
+% FIXME: Dialyzer warnings (maybe false positive)
 should_push_empty_static(_, Curr, {[], _}) when ?is_expr(Curr) -> true;
 should_push_empty_static(Prev, Curr, {_, _}) -> ?is_expr(Prev) andalso
                                                 ?is_expr(Curr).
@@ -162,7 +165,7 @@ should_push_empty_static(Prev, Curr, {_, _}) -> ?is_expr(Prev) andalso
 % Nested
 parse_nested_sd(T, Prev, {S, [HD | D]}) ->
     {Tokens, Nested} = parse_nested_sd_1(T, Prev, {[], []}),
-    H = {nested_expr, Nested},
+    H = ?nested_expr(Nested),
     do_parse_sd_1(Tokens, in_expr, H, {S, [[H | HD] | D]}).
 
 parse_nested_sd_1([{start_expr, _} | _] = T, Prev, {S, D}) ->
@@ -336,7 +339,7 @@ handle_body_test() ->
         {expr,<<"Foo = foo, Foo">>},
         {text,<<"<footer>Footer</footer>">>}
     ],
-    Result = eel_tokenizer:tokenize(Bin, ?MODULE, []),
+    Result = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
     ?assertEqual(Expected, Result).
 
 parse_sd_test() ->
