@@ -1,7 +1,7 @@
 -module(eel_tokenizer).
 
 %% API functions
--export([tokenize/1, tokenize/3, compile/1, compile/3]).
+-export([tokenize/1, tokenize/2, compile/1, compile/2]).
 
 %% Includes
 -ifdef(TEST).
@@ -19,18 +19,20 @@
 -spec tokenize(binary()) -> list().
 
 tokenize(Bin) ->
-    tokenize(Bin, ?DEFAULT_ENGINE, []).
+    tokenize(Bin, #{}).
 
--spec tokenize(binary(), module(), term()) -> list().
+-spec tokenize(binary(), map()) -> list().
 
-tokenize(Bin, Eng, Opts) ->
+tokenize(Bin, Opts) ->
+    Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
     do_tokenize(Bin, {1, 1}, <<>>, Eng, State).
 
 compile(Tokens) ->
-    compile(Tokens, ?DEFAULT_ENGINE, []).
+    compile(Tokens, #{}).
 
-compile(Tokens, Eng, Opts) ->
+compile(Tokens, Opts) ->
+    Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     Eng:compile(Tokens, Opts).
 
 %%%=============================================================================
@@ -129,11 +131,11 @@ tokenize_test() ->
         {expr, {{1, 1}, {"{{", "}}"}, <<"World">>}},
         {text, {{1, 1}, <<"!">>}}
     ],
-    ?assertEqual(Expected, tokenize(Bin, ?MODULE, [])).
+    ?assertEqual(Expected, tokenize(Bin, #{engine => ?MODULE})).
 
 % Engine
 
-init([]) -> [].
+init(#{}) -> [].
 
 markers() -> [{"{{", "}}"}].
 
