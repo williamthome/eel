@@ -1,34 +1,9 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl converter module.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_converter).
 
-%% API functions
--export([ to_binary/1
-        , to_binary/2
-        ]).
-
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
-
-%% -----------------------------------------------------------------------------
-%% @doc to_binary/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec to_binary(term()) -> binary().
+-export([to_binary/1, to_binary/2]).
 
 to_binary(Value) ->
     to_binary(Value, undefined).
-
-%% -----------------------------------------------------------------------------
-%% @doc to_binary/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec to_binary(term(), Options :: term()) -> binary().
 
 to_binary(Bin, undefined) when is_binary(Bin) ->
     Bin;
@@ -51,12 +26,7 @@ to_binary(Int, undefined) when is_integer(Int) ->
 to_binary(Int, Base) when is_integer(Int), is_integer(Base) ->
     erlang:integer_to_binary(Int, Base);
 to_binary(List, undefined) when is_list(List) ->
-    case io_lib:deep_unicode_char_list(List) of
-        true ->
-            erlang:list_to_binary(List);
-        false ->
-            lists:map(fun to_binary/1, List)
-    end;
+    erlang:list_to_binary(List);
 to_binary(Tuple, undefined) when is_tuple(Tuple) ->
     to_binary(erlang:tuple_to_list(Tuple));
 to_binary(PID, undefined) when is_pid(PID) ->
