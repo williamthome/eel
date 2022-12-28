@@ -36,4 +36,4 @@
 
 -callback handle_body(state()) -> ast().
 
--callback compile(tokens(), options()) -> {static(), ast()}.
+-callback handle_compile(tokens(), options()) -> {static(), ast()}.
