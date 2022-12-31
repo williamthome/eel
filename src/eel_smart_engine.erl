@@ -3,14 +3,10 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([
-    init/1,
-    markers/0,
-    handle_expr/4,
-    handle_text/3,
-    handle_body/1,
-    handle_compile/2
-]).
+-export([markers/0,
+         init/1,
+         handle_expr/4, handle_text/3, handle_body/1,
+         handle_compile/2, handle_ast/1]).
 
 %% Includes
 -include("eel.hrl").
@@ -45,19 +41,19 @@
                       | comment
                       | debug.
 -type token()   :: {token_name(), binary()}.
+-type ast()     :: term().
 -type static()  :: eel_engine:static().
 -type dynamic() :: list().
 
-%% State
+%% States
 -record(state, {
-    tokens = [] :: [token()]
+    opts :: map(),
+    acc = [] :: [token() | ast()]
 }).
 
 %%%=============================================================================
 %%% eel_engine callbacks
 %%%=============================================================================
-
-init(#{}) -> #state{}.
 
 markers() -> [{"<%=", ".%>"},
               {"<%=",  "%>"},
@@ -65,6 +61,11 @@ markers() -> [{"<%=", ".%>"},
               {"<%",  ".%>"},
               {"<%:", ":%>"},
               {"<%%", "%%>"}].
+
+init(Opts) ->
+    #state{opts = Opts}.
+
+%% tokenize callbacks
 
 handle_expr(_Pos, {"<%=", ".%>"}, Expr, State) ->
     push(?expr(Expr), State);
@@ -84,18 +85,23 @@ handle_expr(Pos, Marker, Expr, _State) ->
 handle_text(_Pos, Text, State) ->
     push(?text(Text), State).
 
-handle_body(#state{tokens = Tokens}) ->
+handle_body(#state{acc = Tokens}) ->
     parse_tokens_to_sd(lists:reverse(Tokens)).
 
-handle_compile(Token, Opts) ->
-    eel_tokenizer:expr_to_ast(compile(Token, Opts)).
+%% compile callbacks
+
+handle_compile(Token, #state{opts = Opts} = State) ->
+    push(eel_tokenizer:expr_to_ast(compile(Token, Opts)), State).
+
+handle_ast(#state{acc = AST}) ->
+    lists:reverse(AST).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
-push(Token, #state{tokens = Tokens} = State) ->
-    State#state{tokens = [Token | Tokens]}.
+push(Term, #state{acc = Acc} = State) ->
+    State#state{acc = [Term | Acc]}.
 
 %% -----------------------------------------------------------------------------
 %% @private
@@ -257,42 +263,42 @@ handle_expr_test() ->
         {
             "Should return expr token",
             ?assertEqual(
-                #state{tokens = [{expr, <<"Foo">>}]},
+                #state{acc = [{expr, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%=", ".%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
-                #state{tokens = [{start_expr, <<"Foo">>}]},
+                #state{acc = [{start_expr, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%=", "%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
-                #state{tokens = [{mid_expr, <<"Foo">>}]},
+                #state{acc = [{mid_expr, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%", "%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
-                #state{tokens = [{end_expr, <<"Foo">>}]},
+                #state{acc = [{end_expr, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%", ".%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should return debug token",
             ?assertEqual(
-                #state{tokens = [{debug, <<"Foo">>}]},
+                #state{acc = [{debug, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%:", ":%>"}, <<"Foo">>, #state{})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
-                #state{tokens = [{comment, <<"Foo">>}]},
+                #state{acc = [{comment, <<"Foo">>}]},
                 handle_expr({1, 1}, {"<%%", "%%>"}, <<"Foo">>, #state{})
             )
         },
@@ -310,7 +316,7 @@ handle_text_test() ->
         {
             "Should return text token",
             ?assertEqual(
-                #state{tokens = [{text, <<"Foo">>}]},
+                #state{acc = [{text, <<"Foo">>}]},
                 handle_text({1, 1}, <<"Foo">>, #state{})
             )
         }
