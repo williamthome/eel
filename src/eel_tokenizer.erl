@@ -11,7 +11,9 @@
 %% Includes
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--export([init/1, markers/0, handle_expr/4, handle_text/3, handle_body/1]).
+-export([markers/0,
+         init/1,
+         handle_expr/4, handle_text/3, handle_body/1]).
 -endif.
 
 %% Defines
@@ -59,8 +61,9 @@ compile(Tokens) ->
 
 compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
+    State = Eng:init(Opts),
+    DAST = do_compile(Dynamic, Eng, State),
     SAST = lists:map(fun(S) -> expr_to_ast(["<<\"", S, "\">>"]) end, Static),
-    DAST = lists:map(fun(D) -> Eng:handle_compile(D, Opts) end, Dynamic),
     merge_sd(SAST, DAST).
 
 %% -----------------------------------------------------------------------------
@@ -205,6 +208,12 @@ best_match([_ | Markers], Best) ->
 best_match([], Best) ->
     Best.
 
+do_compile([D | Dynamic], Eng, State) ->
+    NewState = Eng:handle_compile(D, State),
+    do_compile(Dynamic, Eng, NewState);
+do_compile([], Eng, State) ->
+    Eng:handle_ast(State).
+
 do_merge_sd([S | Static], [D | Dynamic], Acc) ->
     do_merge_sd(Static, Dynamic, [D, S | Acc]);
 do_merge_sd([S | Static], [], Acc) ->
@@ -232,9 +241,11 @@ tokenize_test() ->
 
 % Engine
 
-init(#{}) -> [].
+markers() ->
+    [{"{{", "}}"}].
 
-markers() -> [{"{{", "}}"}].
+init(#{}) ->
+    [].
 
 handle_expr({Ln, Col}, {SMkr, EMkr}, Expr, Acc) ->
     [{expr, {{Ln, Col}, {SMkr, EMkr}, Expr}} | Acc].
