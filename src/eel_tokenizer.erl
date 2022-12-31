@@ -42,7 +42,8 @@ tokenize(Bin) ->
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
-    do_tokenize(Bin, {1, 1}, <<>>, Eng, State).
+    Pos = {1, 1},
+    do_tokenize(Bin, Pos, Pos, <<>>, Eng, State).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile/1.
@@ -132,29 +133,25 @@ eval(AST, Bindings) ->
 %%% Internal functions
 %%%=============================================================================
 
-% TODO: Sum line/column (position)
-do_tokenize(<<>>, Pos, Text, Eng, State) ->
+do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
     StateEOF = case Text =:= <<>> of
                    true -> State;
                    false -> Eng:handle_text(Pos, Text, State)
                end,
     Eng:handle_body(StateEOF);
-do_tokenize(Bin, Pos, Text, Eng, State) ->
+do_tokenize(Bin, OldPos, CurPos, Text, Eng, State) ->
     case retrieve_marker(Eng:markers(), Bin) of
         {true, {Marker, Expr, BinRest}} ->
             StateText = case Text =:= <<>> of
                             true -> State;
-                            false -> Eng:handle_text(Pos, Text, State)
+                            false -> Eng:handle_text(OldPos, Text, State)
                         end,
-            StateExpr = Eng:handle_expr(Pos, Marker, Expr, StateText),
-            do_tokenize(BinRest, Pos, <<>>, Eng, StateExpr);
+            StateExpr = Eng:handle_expr(CurPos, Marker, Expr, StateText),
+            NewPos = expr_position(Expr, Marker, CurPos),
+            do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
         false ->
-            {BinRest, TextAcc} = case Bin of
-                                     <<"\n", T/binary>> -> {T, Text};
-                                     <<H, T/binary>> -> {T, <<Text/binary, H>>};
-                                     <<>> -> {<<>>, Text}
-                                 end,
-            do_tokenize(BinRest, Pos, TextAcc, Eng, State)
+            {BinRest, NewPos, TextAcc} = do_text_acc(Bin, OldPos, Text),
+            do_tokenize(BinRest, OldPos, NewPos, TextAcc, Eng, State)
     end.
 
 retrieve_marker(EngMarkers, Bin) ->
@@ -208,6 +205,27 @@ best_match([_ | Markers], Best) ->
 best_match([], Best) ->
     Best.
 
+do_text_acc(<<"\n", T/binary>>, {Ln, _}, Text) ->
+    {T, {Ln + 1, 1}, Text};
+do_text_acc(<<H, T/binary>>, {Ln, Col}, Text) ->
+    {T, {Ln, Col + 1}, <<Text/binary, H>>};
+do_text_acc(<<>>, Pos, Text) ->
+    {<<>>, Pos, Text}.
+
+expr_position(Expr, {StartMarker, EndMarker}, OldPos) ->
+    Pos = add_marker_length(StartMarker, OldPos),
+    do_expr_position(Expr, EndMarker, Pos).
+
+do_expr_position(<<"\n", T/binary>>, EndMarker, {Ln, _}) ->
+    do_expr_position(T, EndMarker, {Ln + 1, 1});
+do_expr_position(<<_, T/binary>>, EndMarker, {Ln, Col}) ->
+    do_expr_position(T, EndMarker, {Ln, Col + 1});
+do_expr_position(<<>>, EndMarker, Pos) ->
+    add_marker_length(EndMarker, Pos).
+
+add_marker_length(Marker, {Ln, Col}) ->
+    {Ln, Col + length(Marker)}.
+
 do_compile([D | Dynamic], Eng, State) ->
     NewState = Eng:handle_compile(D, State),
     do_compile(Dynamic, Eng, NewState);
@@ -229,13 +247,13 @@ do_merge_sd([], Dynamic, Acc) ->
 
 -ifdef(TEST).
 
+% TODO: Test position (check if trims are causing issues).
 tokenize_test() ->
     Bin = <<"Hello,\n{{ World }}!">>,
-    % FIXME: Handle columns and new lines
     Expected = [
         {text, {{1, 1}, <<"Hello,">>}},
-        {expr, {{1, 1}, {"{{", "}}"}, <<"World">>}},
-        {text, {{1, 1}, <<"!">>}}
+        {expr, {{2, 1}, {"{{", "}}"}, <<"World">>}},
+        {text, {{2, 11}, <<"!">>}}
     ],
     ?assertEqual(Expected, tokenize(Bin, #{engine => ?MODULE})).
 
@@ -247,8 +265,8 @@ markers() ->
 init(#{}) ->
     [].
 
-handle_expr({Ln, Col}, {SMkr, EMkr}, Expr, Acc) ->
-    [{expr, {{Ln, Col}, {SMkr, EMkr}, Expr}} | Acc].
+handle_expr({Ln, Col}, {StartMarker, EndMarker}, Expr, Acc) ->
+    [{expr, {{Ln, Col}, {StartMarker, EndMarker}, Expr}} | Acc].
 
 handle_text({Ln, Col}, Text, Acc) ->
     [{text, {{Ln, Col}, Text}} | Acc].
