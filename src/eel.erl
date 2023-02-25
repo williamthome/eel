@@ -36,7 +36,7 @@ render(Bin, Bindings) ->
 render(Bin, Bindings, Opts) ->
     Tokens = eel_tokenizer:tokenize(Bin, Opts),
     AST = eel_tokenizer:compile(Tokens, Opts),
-    eel_tokenizer:render(AST, Bindings).
+    eel_tokenizer:render(AST, Bindings, Opts).
 
 render_file(Filename) ->
     Tokens = eel_tokenizer:tokenize_file(Filename),
@@ -51,4 +51,4 @@ render_file(Filename, Bindings) ->
 render_file(Filename, Bindings, Opts) ->
     Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
     AST = eel_tokenizer:compile(Tokens, Opts),
-    eel_tokenizer:render(AST, Bindings).
+    eel_tokenizer:render(AST, Bindings, Opts).
