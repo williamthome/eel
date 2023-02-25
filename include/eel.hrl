@@ -1,7 +1,7 @@
--define(unknown_marker_error(Token), begin
-    {{Ln, Col}, Marker, Expr} = Token,
-    error(unknown_marker, [{line, Ln},
-                           {column, Col},
-                           {expression, Expr},
-                           {marker, Marker}])
-end).
+-define(DEFAULT_ENGINE, eel_smart_engine).
+-define(DEFAULT_ENGINE_OPTS, #{
+    % capitalize bindings keys
+    % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
+    % note: eval expects capitalized atoms
+    cbkeys => false
+}).
