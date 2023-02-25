@@ -415,34 +415,47 @@ parse_tokens_to_sd_test() ->
     ?assertEqual(Expected, Result).
 
 handle_render_test() ->
-    Tokens = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
-                   <<"<footer>Footer</footer>">>],
-                  [{expr,<<"foo">>},
-                   {debug,<<"io:format(\"Print but not render me!~n\")">>},
-                   [{start_expr,<<"case 1 of">>},
-                    {mid_expr,<<"2 ->">>},
-                    {nested_expr,{[<<"<p>Foo</p>">>],[]}},
-                    {mid_expr,<<"; Bar ->">>},
-                    {nested_expr,
-                        {[<<"<p>">>,<<"</p>">>],
-                         [[{start_expr,<<"case hello =:= world of">>},
-                           {mid_expr,<<"true ->">>},
-                           {expr,<<"hello">>},
-                           {mid_expr,<<"; false ->">>},
-                           {nested_expr,
-                               {[<<"<p>">>,<<>>,<<"</p>">>],
-                                [{debug,<<"ignore_me">>},
-                                 [{start_expr,<<"case car =:= bus of">>},
-                                  {mid_expr,<<"true ->">>},
-                                  {nested_expr,{[<<"Car">>],[]}},
-                                  {mid_expr,<<"; false ->">>},
-                                  {expr,<<"bus">>},
-                                  {end_expr,<<"end">>}]]}},
-                           {end_expr,<<"end">>}]]}},
-                    {end_expr,<<"end">>}],
-                   {expr,<<"Foo = foo, Foo">>}]},
-    Expected = <<"foo<h1>Title</h1><p><p>bus</p></p>foo<footer>Footer</footer>">>,
-    Result = eel_tokenizer:render(eel_tokenizer:compile(Tokens, #{engine => ?MODULE})),
+    Expected = <<
+        "<h1>EEl</h1>"
+        "<ul>"
+            "<li>foo</li>"
+            "<li>bar</li>"
+            "<li>baz</li>"
+        "</ul>"
+        "<div>Item count: 3</div>"
+        "<ul>"
+            "<li>1</li>"
+            "<li>2</li>"
+            "<li>3</li>"
+        "</ul>"
+    >>,
+    Bin = <<
+        "<h1><%= Title .%></h1>"
+        %% FIXME: Expression inside comment causes exception
+        %%        e.g.: "<%% <h2><%= Foo .%></h2> %%>"
+        "<ul>"
+        "<%= lists:map(fun(Item) -> %>"
+        "<li><%= Item .%></li>"
+        "<% end, List) .%>"
+        "</ul>"
+        "<%= Length = erlang:length(List), %>"
+        "<div>Item count: <%= Length .%></div>"
+        "<%= case Length > 0 of true -> %>"
+        "<ul>"
+        "<%= lists:map(fun(N) -> %>"
+        "<li><%= N .%></li>"
+        "<% end, lists:seq(1, Length)) .%>"
+        "</ul>"
+        "<% ; false -> <<\"Empty list\">> end .%>"
+        "<% .%>"
+    >>,
+    Tokens = eel_tokenizer:tokenize(Bin),
+    AST = eel_tokenizer:compile(Tokens),
+    Bindings = #{
+        'Title' => <<"EEl">>,
+        'List' => [foo, bar, baz]
+    },
+    Result = eel_tokenizer:render(AST, Bindings),
     ?assertEqual(Expected, Result).
 
 -endif.
