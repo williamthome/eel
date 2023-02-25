@@ -178,12 +178,12 @@ do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
     Eng:handle_body(StateEOF);
 do_tokenize(Bin, OldPos, CurPos, Text, Eng, State) ->
     case retrieve_marker(Eng:markers(), Bin) of
-        {true, {Marker, Expr, BinRest}} ->
+        {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
             StateText = case Text =:= <<>> of
                             true -> State;
                             false -> Eng:handle_text(OldPos, Text, State)
                         end,
-            StateExpr = Eng:handle_expr(CurPos, Marker, Expr, StateText),
+            StateExpr = Eng:handle_expr(CurPos, MarkerId, Expr, StateText),
             NewPos = expr_position(Expr, Marker, CurPos),
             do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
         false ->
@@ -204,7 +204,7 @@ match_markers_start(_, <<>>) ->
     [];
 match_markers_start(Markers, Bin) ->
     lists:filtermap(
-        fun({StartMarker, _} = Marker) ->
+        fun({_, {StartMarker, _}} = Marker) ->
             StartMarkerBin = <<(list_to_binary(StartMarker))/binary, 32>>,
             StartMarkerLength = size(StartMarkerBin),
             case size(Bin) >= StartMarkerLength andalso
@@ -221,7 +221,7 @@ match_markers_start(Markers, Bin) ->
 
 match_markers_end(Markers) ->
     lists:filtermap(
-        fun({{_, EndMarker} = Marker, Bin}) ->
+        fun({{_, {_, EndMarker}} = Marker, Bin}) ->
             EndMarkerBin = <<32, (list_to_binary(EndMarker))/binary>>,
             case size(Bin) >= size(EndMarkerBin) andalso
                  binary:split(Bin, EndMarkerBin)
@@ -233,14 +233,14 @@ match_markers_end(Markers) ->
         Markers
     ).
 
-best_match([Best | Markers], undefined) ->
-    best_match(Markers, Best);
-best_match([{_, Expr, _} = Best | Markers], {_, BestExpr, _})
+best_match([Best | Rest], undefined) ->
+    best_match(Rest, Best);
+best_match([{_, Expr, _} = Best | Rest], {_, BestExpr, _})
     when size(Expr) < size(BestExpr)
 ->
-    best_match(Markers, Best);
-best_match([_ | Markers], Best) ->
-    best_match(Markers, Best);
+    best_match(Rest, Best);
+best_match([_ | Rest], Best) ->
+    best_match(Rest, Best);
 best_match([], Best) ->
     Best.
 
@@ -251,7 +251,7 @@ do_text_acc(<<H, T/binary>>, {Ln, Col}, Text) ->
 do_text_acc(<<>>, Pos, Text) ->
     {<<>>, Pos, Text}.
 
-expr_position(Expr, {StartMarker, EndMarker}, OldPos) ->
+expr_position(Expr, {_, {StartMarker, EndMarker}}, OldPos) ->
     Pos = add_marker_length(StartMarker, OldPos),
     do_expr_position(Expr, EndMarker, Pos).
 
@@ -324,7 +324,7 @@ tokenize_test() ->
     Bin = <<"Hello,\n{{ World }}!">>,
     Expected = [
         {text, {{1, 1}, <<"Hello,">>}},
-        {expr, {{2, 1}, {"{{", "}}"}, <<"World">>}},
+        {expr, {{2, 1}, var, <<"World">>}},
         {text, {{2, 11}, <<"!">>}}
     ],
     ?assertEqual(Expected, tokenize(Bin, #{engine => ?MODULE})).
@@ -335,7 +335,7 @@ tokenize_file_test() ->
     ok = file:write_file(Filename, Bin),
     Expected = [
         {text, {{1, 1}, <<"Hello,">>}},
-        {expr, {{2, 1}, {"{{", "}}"}, <<"World">>}},
+        {expr, {{2, 1}, var, <<"World">>}},
         {text, {{2, 11}, <<"!">>}}
     ],
     ?assertEqual(Expected, tokenize_file(Filename, #{engine => ?MODULE})).
@@ -343,13 +343,13 @@ tokenize_file_test() ->
 % Engine
 
 markers() ->
-    [{"{{", "}}"}].
+    [{var, {"{{", "}}"}}].
 
 init(#{}) ->
     [].
 
-handle_expr({Ln, Col}, {StartMarker, EndMarker}, Expr, Acc) ->
-    [{expr, {{Ln, Col}, {StartMarker, EndMarker}, Expr}} | Acc].
+handle_expr({Ln, Col}, var, Expr, Acc) ->
+    [{expr, {{Ln, Col}, var, Expr}} | Acc].
 
 handle_text({Ln, Col}, Text, Acc) ->
     [{text, {{Ln, Col}, Text}} | Acc].
