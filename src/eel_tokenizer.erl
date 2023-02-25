@@ -8,32 +8,23 @@
 
 %% API functions
 -export([tokenize/1, tokenize/2,
-         tokenize_file/1, tokenize_file/2,
-         compile/1, compile/2,
-         expr_to_ast/1,
-         normalize_expr/1,
-         merge_sd/1, merge_sd/2,
-         render/1, render/2, render/3]).
+         tokenize_file/1, tokenize_file/2]).
 
-%% Types
--export_type([dynamic/0, tokens/0]).
-
-%% Includes
 -ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
+%% Test functions
 -export([markers/0,
          init/1,
          handle_expr/4, handle_text/3, handle_body/1]).
 -endif.
 
-%% Defines
--define(DEFAULT_ENGINE, eel_smart_engine).
--define(DEFAULT_ENGINE_OPTS, #{
-    % capitalize bindings keys
-    % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
-    % note: eval expects capitalized atoms
-    cbkeys => false
-}).
+%% Types
+-export_type([dynamic/0, tokens/0]).
+
+%% Includes
+-include("eel.hrl").
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 %% Types
 -type dynamic() :: term().
@@ -82,93 +73,6 @@ tokenize_file(Filename) ->
 tokenize_file(Filename, Opts) ->
     {ok, Bin} = file:read_file(Filename),
     tokenize(Bin, Opts).
-
-%% -----------------------------------------------------------------------------
-%% @doc compile/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec compile(tokens()) -> list().
-
-compile(Tokens) ->
-    compile(Tokens, ?DEFAULT_ENGINE_OPTS).
-
-%% -----------------------------------------------------------------------------
-%% @doc compile/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec compile(tokens(), map()) -> list().
-
-compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
-    Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
-    State = Eng:init(Opts),
-    DAST = do_compile(Dynamic, Eng, State),
-    SAST = lists:map(fun(S) -> expr_to_ast(["<<\"", S, "\">>"]) end, Static),
-    merge_sd(SAST, DAST).
-
-%% -----------------------------------------------------------------------------
-%% @doc expr_to_ast/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec expr_to_ast(binary() | string()) -> eel_engine:ast().
-
-expr_to_ast(Expr) ->
-    {ok, Tokens, _} = erl_scan:string(normalize_expr(Expr)),
-    {ok, AST} = erl_parse:parse_exprs(Tokens),
-    AST.
-
-%% -----------------------------------------------------------------------------
-%% @doc normalize_expr/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec normalize_expr(binary() | string()) -> string().
-
-normalize_expr(Expr) ->
-    erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
-
-%% -----------------------------------------------------------------------------
-%% @doc merge_sd/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec merge_sd(tokens()) -> list().
-
-merge_sd({Static, Dynamic}) ->
-    merge_sd(Static, Dynamic).
-
-%% -----------------------------------------------------------------------------
-%% @doc merge_sd/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec merge_sd([binary()], list()) -> list().
-
-merge_sd(Static, Dynamic) ->
-    do_merge_sd(Static, Dynamic, []).
-
-%% -----------------------------------------------------------------------------
-%% @doc render/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(list()) -> binary().
-
-render(AST) ->
-    render(AST, #{}).
-
-%% -----------------------------------------------------------------------------
-%% @doc render/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(list(), map() | proplists:proplist()) -> binary().
-
-render(ASTList, Bindings) ->
-    render(ASTList, Bindings, ?DEFAULT_ENGINE_OPTS).
-
-%% -----------------------------------------------------------------------------
-%% @doc render/3.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(list(), map() | proplists:proplist(), map()) -> binary().
-
-render(ASTList, Bindings, Opts) ->
-    erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
 
 %%%=============================================================================
 %%% Internal functions
@@ -269,53 +173,6 @@ do_expr_position(<<>>, EndMarker, Pos) ->
 add_marker_length(Marker, {Ln, Col}) ->
     {Ln, Col + length(Marker)}.
 
-do_compile([D | Dynamic], Eng, State) ->
-    NewState = Eng:handle_compile(D, State),
-    do_compile(Dynamic, Eng, NewState);
-do_compile([], Eng, State) ->
-    Eng:handle_ast(State).
-
-do_merge_sd([S | Static], [D | Dynamic], Acc) ->
-    do_merge_sd(Static, Dynamic, [D, S | Acc]);
-do_merge_sd([S | Static], [], Acc) ->
-    do_merge_sd(Static, [], [S | Acc]);
-do_merge_sd([], [], Acc) ->
-    lists:reverse(Acc);
-do_merge_sd([], Dynamic, Acc) ->
-    lists:reverse(Dynamic, Acc).
-
-eval(AST, Bindings0, Opts) ->
-    Bindings =
-        case maps:find(cbkeys, Opts) of
-            {ok, true} ->
-                capitalize_keys(Bindings0);
-            _ ->
-                Bindings0
-        end,
-    {value, Binary, _} = erl_eval:exprs(AST, Bindings),
-    Binary.
-
-capitalize_keys(Bindings) when is_list(Bindings) ->
-    lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
-capitalize_keys(Bindings) when is_map(Bindings) ->
-    capitalize_keys(proplists:from_map(Bindings)).
-
-capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
-    capitalize(T, <<(H - 32)>>);
-capitalize(<<_, T/binary>>) ->
-    capitalize(T);
-capitalize(Atom) when is_atom(Atom) ->
-    capitalize(atom_to_binary(Atom));
-capitalize(List) when is_list(List) ->
-    capitalize(list_to_binary(List)).
-
-capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
-    capitalize(T, <<Acc/binary, (H - 32)>>);
-capitalize(<<H, T/binary>>, Acc) ->
-    capitalize(T, <<Acc/binary, H>>);
-capitalize(<<>>, Acc) ->
-    binary_to_existing_atom(Acc).
-
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -359,16 +216,5 @@ handle_text({Ln, Col}, Text, Acc) ->
 
 handle_body(Tokens) ->
     lists:reverse(Tokens).
-
-% Support
-
-capitalize_test() ->
-    [?assertEqual('FooBar', capitalize(<<"foo_bar">>)),
-     ?assertEqual('FooBar', capitalize("foo_bar")),
-     ?assertEqual('FooBar', capitalize(foo_bar))].
-
-capitalize_keys_test() ->
-    [?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])),
-     ?assertEqual([{'FooBar', baz}], capitalize_keys(#{<<"foo_bar">> => baz}))].
 
 -endif.

@@ -15,46 +15,46 @@
 
 compile(Bin) ->
     Tokens = eel_tokenizer:tokenize(Bin),
-    eel_tokenizer:compile(Tokens).
+    eel_compiler:compile(Tokens).
 
 compile(Bin, Opts) ->
     Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    eel_tokenizer:compile(Tokens, Opts).
+    eel_compiler:compile(Tokens, Opts).
 
 compile_file(Filename) ->
     Tokens = eel_tokenizer:tokenize_file(Filename),
-    eel_tokenizer:compile(Tokens).
+    eel_compiler:compile(Tokens).
 
 compile_file(Filename, Opts) ->
     Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
-    eel_tokenizer:compile(Tokens, Opts).
+    eel_compiler:compile(Tokens, Opts).
 
 render(Bin) ->
     Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_tokenizer:compile(Tokens),
-    eel_tokenizer:render(AST).
+    AST = eel_compiler:compile(Tokens),
+    eel_renderer:render(AST).
 
 render(Bin, Bindings) ->
     Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_tokenizer:compile(Tokens),
-    eel_tokenizer:render(AST, Bindings).
+    AST = eel_compiler:compile(Tokens),
+    eel_renderer:render(AST, Bindings).
 
 render(Bin, Bindings, Opts) ->
     Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    AST = eel_tokenizer:compile(Tokens, Opts),
-    eel_tokenizer:render(AST, Bindings, Opts).
+    AST = eel_compiler:compile(Tokens, Opts),
+    eel_renderer:render(AST, Bindings, Opts).
 
 render_file(Filename) ->
     Tokens = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_tokenizer:compile(Tokens),
-    eel_tokenizer:render(AST).
+    AST = eel_compiler:compile(Tokens),
+    eel_renderer:render(AST).
 
 render_file(Filename, Bindings) ->
     Tokens = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_tokenizer:compile(Tokens),
-    eel_tokenizer:render(AST, Bindings).
+    AST = eel_compiler:compile(Tokens),
+    eel_renderer:render(AST, Bindings).
 
 render_file(Filename, Bindings, Opts) ->
     Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
-    AST = eel_tokenizer:compile(Tokens, Opts),
-    eel_tokenizer:render(AST, Bindings, Opts).
+    AST = eel_compiler:compile(Tokens, Opts),
+    eel_renderer:render(AST, Bindings, Opts).

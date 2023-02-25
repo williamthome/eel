@@ -15,7 +15,7 @@
          handle_compile/2, handle_ast/1]).
 
 %% Includes
--include("eel.hrl").
+-include("eel_engine.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -97,7 +97,7 @@ handle_body(#state{acc = Tokens}) ->
 %% compile callbacks
 
 handle_compile(Token, #state{opts = Opts} = State) ->
-    push(eel_tokenizer:expr_to_ast(compile(Token, Opts)), State).
+    push(eel_compiler:expr_to_ast(compile(Token, Opts)), State).
 
 handle_ast(#state{acc = AST}) ->
     lists:reverse(AST).
@@ -218,7 +218,7 @@ compile(Tokens, Opts) when is_list(Tokens) ->
 compile({nested_expr, Tokens}, Opts) ->
     Expr0 = lists:map(fun(S) when is_binary(S) -> <<"<<\"", S/binary, "\">>">>;
                          (Token) -> compile(Token, Opts) end,
-                      eel_tokenizer:merge_sd(Tokens)),
+                      eel_compiler:merge_sd(Tokens)),
     Expr1 = lists:join(", ", Expr0),
     Expr = erlang:iolist_to_binary([" erlang:iolist_to_binary([", Expr1, "])"]),
     wrap_expr(Expr);
@@ -458,12 +458,12 @@ handle_render_test() ->
         "<%  .%>"
     >>,
     Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_tokenizer:compile(Tokens),
+    AST = eel_compiler:compile(Tokens),
     Bindings = #{
         'Title' => <<"EEl">>,
         'List' => [foo, bar, baz]
     },
-    Result = eel_tokenizer:render(AST, Bindings),
+    Result = eel_renderer:render(AST, Bindings),
     ?assertEqual(Expected, Result).
 
 -endif.
