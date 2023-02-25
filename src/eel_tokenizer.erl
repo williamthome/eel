@@ -205,10 +205,11 @@ match_markers_start(_, <<>>) ->
 match_markers_start(Markers, Bin) ->
     lists:filtermap(
         fun({StartMarker, _} = Marker) ->
-            StartMarkerLength = length(StartMarker),
+            StartMarkerBin = <<(list_to_binary(StartMarker))/binary, 32>>,
+            StartMarkerLength = size(StartMarkerBin),
             case size(Bin) >= StartMarkerLength andalso
                  binary:split(Bin,
-                              list_to_binary(StartMarker),
+                              StartMarkerBin,
                               [{scope, {0, StartMarkerLength}}])
             of
                 [<<>>, Rest] -> {true, {Marker, Rest}};
@@ -221,10 +222,11 @@ match_markers_start(Markers, Bin) ->
 match_markers_end(Markers) ->
     lists:filtermap(
         fun({{_, EndMarker} = Marker, Bin}) ->
-            case size(Bin) >= length(EndMarker) andalso
-                 binary:split(Bin, list_to_binary(EndMarker))
+            EndMarkerBin = <<32, (list_to_binary(EndMarker))/binary>>,
+            case size(Bin) >= size(EndMarkerBin) andalso
+                 binary:split(Bin, EndMarkerBin)
             of
-                [Expr, Rest] -> {true, {Marker, string:trim(Expr), Rest}};
+                [Expr, Rest] -> {true, {Marker, Expr, Rest}};
                 _ -> false
             end
         end,

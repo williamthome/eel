@@ -431,8 +431,7 @@ handle_render_test() ->
     >>,
     Bin = <<
         "<h1><%= Title .%></h1>"
-        %% FIXME: Expression inside comment causes exception
-        %%        e.g.: "<%% <h2><%= Foo .%></h2> %%>"
+        "<%% <h2><%= Foo .%></h2> %%>"
         "<ul>"
         "<%= lists:map(fun(Item) -> %>"
         "<li><%= Item .%></li>"
@@ -447,7 +446,7 @@ handle_render_test() ->
         "<% end, lists:seq(1, Length)) .%>"
         "</ul>"
         "<% ; false -> <<\"Empty list\">> end .%>"
-        "<% .%>"
+        "<%  .%>"
     >>,
     Tokens = eel_tokenizer:tokenize(Bin),
     AST = eel_tokenizer:compile(Tokens),
