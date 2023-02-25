@@ -1,2 +1,0 @@
-<h1><%= Foo .%></h1>
-<%= eel_test_support:compile_file(<<"bar.html.eel">>) .%>
