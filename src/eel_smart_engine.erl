@@ -1,3 +1,9 @@
+%%%-----------------------------------------------------------------------------
+%%% @author William Fank Thomé [https://github.com/williamthome]
+%%% @copyright 2023 William Fank Thomé
+%%% @doc EEl default engine module.
+%%% @end
+%%%-----------------------------------------------------------------------------
 -module(eel_smart_engine).
 
 -behaviour(eel_engine).
