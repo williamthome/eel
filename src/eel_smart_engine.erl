@@ -225,33 +225,6 @@ wrap_expr_end(Expr) ->
 wrap_expr(Expr) ->
     wrap_expr_end(wrap_expr_begin(Expr)).
 
-% TODO: Retrieve funs vars
-% retrieve_vars(Bin) ->
-%     {ok, Tokens, _} = erl_scan:string(erlang:binary_to_list(Bin)),
-%     MaybeAcc =
-%         fun(Var, VAcc) ->
-%             case lists:member(Var, VAcc) of
-%                 true -> VAcc;
-%                 false -> [Var | VAcc]
-%             end
-%         end,
-%     {_, Vars} =
-%         lists:foldl(
-%             fun
-%                 ({var, _, Var} = Token, {[{':=', _} | _] = TAcc, VAcc}) ->
-%                     {[Token | TAcc], MaybeAcc(Var, VAcc)};
-%                 ({var, _, _} = Token, {[{'=>', _} | _] = TAcc, VAcc}) ->
-%                     {[Token | TAcc], VAcc};
-%                 ({var, _, Var} = Token, {TAcc, VAcc}) ->
-%                     {[Token | TAcc], MaybeAcc(Var, VAcc)};
-%                 (Token, {TAcc, VAcc}) ->
-%                     {[Token | TAcc], VAcc}
-%             end,
-%             {[], []},
-%             Tokens
-%         ),
-%     Vars.
-
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
