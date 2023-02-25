@@ -2,6 +2,7 @@
 
 %% API functions
 -export([tokenize/1, tokenize/2,
+         tokenize_file/1, tokenize_file/2,
          compile/1, compile/2,
          expr_to_ast/1,
          normalize_expr/1,
@@ -19,6 +20,8 @@
 %% Defines
 -define(DEFAULT_ENGINE, eel_smart_engine).
 -define(DEFAULT_ENGINE_OPTS, #{}).
+
+%% TODO: Types
 
 %%%=============================================================================
 %%% API functions
@@ -39,11 +42,31 @@ tokenize(Bin) ->
 %% -----------------------------------------------------------------------------
 -spec tokenize(binary(), map()) -> list().
 
+%% TODO: Change result to {ok, Tokens} | {error, Reason}
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
     Pos = {1, 1},
     do_tokenize(Bin, Pos, Pos, <<>>, Eng, State).
+
+%% -----------------------------------------------------------------------------
+%% @doc tokenize_file/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec tokenize_file(binary()) -> list().
+
+tokenize_file(Filename) ->
+    tokenize_file(Filename, ?DEFAULT_ENGINE_OPTS).
+
+%% -----------------------------------------------------------------------------
+%% @doc tokenize_file/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec tokenize_file(binary(), map()) -> list().
+
+tokenize_file(Filename, Opts) ->
+    {ok, Bin} = file:read_file(Filename),
+    tokenize(Bin, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile/1.
@@ -262,6 +285,17 @@ tokenize_test() ->
         {text, {{2, 11}, <<"!">>}}
     ],
     ?assertEqual(Expected, tokenize(Bin, #{engine => ?MODULE})).
+
+tokenize_file_test() ->
+    Filename = "/tmp/foo.eel",
+    Bin = <<"Hello,\n{{ World }}!">>,
+    ok = file:write_file(Filename, Bin),
+    Expected = [
+        {text, {{1, 1}, <<"Hello,">>}},
+        {expr, {{2, 1}, {"{{", "}}"}, <<"World">>}},
+        {text, {{2, 11}, <<"!">>}}
+    ],
+    ?assertEqual(Expected, tokenize_file(Filename, #{engine => ?MODULE})).
 
 % Engine
 
