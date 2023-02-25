@@ -55,29 +55,29 @@
 %%% eel_engine callbacks
 %%%=============================================================================
 
-markers() -> [{"<%=", ".%>"},
-              {"<%=",  "%>"},
-              {"<%",   "%>"},
-              {"<%",  ".%>"},
-              {"<%:", ":%>"},
-              {"<%%", "%%>"}].
+markers() -> [{expr,       {"<%=", ".%>"}},
+              {start_expr, {"<%=",  "%>"}},
+              {mid_expr,   {"<%",   "%>"}},
+              {end_expr,   {"<%",  ".%>"}},
+              {debug,      {"<%:", ":%>"}},
+              {comment,    {"<%%", "%%>"}}].
 
 init(Opts) ->
     #state{opts = Opts}.
 
 %% tokenize callbacks
 
-handle_expr(_Pos, {"<%=", ".%>"}, Expr, State) ->
+handle_expr(_Pos, expr, Expr, State) ->
     push(?expr(Expr), State);
-handle_expr(_Pos, {"<%=", "%>"}, Expr, State) ->
+handle_expr(_Pos, start_expr, Expr, State) ->
     push(?start_expr(Expr), State);
-handle_expr(_Pos, {"<%", "%>"}, Expr, State) ->
+handle_expr(_Pos, mid_expr, Expr, State) ->
     push(?mid_expr(Expr), State);
-handle_expr(_Pos, {"<%", ".%>"}, Expr, State) ->
+handle_expr(_Pos, end_expr, Expr, State) ->
     push(?end_expr(Expr), State);
-handle_expr(_Pos, {"<%:", ":%>"}, Expr, State) ->
+handle_expr(_Pos, debug, Expr, State) ->
     push(?debug(Expr), State);
-handle_expr(_Pos, {"<%%", "%%>"}, Expr, State) ->
+handle_expr(_Pos, comment, Expr, State) ->
     push(?comment(Expr), State);
 handle_expr(Pos, Marker, Expr, _State) ->
     ?unknown_marker_error({Pos, Marker, Expr}).
@@ -242,49 +242,49 @@ handle_expr_test() ->
             "Should return expr token",
             ?assertEqual(
                 #state{acc = [{expr, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%=", ".%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
                 #state{acc = [{start_expr, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%=", "%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, start_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
                 #state{acc = [{mid_expr, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%", "%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, mid_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
                 #state{acc = [{end_expr, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%", ".%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, end_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return debug token",
             ?assertEqual(
                 #state{acc = [{debug, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%:", ":%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, debug, <<"Foo">>, #state{})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
                 #state{acc = [{comment, <<"Foo">>}]},
-                handle_expr({1, 1}, {"<%%", "%%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, comment, <<"Foo">>, #state{})
             )
         },
         {
             "Should raise unknown marker error",
             ?assertError(
                 unknown_marker,
-                handle_expr({1, 1}, {"<%.", ".%>"}, <<"Foo">>, #state{})
+                handle_expr({1, 1}, unknown, <<"Foo">>, #state{})
             )
         }
     ].
