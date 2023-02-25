@@ -58,7 +58,6 @@ tokenize(Bin) ->
 %% -----------------------------------------------------------------------------
 -spec tokenize(binary(), map()) -> tokens().
 
-%% TODO: Change result to {ok, Tokens} | {error, Reason}
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
@@ -123,7 +122,6 @@ expr_to_ast(Expr) ->
 %% -----------------------------------------------------------------------------
 -spec normalize_expr(binary() | string()) -> string().
 
-% TODO: Check if expr has dot at the end
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
 
@@ -294,8 +292,7 @@ eval(AST, Bindings0, Opts) ->
             _ ->
                 Bindings0
         end,
-    % TODO: Check if new bindings should be available to nested expressions
-    {value, Binary, _NewBindings} = erl_eval:exprs(AST, Bindings),
+    {value, Binary, _} = erl_eval:exprs(AST, Bindings),
     Binary.
 
 capitalize_keys(Bindings) when is_list(Bindings) ->
