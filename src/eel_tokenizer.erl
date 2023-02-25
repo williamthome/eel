@@ -7,7 +7,7 @@
          expr_to_ast/1,
          normalize_expr/1,
          merge_sd/1, merge_sd/2,
-         render/1, render/2]).
+         render/1, render/2, render/3]).
 
 %% Includes
 -ifdef(TEST).
@@ -19,7 +19,12 @@
 
 %% Defines
 -define(DEFAULT_ENGINE, eel_smart_engine).
--define(DEFAULT_ENGINE_OPTS, #{}).
+-define(DEFAULT_ENGINE_OPTS, #{
+    % capitalize bindings keys
+    % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
+    % note: eval expects capitalized atoms
+    cbkeys => false
+}).
 
 %% TODO: Types
 
@@ -145,18 +150,16 @@ render(AST) ->
 -spec render(list(), map() | proplists:proplist()) -> binary().
 
 render(ASTList, Bindings) ->
-    erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings) end, ASTList)).
+    render(ASTList, Bindings, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
-%% @doc eval/2.
+%% @doc render/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec eval(list(), map() | proplists:proplist()) -> binary().
+-spec render(list(), map() | proplists:proplist(), map()) -> binary().
 
-eval(AST, Bindings) ->
-    % TODO: Check if new bindings should be available to nested expressions
-    {value, Binary, _NewBindings} = erl_eval:exprs(AST, Bindings),
-    Binary.
+render(ASTList, Bindings, Opts) ->
+    erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
 
 %%%=============================================================================
 %%% Internal functions
@@ -270,6 +273,39 @@ do_merge_sd([], [], Acc) ->
 do_merge_sd([], Dynamic, Acc) ->
     lists:reverse(Dynamic, Acc).
 
+eval(AST, Bindings0, Opts) ->
+    Bindings =
+        case maps:find(cbkeys, Opts) of
+            {ok, true} ->
+                capitalize_keys(Bindings0);
+            _ ->
+                Bindings0
+        end,
+    % TODO: Check if new bindings should be available to nested expressions
+    {value, Binary, _NewBindings} = erl_eval:exprs(AST, Bindings),
+    Binary.
+
+capitalize_keys(Bindings) when is_list(Bindings) ->
+    lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
+capitalize_keys(Bindings) when is_map(Bindings) ->
+    capitalize_keys(proplists:from_map(Bindings)).
+
+capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
+    capitalize(T, <<(H - 32)>>);
+capitalize(<<_, T/binary>>) ->
+    capitalize(T);
+capitalize(Atom) when is_atom(Atom) ->
+    capitalize(atom_to_binary(Atom));
+capitalize(List) when is_list(List) ->
+    capitalize(list_to_binary(List)).
+
+capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
+    capitalize(T, <<Acc/binary, (H - 32)>>);
+capitalize(<<H, T/binary>>, Acc) ->
+    capitalize(T, <<Acc/binary, H>>);
+capitalize(<<>>, Acc) ->
+    binary_to_existing_atom(Acc).
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -313,5 +349,16 @@ handle_text({Ln, Col}, Text, Acc) ->
 
 handle_body(Tokens) ->
     lists:reverse(Tokens).
+
+% Support
+
+capitalize_test() ->
+    [?assertEqual('FooBar', capitalize(<<"foo_bar">>)),
+     ?assertEqual('FooBar', capitalize("foo_bar")),
+     ?assertEqual('FooBar', capitalize(foo_bar))].
+
+capitalize_keys_test() ->
+    [?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])),
+     ?assertEqual([{'FooBar', baz}], capitalize_keys(#{<<"foo_bar">> => baz}))].
 
 -endif.
