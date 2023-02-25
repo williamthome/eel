@@ -26,7 +26,7 @@
 -spec render(list()) -> binary().
 
 render(AST) ->
-    render(AST, #{}).
+    render(AST, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/2.
