@@ -140,6 +140,9 @@ do_parse_tokens_to_sd_1([{mid_expr, _} = H | T], in_expr, Prev, {S, [HD | D]}) -
 do_parse_tokens_to_sd_1([{end_expr, _} = H | T], in_expr, _, {S, [HD | D]}) ->
     {T, H, {S, [lists:reverse([H | HD]) | D]}};
 % Text
+do_parse_tokens_to_sd_1([{text, Text} | T], in_text, {text, PrevText}, {[PrevText | S], D}) ->
+    Concat = <<PrevText/binary, Text/binary>>,
+    do_parse_tokens_to_sd_2(T, {text, Concat}, in_text, Concat, {[Concat | S], D});
 do_parse_tokens_to_sd_1([{text, Text} = H | T], in_text, Prev, {S, D}) ->
     do_parse_tokens_to_sd_2(T, H, in_text, Prev, {[Text | S], D});
 do_parse_tokens_to_sd_1([{text, _} | _] = T, in_expr, Prev, SD) ->
