@@ -9,6 +9,9 @@
          merge_sd/1, merge_sd/2,
          render/1, render/2, render/3]).
 
+%% Types
+-export_type([dynamic/0, tokens/0]).
+
 %% Includes
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -26,7 +29,9 @@
     cbkeys => false
 }).
 
-%% TODO: Types
+%% Types
+-type dynamic() :: term().
+-type tokens() :: {eel_engine:static(), dynamic()}.
 
 %%%=============================================================================
 %%% API functions
@@ -36,7 +41,7 @@
 %% @doc tokenize/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary()) -> list().
+-spec tokenize(binary()) -> tokens().
 
 tokenize(Bin) ->
     tokenize(Bin, ?DEFAULT_ENGINE_OPTS).
@@ -45,7 +50,7 @@ tokenize(Bin) ->
 %% @doc tokenize/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary(), map()) -> list().
+-spec tokenize(binary(), map()) -> tokens().
 
 %% TODO: Change result to {ok, Tokens} | {error, Reason}
 tokenize(Bin, Opts) ->
@@ -58,7 +63,7 @@ tokenize(Bin, Opts) ->
 %% @doc tokenize_file/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(binary()) -> list().
+-spec tokenize_file(file:filename_all()) -> tokens().
 
 tokenize_file(Filename) ->
     tokenize_file(Filename, ?DEFAULT_ENGINE_OPTS).
@@ -67,7 +72,7 @@ tokenize_file(Filename) ->
 %% @doc tokenize_file/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(binary(), map()) -> list().
+-spec tokenize_file(file:filename_all(), map()) -> tokens().
 
 tokenize_file(Filename, Opts) ->
     {ok, Bin} = file:read_file(Filename),
@@ -77,7 +82,7 @@ tokenize_file(Filename, Opts) ->
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile({[binary()], list()}) -> list().
+-spec compile(tokens()) -> list().
 
 compile(Tokens) ->
     compile(Tokens, ?DEFAULT_ENGINE_OPTS).
@@ -86,7 +91,7 @@ compile(Tokens) ->
 %% @doc compile/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile({[binary()], list()}, map()) -> list().
+-spec compile(tokens(), map()) -> list().
 
 compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -99,7 +104,7 @@ compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
 %% @doc expr_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec expr_to_ast(binary() | string()) -> list().
+-spec expr_to_ast(binary() | string()) -> eel_engine:ast().
 
 expr_to_ast(Expr) ->
     {ok, Tokens, _} = erl_scan:string(normalize_expr(Expr)),
@@ -120,7 +125,7 @@ normalize_expr(Expr) ->
 %% @doc merge_sd/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec merge_sd({[binary()], list()}) -> list().
+-spec merge_sd(tokens()) -> list().
 
 merge_sd({Static, Dynamic}) ->
     merge_sd(Static, Dynamic).
