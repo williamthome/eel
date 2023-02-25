@@ -22,7 +22,7 @@
 -type marker_id()   :: atom().
 -type marker()      :: nonempty_string().
 -type marker_def()  :: {marker_id(), {Start :: marker(), End :: marker()}}.
--type expressions() :: {Outside :: expression(), Inside :: expression()}.
+-type expressions() :: {Outer :: expression(), Inner :: expression()}.
 -type options()     :: map().
 
 -export_type([line/0, column/0, expression/0, state/0, token/0, static/0,
