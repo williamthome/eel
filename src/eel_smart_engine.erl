@@ -21,15 +21,15 @@
 -endif.
 
 %% Defines
--define(token(Name), fun(BinOrSD) -> {Name, BinOrSD} end).
--define(text,        ?token(text)).
--define(expr,        ?token(expr)).
--define(start_expr,  ?token(start_expr)).
--define(mid_expr,    ?token(mid_expr)).
--define(end_expr,    ?token(end_expr)).
--define(nested_expr, ?token(nested_expr)).
--define(comment,     ?token(comment)).
--define(debug,       ?token(debug)).
+-define(token(Name),    fun(BinOrSD) -> {Name, BinOrSD} end).
+-define(text,           ?token(text)).
+-define(expr,           ?token(expr)).
+-define(start_expr,     ?token(start_expr)).
+-define(mid_expr,       ?token(mid_expr)).
+-define(end_expr,       ?token(end_expr)).
+-define(nested_expr,    ?token(nested_expr)).
+-define(comment,        ?token(comment)).
+-define(debug,          ?token(debug)).
 -define(is_expr(Token), is_tuple(Token) andalso
                         (element(1, Token) =:= expr orelse
                          element(1, Token) =:= start_expr orelse
@@ -46,10 +46,10 @@
                       | nested_expr
                       | comment
                       | debug.
--type token()   :: {token_name(), binary()}.
--type ast()     :: term().
--type static()  :: eel_engine:static().
--type dynamic() :: list().
+-type token()      :: {token_name(), binary()}.
+-type ast()        :: term().
+-type static()     :: eel_engine:static().
+-type dynamic()    :: list().
 
 %% States
 -record(state, {
