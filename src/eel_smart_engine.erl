@@ -229,6 +229,8 @@ wrap_expr(Expr) ->
 %%% Tests
 %%%=============================================================================
 
+%% TODO: Improve tests
+
 -ifdef(TEST).
 
 handle_expr_test() ->
@@ -295,130 +297,124 @@ handle_text_test() ->
         }
     ].
 
-% FIXME
-% handle_body_test() ->
-%     Bin = <<
-%         "<%= foo .%>"
-%         "<h1>Title</h1>"
-%         "<%: io:format(\"Print but not render me!~n\") :%>"
-%         "<%= case 1 of %>"
-%         "<% 2 -> %><p>Foo</p>"
-%         "<% ; Bar -> %>"
-%             "<p>"
-%                 "<%= case hello =:= world of %>"
-%                 "<% true -> %>"
-%                     "<%= hello .%>"
-%                 "<% ; false -> %>"
-%                     "<p>"
-%                         "<%% This is a comment %%>"
-%                         "<%: ignore_me :%>"
-%                         "<%= case car =:= bus of %>"
-%                         "<% true -> %>"
-%                             "Car"
-%                         "<% ; false -> %>"
-%                             "<%= bus .%>"
-%                         "<% end .%>"
-%                     "</p>"
-%                 "<% end .%>"
-%             "</p>"
-%         "<% end .%>"
-%         "<%= Foo = foo, Foo .%>"
-%         "<footer>Footer</footer>"
-%     >>,
-%     Expected = [
-%         {expr, <<"foo">>},
-%         {text,<<"<h1>Title</h1>">>},
-%         {debug,<<"io:format(\"Print but not render me!~n\")">>},
-%         {start_expr,<<"case 1 of">>},
-%         {mid_expr,<<"2 ->">>},
-%         {text,<<"<p>Foo</p>">>},
-%         {mid_expr,<<"; Bar ->">>},
-%         {text,<<"<p>">>},
-%         {start_expr,<<"case hello =:= world of">>},
-%         {mid_expr,<<"true ->">>},
-%         {expr,<<"hello">>},
-%         {mid_expr,<<"; false ->">>},
-%         {text,<<"<p>">>},
-%         {comment,<<"This is a comment">>},
-%         {debug,<<"ignore_me">>},
-%         {start_expr,<<"case car =:= bus of">>},
-%         {mid_expr,<<"true ->">>},
-%         {text,<<"Car">>},
-%         {mid_expr,<<"; false ->">>},
-%         {expr,<<"bus">>},
-%         {end_expr,<<"end">>},
-%         {text,<<"</p>">>},
-%         {end_expr,<<"end">>},
-%         {text,<<"</p>">>},
-%         {end_expr,<<"end">>},
-%         {expr,<<"Foo = foo, Foo">>},
-%         {text,<<"<footer>Footer</footer>">>}
-%     ],
-%     Result = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
-%     ?assertEqual(Expected, Result).
+handle_body_test() ->
+    Bin = <<
+        "<%= foo .%>"
+        "<h1>Title</h1>"
+        "<%: io:format(\"Print but not render me!~n\") :%>"
+        "<%= case 1 of %>"
+        "<% 2 -> %><p>Foo</p>"
+        "<% ; Bar -> %>"
+            "<p>"
+                "<%= case hello =:= world of %>"
+                "<% true -> %>"
+                    "<%= hello .%>"
+                "<% ; false -> %>"
+                    "<p>"
+                        "<%% This is a comment %%>"
+                        "<%: ignore_me :%>"
+                        "<%= case car =:= bus of %>"
+                        "<% true -> %>"
+                            "Car"
+                        "<% ; false -> %>"
+                            "<%= bus .%>"
+                        "<% end .%>"
+                    "</p>"
+                "<% end .%>"
+            "</p>"
+        "<% end .%>"
+        "<%= Foo = foo, Foo .%>"
+        "<footer>Footer</footer>"
+    >>,
+    Expected = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
+                   <<"<footer>Footer</footer>">>],
+                  [{expr,<<"foo">>},
+                   {debug,<<"io:format(\"Print but not render me!~n\")">>},
+                   [{start_expr,<<"case 1 of">>},
+                    {mid_expr,<<"2 ->">>},
+                    {nested_expr,{[<<"<p>Foo</p>">>],[]}},
+                    {mid_expr,<<"; Bar ->">>},
+                    {nested_expr,
+                        {[<<"<p>">>,<<"</p>">>],
+                         [[{start_expr,<<"case hello =:= world of">>},
+                           {mid_expr,<<"true ->">>},
+                           {expr,<<"hello">>},
+                           {mid_expr,<<"; false ->">>},
+                           {nested_expr,
+                               {[<<"<p>">>,<<>>,<<"</p>">>],
+                                [{debug,<<"ignore_me">>},
+                                 [{start_expr,<<"case car =:= bus of">>},
+                                  {mid_expr,<<"true ->">>},
+                                  {nested_expr,{[<<"Car">>],[]}},
+                                  {mid_expr,<<"; false ->">>},
+                                  {expr,<<"bus">>},
+                                  {end_expr,<<"end">>}]]}},
+                           {end_expr,<<"end">>}]]}},
+                    {end_expr,<<"end">>}],
+                   {expr,<<"Foo = foo, Foo">>}]},
+    Result = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
+    ?assertEqual(Expected, Result).
 
-% FIXME
-% parse_tokens_to_sd_test() ->
-%     Tokens = [
-%         {expr, <<"foo">>},
-%         {text,<<"<h1>Title</h1>">>},
-%         {debug,<<"io:format(\"Print but not render me!~n\")">>},
-%         {start_expr,<<"case 1 of">>},
-%         {mid_expr,<<"2 ->">>},
-%         {text,<<"<p>Foo</p>">>},
-%         {mid_expr,<<"; Bar ->">>},
-%         {text,<<"<p>">>},
-%         {start_expr,<<"case hello =:= world of">>},
-%         {mid_expr,<<"true ->">>},
-%         {expr,<<"hello">>},
-%         {mid_expr,<<"; false ->">>},
-%         {text,<<"<p>">>},
-%         {comment,<<"This is a comment">>},
-%         {debug,<<"ignore_me">>},
-%         {start_expr,<<"case car =:= bus of">>},
-%         {mid_expr,<<"true ->">>},
-%         {text,<<"Car">>},
-%         {mid_expr,<<"; false ->">>},
-%         {expr,<<"bus">>},
-%         {end_expr,<<"end">>},
-%         {text,<<"</p>">>},
-%         {end_expr,<<"end">>},
-%         {text,<<"</p>">>},
-%         {end_expr,<<"end">>},
-%         {expr,<<"Foo = foo, Foo">>},
-%         {text,<<"<footer>Footer</footer>">>}
-%     ],
-%     Expected = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
-%                    <<"<footer>Footer</footer>">>],
-%                   [{expr,<<"foo">>},
-%                    {debug,<<"io:format(\"Print but not render me!~n\")">>},
-%                    [{start_expr,<<"case 1 of">>},
-%                     {mid_expr,<<"2 ->">>},
-%                     {nested_expr,{[<<"<p>Foo</p>">>],[]}},
-%                     {mid_expr,<<"; Bar ->">>},
-%                     {nested_expr,
-%                         {[<<"<p>">>,<<"</p>">>],
-%                          [[{start_expr,<<"case hello =:= world of">>},
-%                            {mid_expr,<<"true ->">>},
-%                            {expr,<<"hello">>},
-%                            {mid_expr,<<"; false ->">>},
-%                            {nested_expr,
-%                                {[<<"<p>">>,<<>>,<<"</p>">>],
-%                                 [{debug,<<"ignore_me">>},
-%                                  [{start_expr,<<"case car =:= bus of">>},
-%                                   {mid_expr,<<"true ->">>},
-%                                   {nested_expr,{[<<"Car">>],[]}},
-%                                   {mid_expr,<<"; false ->">>},
-%                                   {expr,<<"bus">>},
-%                                   {end_expr,<<"end">>}]]}},
-%                            {end_expr,<<"end">>}]]}},
-%                     {end_expr,<<"end">>}],
-%                    {expr,<<"Foo = foo, Foo">>}]},
-%     Result = parse_tokens_to_sd(Tokens),
-%     ?assertEqual(Expected, Result).
+parse_tokens_to_sd_test() ->
+    Tokens = [
+        {expr, <<"foo">>},
+        {text,<<"<h1>Title</h1>">>},
+        {debug,<<"io:format(\"Print but not render me!~n\")">>},
+        {start_expr,<<"case 1 of">>},
+        {mid_expr,<<"2 ->">>},
+        {text,<<"<p>Foo</p>">>},
+        {mid_expr,<<"; Bar ->">>},
+        {text,<<"<p>">>},
+        {start_expr,<<"case hello =:= world of">>},
+        {mid_expr,<<"true ->">>},
+        {expr,<<"hello">>},
+        {mid_expr,<<"; false ->">>},
+        {text,<<"<p>">>},
+        {comment,<<"This is a comment">>},
+        {debug,<<"ignore_me">>},
+        {start_expr,<<"case car =:= bus of">>},
+        {mid_expr,<<"true ->">>},
+        {text,<<"Car">>},
+        {mid_expr,<<"; false ->">>},
+        {expr,<<"bus">>},
+        {end_expr,<<"end">>},
+        {text,<<"</p>">>},
+        {end_expr,<<"end">>},
+        {text,<<"</p>">>},
+        {end_expr,<<"end">>},
+        {expr,<<"Foo = foo, Foo">>},
+        {text,<<"<footer>Footer</footer>">>}
+    ],
+    Expected = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
+                   <<"<footer>Footer</footer>">>],
+                  [{expr,<<"foo">>},
+                   {debug,<<"io:format(\"Print but not render me!~n\")">>},
+                   [{start_expr,<<"case 1 of">>},
+                    {mid_expr,<<"2 ->">>},
+                    {nested_expr,{[<<"<p>Foo</p>">>],[]}},
+                    {mid_expr,<<"; Bar ->">>},
+                    {nested_expr,
+                        {[<<"<p>">>,<<"</p>">>],
+                         [[{start_expr,<<"case hello =:= world of">>},
+                           {mid_expr,<<"true ->">>},
+                           {expr,<<"hello">>},
+                           {mid_expr,<<"; false ->">>},
+                           {nested_expr,
+                               {[<<"<p>">>,<<>>,<<"</p>">>],
+                                [{debug,<<"ignore_me">>},
+                                 [{start_expr,<<"case car =:= bus of">>},
+                                  {mid_expr,<<"true ->">>},
+                                  {nested_expr,{[<<"Car">>],[]}},
+                                  {mid_expr,<<"; false ->">>},
+                                  {expr,<<"bus">>},
+                                  {end_expr,<<"end">>}]]}},
+                           {end_expr,<<"end">>}]]}},
+                    {end_expr,<<"end">>}],
+                   {expr,<<"Foo = foo, Foo">>}]},
+    Result = parse_tokens_to_sd(Tokens),
+    ?assertEqual(Expected, Result).
 
-% TODO: Real test
-handle_compile_test() ->
+handle_render_test() ->
     Tokens = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
                    <<"<footer>Footer</footer>">>],
                   [{expr,<<"foo">>},
@@ -445,7 +441,8 @@ handle_compile_test() ->
                            {end_expr,<<"end">>}]]}},
                     {end_expr,<<"end">>}],
                    {expr,<<"Foo = foo, Foo">>}]},
-    Result = eel_tokenizer:compile(Tokens, #{engine => ?MODULE}),
-    ?debugFmt("[RESULT] ~p", [eel_tokenizer:render(Result)]).
+    Expected = <<"foo<h1>Title</h1><p><p>bus</p></p>foo<footer>Footer</footer>">>,
+    Result = eel_tokenizer:render(eel_tokenizer:compile(Tokens, #{engine => ?MODULE})),
+    ?assertEqual(Expected, Result).
 
 -endif.
