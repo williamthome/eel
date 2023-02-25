@@ -125,7 +125,7 @@ render(ASTList, Bindings) ->
     erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings) end, ASTList)).
 
 eval(AST, Bindings) ->
-    % FIXME: New bindings must be available to nested expressions
+    % TODO: Check if new bindings should be available to nested expressions
     {value, Binary, _NewBindings} = erl_eval:exprs(AST, Bindings),
     Binary.
 
