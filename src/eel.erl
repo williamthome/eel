@@ -8,6 +8,8 @@
 
 -export([compile/1, compile/2,
          compile_file/1, compile_file/2,
+         compile_to_module/2, compile_to_module/3,
+         compile_file_to_module/1, compile_file_to_module/2,
          render/1, render/2, render/3,
          render_file/1, render_file/2, render_file/3]).
 
@@ -28,6 +30,22 @@ compile_file(Filename) ->
 compile_file(Filename, Opts) ->
     Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
     eel_compiler:compile(Tokens, Opts).
+
+compile_to_module(ModName, Bin) ->
+    Tokens = eel_tokenizer:tokenize(Bin),
+    eel_compiler:compile_to_module(ModName, Tokens).
+
+compile_to_module(ModName, Bin, Opts) ->
+    Tokens = eel_tokenizer:tokenize(Bin, Opts),
+    eel_compiler:compile_to_module(ModName, Tokens, Opts).
+
+compile_file_to_module(Filename) ->
+    Tokens = eel_tokenizer:tokenize_file(Filename),
+    eel_compiler:compile_to_module(Filename, Tokens).
+
+compile_file_to_module(Filename, Opts) ->
+    Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
+    eel_compiler:compile_to_module(Filename, Tokens, Opts).
 
 render(Bin) ->
     Tokens = eel_tokenizer:tokenize(Bin),
