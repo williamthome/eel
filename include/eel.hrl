@@ -1,7 +1,7 @@
 -define(unknown_marker_error(Token), begin
-    {{Ln, Col}, {SMkr, EMkr}, Expr} = Token,
+    {{Ln, Col}, Marker, Expr} = Token,
     error(unknown_marker, [{line, Ln},
                            {column, Col},
                            {expression, Expr},
-                           {markers, {SMkr, EMkr}}])
+                           {marker, Marker}])
 end).
