@@ -7,47 +7,13 @@
 -module(eel_renderer).
 
 %% API functions
--export([ render/1
-        , render/2
-        , render/3
-        , snapshot/2
-        , snapshot/3
-        , snapshot/4
-        , snapshot/6
-        ]).
-
-%% Types
--export_type([ bindings/0
-             , dynamic/0
-             , changes/0
-             , snapshot/0
-             , result/0
-             ]).
+-export([render/1, render/2, render/3]).
 
 %% Includes
--include("eel_core.hrl").
--include_lib("kernel/include/logger.hrl").
-
+-include("eel.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
-
-%% Type
--type bindings() :: map().
--type static()   :: eel_engine:static().
--type dynamic()  :: undefined | [binary()].
--type ast()      :: eel_engine:ast().
--type changes()  :: [{non_neg_integer(), binary()}].
-% TODO: Maybe change snapshot to a opaque record
--type snapshot() :: #{ static   => static()
-                     , dynamic  => dynamic()
-                     , ast      => ast()
-                     , bindings => bindings()
-                     , vars     => [atom()]
-                     , changes  => changes()
-                     }.
--type options()  :: map().
--type result()   :: {ok, snapshot()}.
 
 %%%=============================================================================
 %%% API functions
@@ -57,218 +23,64 @@
 %% @doc render/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Snapshot) -> Result
-    when Snapshot :: snapshot()
-       , Result   :: result()
-       .
+-spec render(list()) -> binary().
 
-render(Snapshot) ->
-    render(#{}, Snapshot, ?DEFAULT_ENGINE_OPTS).
+render(AST) ->
+    render(AST, #{}).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot) -> Result
-    when Bindings :: bindings()
-       , Snapshot :: snapshot()
-       , Result   :: result()
-       .
+-spec render(list(), map() | proplists:proplist()) -> binary().
 
-render(Bindings, Snapshot) ->
-    render(Bindings, Snapshot, ?DEFAULT_ENGINE_OPTS).
+render(ASTList, Bindings) ->
+    render(ASTList, Bindings, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot, Opts) -> Result
-    when Bindings :: bindings()
-       , Snapshot :: snapshot()
-       , Opts     :: options()
-       , Result   :: result()
-       .
+-spec render(list(), map() | proplists:proplist(), map()) -> binary().
 
-render( Params0
-      , #{ static   := Static
-         , dynamic  := DynamicSnap
-         , ast      := AST
-         , bindings := BindingsSnap
-         , vars     := Vars
-         }
-      , Opts ) ->
-    Params = normalize_bindings(Params0, Opts),
-    Bindings = maps:merge(BindingsSnap, Params),
-    EvalBindings = Bindings#{'Bindings' => Bindings},
-    {Dynamic0, Changes0} =
-        lists:foldl(
-            fun({Index, IndexVars}, {DAcc, CAcc}) ->
-                case should_eval_exprs(DynamicSnap, Params, IndexVars) of
-                    true ->
-                        {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
-                        try
-                            Bin = eval(EvalAST, EvalBindings),
-                            {[{Index, {Pos, Bin}} | DAcc], [{Index, Bin} | CAcc]}
-                        catch
-                            Class:Reason:Stacktrace ->
-                                ?LOG_ERROR(#{ class => Class
-                                            , reason => Reason
-                                            , stacktrace => Stacktrace
-                                            , ast => EvalAST
-                                            , position => Pos
-                                            }),
-                                erlang:raise(Class, Reason, Stacktrace)
-                        end;
-                    false ->
-                        DCache = proplists:lookup(Index, DynamicSnap),
-                        {[DCache | DAcc], CAcc}
-                end
-            end,
-            {[], []},
-            Vars
-        ),
-    Dynamic = lists:reverse(Dynamic0),
-    Changes = lists:reverse(Changes0),
-    {ok, snapshot(Static, Dynamic, AST, Bindings, Vars, Changes)}.
-
-should_eval_exprs(undefined, _, _) ->
-    true;
-should_eval_exprs(_, Params, Vars) ->
-    lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
-
-contains_any_var(Map, Vars) ->
-    MapKeys = maps:keys(Map),
-    lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, AST) -> Result
-    when Static :: static()
-       , AST    :: ast()
-       , Result :: snapshot()
-       .
-
-snapshot(Static, AST) ->
-    snapshot(Static, undefined, AST).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/3.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST) -> Result
-    when Static  :: static()
-       , Dynamic :: dynamic()
-       , AST     :: ast()
-       , Result  :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST) ->
-    snapshot(Static, Dynamic, AST, #{}).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/4.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings) -> Result
-    when Static   :: static()
-       , Dynamic  :: dynamic()
-       , AST      :: ast()
-       , Bindings :: bindings()
-       , Result   :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST, Bindings) ->
-    Vars = eel_compiler:ast_vars(AST),
-    snapshot(Static, Dynamic, AST, Bindings, Vars, []).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/5.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) -> Result
-    when Static   :: static()
-       , Dynamic  :: dynamic()
-       , AST      :: ast()
-       , Bindings :: bindings()
-       , Vars     :: [atom()]
-       , Changes  :: changes()
-       , Result   :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) ->
-    #{ static   => Static
-     , dynamic  => Dynamic
-     , ast      => AST
-     , bindings => Bindings
-     , vars     => Vars
-     , changes  => Changes
-     }.
+render(ASTList, Bindings, Opts) ->
+    erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Normalize bindings keys to capitalized key, e.g.:
-%%
-%%          #{foo_bar => baz} -> #{'FooBar' => baz}
-%%
-%%      This is for the eval/2, who expects capitalized atoms.
-%% @end
-%% -----------------------------------------------------------------------------
-
-normalize_bindings(Bindings0, Opts) ->
-    capitalize_keys(Bindings0, Opts).
-
-eval(Exprs, Bindings) ->
-    {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
+eval(AST, Bindings0, Opts) ->
+    Bindings =
+        case maps:find(cbkeys, Opts) of
+            {ok, true} ->
+                capitalize_keys(Bindings0);
+            _ ->
+                Bindings0
+        end,
+    {value, Binary, _} = erl_eval:exprs(AST, Bindings),
     Binary.
 
-capitalize_keys(Bindings, Opts) when is_list(Bindings) ->
-    lists:map(fun({K, V}) -> {capitalize(K, Opts), V} end, Bindings);
-capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
-    maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K, Opts) => V} end, #{}, Bindings).
+capitalize_keys(Bindings) when is_list(Bindings) ->
+    lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
+capitalize_keys(Bindings) when is_map(Bindings) ->
+    capitalize_keys(proplists:from_map(Bindings)).
 
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Transform binary, list or atom to capital case. Snake case or camel case
-%%      can be provided to be parsed, e.g.:
-%%
-%%          - snake_case: foo_bar, &lt;&lt;"foo_bar"&gt;&gt;, "foo_bar"
-%%          - camelCase: fooBar, &lt;&lt;"fooBar"&gt;&gt;, "fooBar"
-%%
-%%      The result will be an atom: 'FooBar'.
-%% @end
-%% -----------------------------------------------------------------------------
+capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
+    capitalize(T, <<(H - 32)>>);
+capitalize(<<_, T/binary>>) ->
+    capitalize(T);
+capitalize(Atom) when is_atom(Atom) ->
+    capitalize(atom_to_binary(Atom));
+capitalize(List) when is_list(List) ->
+    capitalize(list_to_binary(List)).
 
-capitalize(Key, Opts) ->
-    capitalize_1(Key, Key, Opts).
-
-capitalize_1(<<H, T/binary>>, _, Opts) when H >= $a, H =< $z ->
-    capitalize_2(T, Opts, <<(H - 32)>>);
-capitalize_1(<<H, _/binary>>, Key, _) when H >= $A, H =< $Z, is_atom(Key) ->
-    Key;
-capitalize_1(<<H, _/binary>> = Key, _, Opts) when H >= $A, H =< $Z ->
-    to_atom(Key, Opts);
-capitalize_1(Atom, Key, Opts) when is_atom(Atom) ->
-    capitalize_1(erlang:atom_to_binary(Atom), Key, Opts);
-capitalize_1(List, Key, Opts) when is_list(List) ->
-    capitalize_1(erlang:list_to_binary(List), Key, Opts).
-
-capitalize_2(<<$_, H, T/binary>>, Opts, Acc) when H >= $a, H =< $z ->
-    capitalize_2(T, Opts, <<Acc/binary, (H - 32)>>);
-capitalize_2(<<H, T/binary>>, Opts, Acc) ->
-    capitalize_2(T, Opts, <<Acc/binary, H>>);
-capitalize_2(<<>>, Opts, Acc) ->
-    to_atom(Acc, Opts).
-
-to_atom(Bin, #{safe_atoms := true}) ->
-    erlang:binary_to_existing_atom(Bin);
-to_atom(Bin, #{}) ->
-    erlang:binary_to_atom(Bin).
+capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
+    capitalize(T, <<Acc/binary, (H - 32)>>);
+capitalize(<<H, T/binary>>, Acc) ->
+    capitalize(T, <<Acc/binary, H>>);
+capitalize(<<>>, Acc) ->
+    binary_to_existing_atom(Acc).
 
 %%%=============================================================================
 %%% Tests
@@ -277,15 +89,12 @@ to_atom(Bin, #{}) ->
 -ifdef(TEST).
 
 capitalize_test() ->
-    [ ?assertEqual('FooBar', capitalize(<<"foo_bar">>, #{}))
-    , ?assertEqual('FooBar', capitalize("foo_bar", #{}))
-    , ?assertEqual('FooBar', capitalize(foo_bar, #{}))
-    , ?assertEqual('FooBar', capitalize(fooBar, #{}))
-    , ?assertEqual('FooBar', capitalize('FooBar', #{}))
-    ].
+    [?assertEqual('FooBar', capitalize(<<"foo_bar">>)),
+     ?assertEqual('FooBar', capitalize("foo_bar")),
+     ?assertEqual('FooBar', capitalize(foo_bar))].
 
 capitalize_keys_test() ->
-    ?assertEqual( [{'FooBar', baz}]
-                , capitalize_keys([{<<"foo_bar">>, baz}], #{}) ).
+    [?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])),
+     ?assertEqual([{'FooBar', baz}], capitalize_keys(#{<<"foo_bar">> => baz}))].
 
 -endif.
