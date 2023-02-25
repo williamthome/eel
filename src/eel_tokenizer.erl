@@ -1,3 +1,9 @@
+%%%-----------------------------------------------------------------------------
+%%% @author William Fank Thomé [https://github.com/williamthome]
+%%% @copyright 2023 William Fank Thomé
+%%% @doc EEl tokenizer module.
+%%% @end
+%%%-----------------------------------------------------------------------------
 -module(eel_tokenizer).
 
 %% API functions

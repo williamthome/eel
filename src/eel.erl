@@ -1,3 +1,9 @@
+%%%-----------------------------------------------------------------------------
+%%% @author William Fank Thomé [https://github.com/williamthome]
+%%% @copyright 2023 William Fank Thomé
+%%% @doc Embedded Erlang library.
+%%% @end
+%%%-----------------------------------------------------------------------------
 -module(eel).
 
 -export([compile/1, compile/2,
