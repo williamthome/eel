@@ -9,8 +9,7 @@
 %% API functions
 -export([compile/1, compile/2,
          compile_to_module/2, compile_to_module/3,
-         bin_ast_form/1, expr_to_ast/1,
-         normalize_expr/1,
+         static_to_ast/1, dynamic_to_ast/1,
          merge_sd/1, merge_sd/2]).
 
 %% Includes
@@ -40,7 +39,7 @@ compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
     DAST = do_compile(Dynamic, Eng, State),
-    SAST = lists:map(fun bin_ast_form/1, Static),
+    SAST = lists:map(fun static_to_ast/1, Static),
     merge_sd(SAST, DAST).
 
 %% -----------------------------------------------------------------------------
@@ -102,33 +101,24 @@ compile_to_module(FileOrModName, Tokens, Opts) ->
     end.
 
 %% -----------------------------------------------------------------------------
-%% @doc bin_ast_form/1.
+%% @doc static_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec bin_ast_form(binary()) -> eel_engine:ast().
+-spec static_to_ast(binary()) -> eel_engine:ast().
 
-bin_ast_form(Bin) ->
+static_to_ast(Bin) ->
     [{bin, 1, [{bin_element, 1, {string, 1, binary_to_list(Bin)}, default, default}]}].
 
 %% -----------------------------------------------------------------------------
-%% @doc expr_to_ast/1.
+%% @doc dynamic_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec expr_to_ast(binary() | string()) -> eel_engine:ast().
+-spec dynamic_to_ast(binary() | string()) -> eel_engine:ast().
 
-expr_to_ast(Expr) ->
+dynamic_to_ast(Expr) ->
     {ok, Tokens, _} = erl_scan:string(normalize_expr(Expr)),
     {ok, AST} = erl_parse:parse_exprs(Tokens),
     AST.
-
-%% -----------------------------------------------------------------------------
-%% @doc normalize_expr/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec normalize_expr(binary() | string()) -> string().
-
-normalize_expr(Expr) ->
-    erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
 
 %% -----------------------------------------------------------------------------
 %% @doc merge_sd/1.
@@ -171,6 +161,9 @@ module_name(Filename) when is_binary(Filename); is_list(Filename) ->
     end;
 module_name(Mod) when is_atom(Mod) ->
     Mod.
+
+normalize_expr(Expr) ->
+    erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
 
 do_merge_sd([S | Static], [D | Dynamic], Acc) ->
     do_merge_sd(Static, Dynamic, [D, S | Acc]);
