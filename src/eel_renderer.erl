@@ -53,7 +53,7 @@ render(ASTList, Bindings, Opts) ->
 
 eval(AST, Bindings0, Opts) ->
     Bindings1 =
-        case maps:find(cbkeys, Opts) of
+        case maps:find(capitalize, Opts) of
             {ok, true} ->
                 capitalize_keys(Bindings0);
             {ok, false} ->
