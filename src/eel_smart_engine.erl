@@ -439,7 +439,7 @@ handle_render_test() ->
         "</ul>"
     >>,
     Bin = <<
-        "<h1><%= Title .%></h1>"
+        "<h1><%= maps:get('Title', Bindings, <<\"EEl\">>) .%></h1>"
         "<%% <h2><%= Foo .%></h2> %%>"
         "<ul>"
         "<%= lists:map(fun(Item) -> %>"
@@ -459,10 +459,7 @@ handle_render_test() ->
     >>,
     Tokens = eel_tokenizer:tokenize(Bin),
     AST = eel_compiler:compile(Tokens),
-    Bindings = #{
-        'Title' => <<"EEl">>,
-        'List' => [foo, bar, baz]
-    },
+    Bindings = #{'List' => [foo, bar, baz], 'V' => #{}},
     Result = eel_renderer:render(AST, Bindings),
     ?assertEqual(Expected, Result).
 
