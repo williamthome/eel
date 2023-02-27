@@ -97,7 +97,7 @@ handle_body(#state{acc = Tokens}) ->
 %% compile callbacks
 
 handle_compile(Token, #state{opts = Opts} = State) ->
-    push(eel_compiler:expr_to_ast(compile(Token, Opts)), State).
+    push(eel_compiler:dynamic_to_ast(compile(Token, Opts)), State).
 
 handle_ast(#state{acc = AST}) ->
     lists:reverse(AST).
