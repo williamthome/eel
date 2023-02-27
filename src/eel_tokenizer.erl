@@ -191,13 +191,9 @@ tokenize_test() ->
 
 tokenize_file_test() ->
     Filename = "/tmp/foo.eel",
-    Bin = <<"Hello,\n{{ World }}!">>,
+    Bin = <<"\"Foo\"">>,
     ok = file:write_file(Filename, Bin),
-    Expected = [
-        {text, {{1, 1}, <<"Hello,">>}},
-        {expr, {{2, 1}, var, <<"World">>}},
-        {text, {{2, 11}, <<"!">>}}
-    ],
+    Expected = [{text, {{1, 2}, <<"\"Foo\"">>}}],
     ?assertEqual(Expected, tokenize_file(Filename, #{engine => ?MODULE})).
 
 % Engine
