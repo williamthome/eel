@@ -44,20 +44,24 @@ render(ASTList, Bindings) ->
 -spec render(list(), map() | proplists:proplist(), map()) -> binary().
 
 render(ASTList, Bindings, Opts) ->
-    erlang:iolist_to_binary(lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
+    erlang:iolist_to_binary(
+        lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
 eval(AST, Bindings0, Opts) ->
-    Bindings =
+    Bindings1 =
         case maps:find(cbkeys, Opts) of
             {ok, true} ->
                 capitalize_keys(Bindings0);
-            _ ->
+            {ok, false} ->
+                Bindings0;
+            error ->
                 Bindings0
         end,
+    Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
     {value, Binary, _} = erl_eval:exprs(AST, Bindings),
     Binary.
 
