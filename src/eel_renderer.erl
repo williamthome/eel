@@ -68,7 +68,7 @@ eval(AST, Bindings0, Opts) ->
 capitalize_keys(Bindings) when is_list(Bindings) ->
     lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
 capitalize_keys(Bindings) when is_map(Bindings) ->
-    capitalize_keys(proplists:from_map(Bindings)).
+    maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K) => V} end, #{}, Bindings).
 
 capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
     capitalize(T, <<(H - 32)>>);
@@ -99,6 +99,6 @@ capitalize_test() ->
 
 capitalize_keys_test() ->
     [?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])),
-     ?assertEqual([{'FooBar', baz}], capitalize_keys(#{<<"foo_bar">> => baz}))].
+     ?assertEqual(#{'FooBar' => baz}, capitalize_keys(#{<<"foo_bar">> => baz}))].
 
 -endif.
