@@ -9,7 +9,7 @@
 %% API functions
 -export([compile/1, compile/2,
          compile_to_module/2, compile_to_module/3,
-         expr_to_ast/1,
+         bin_ast_form/1, expr_to_ast/1,
          normalize_expr/1,
          merge_sd/1, merge_sd/2]).
 
@@ -40,7 +40,7 @@ compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
     DAST = do_compile(Dynamic, Eng, State),
-    SAST = lists:map(fun(S) -> expr_to_ast(["<<\"", S, "\">>"]) end, Static),
+    SAST = lists:map(fun bin_ast_form/1, Static),
     merge_sd(SAST, DAST).
 
 %% -----------------------------------------------------------------------------
@@ -100,6 +100,15 @@ compile_to_module(FileOrModName, Tokens, Opts) ->
                     {error, Reason}
             end
     end.
+
+%% -----------------------------------------------------------------------------
+%% @doc bin_ast_form/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec bin_ast_form(binary()) -> eel_engine:ast().
+
+bin_ast_form(Bin) ->
+    [{bin, 1, [{bin_element, 1, {string, 1, binary_to_list(Bin)}, default, default}]}].
 
 %% -----------------------------------------------------------------------------
 %% @doc expr_to_ast/1.
