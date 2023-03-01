@@ -17,7 +17,7 @@
 -type token()         :: term().
 -type static()        :: [binary()].
 -type dynamic()       :: [token()].
--type ast()           :: list().
+-type ast()           :: erl_syntax:syntaxTree().
 -type position()      :: {line(), column()}.
 -type marker_id()     :: atom().
 -type marker_symbol() :: nonempty_string().
