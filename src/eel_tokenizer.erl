@@ -87,9 +87,9 @@ do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
 do_tokenize(Bin, OldPos, CurPos, Text, Eng, State) ->
     case retrieve_marker(Eng:markers(), Bin) of
         {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
-            StateText = case Text =:= <<>> of
-                            true -> State;
-                            false -> Eng:handle_text(OldPos, Text, State)
+            StateText = case string:trim(Text) of
+                            <<>> -> State;
+                            _ -> Eng:handle_text(OldPos, Text, State)
                         end,
             StateExpr = Eng:handle_expr(CurPos, MarkerId, Expr, StateText),
             NewPos = expr_position(Expr, Marker, CurPos),
