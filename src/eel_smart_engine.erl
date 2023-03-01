@@ -47,7 +47,7 @@
                       | comment
                       | debug.
 -type token()      :: {token_name(), binary()}.
--type ast()        :: term().
+-type ast()        :: eel_engine:ast().
 -type static()     :: eel_engine:static().
 -type dynamic()    :: list().
 
@@ -218,7 +218,7 @@ compile(Tokens, Opts) when is_list(Tokens) ->
 compile({nested_expr, Tokens}, Opts) ->
     Expr0 = lists:map(fun(S) when is_binary(S) -> <<"<<\"", S/binary, "\">>">>;
                          (Token) -> compile(Token, Opts) end,
-                      eel_compiler:merge_sd(Tokens)),
+                      eel_renderer:zip(Tokens)),
     Expr1 = lists:join(", ", Expr0),
     Expr = erlang:iolist_to_binary([" erlang:iolist_to_binary([", Expr1, "])"]),
     wrap_expr(Expr);

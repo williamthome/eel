@@ -7,7 +7,7 @@
 -module(eel_renderer).
 
 %% API functions
--export([render/1, render/2, render/3]).
+-export([render/1, render/2, render/3, zip/1, zip/2]).
 
 %% Includes
 -include("eel.hrl").
@@ -43,9 +43,27 @@ render(ASTList, Bindings) ->
 %% -----------------------------------------------------------------------------
 -spec render(list(), map() | proplists:proplist(), map()) -> binary().
 
-render(ASTList, Bindings, Opts) ->
-    erlang:iolist_to_binary(
-        lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, ASTList)).
+render({Static, DynamicAST}, Bindings, Opts) ->
+    Dynamic = lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, DynamicAST),
+    unicode:characters_to_nfc_binary(zip(Static, Dynamic)).
+
+%% -----------------------------------------------------------------------------
+%% @doc zip/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec zip(eel_tokenizer:tokens()) -> list().
+
+zip({Static, Dynamic}) ->
+    zip(Static, Dynamic).
+
+%% -----------------------------------------------------------------------------
+%% @doc zip/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec zip([binary()], list()) -> list().
+
+zip(Static, Dynamic) ->
+    do_zip(Static, Dynamic, []).
 
 %%%=============================================================================
 %%% Internal functions
@@ -64,6 +82,15 @@ eval(AST, Bindings0, Opts) ->
     Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
     {value, Binary, _} = erl_eval:exprs(AST, Bindings),
     Binary.
+
+do_zip([S | Static], [D | Dynamic], Acc) ->
+    do_zip(Static, Dynamic, [D, S | Acc]);
+do_zip([S | Static], [], Acc) ->
+    do_zip(Static, [], [S | Acc]);
+do_zip([], [], Acc) ->
+    lists:reverse(Acc);
+do_zip([], Dynamic, Acc) ->
+    lists:reverse(Dynamic, Acc).
 
 capitalize_keys(Bindings) when is_list(Bindings) ->
     lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
