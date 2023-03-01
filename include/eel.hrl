@@ -3,5 +3,5 @@
     % capitalize bindings keys
     % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
     % note: eval expects capitalized atoms
-    capitalize => false
+    capitalize => true
 }).
