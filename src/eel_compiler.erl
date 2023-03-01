@@ -9,8 +9,7 @@
 %% API functions
 -export([compile/1, compile/2,
          compile_to_module/2, compile_to_module/3,
-         static_to_ast/1, dynamic_to_ast/1,
-         merge_sd/1, merge_sd/2]).
+         dynamic_to_ast/1]).
 
 %% Includes
 -include("eel.hrl").
@@ -24,7 +23,7 @@
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_tokenizer:tokens()) -> list().
+-spec compile(eel_tokenizer:tokens()) -> {eel_engine:static(), eel_engine:dynamic()}.
 
 compile(Tokens) ->
     compile(Tokens, ?DEFAULT_ENGINE_OPTS).
@@ -33,14 +32,13 @@ compile(Tokens) ->
 %% @doc compile/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_tokenizer:tokens(), map()) -> list().
+-spec compile(eel_tokenizer:tokens(), map()) -> {eel_engine:static(), eel_engine:dynamic()}.
 
 compile({Static, Dynamic}, Opts) when is_list(Static), is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
-    DAST = do_compile(Dynamic, Eng, State),
-    SAST = lists:map(fun static_to_ast/1, Static),
-    merge_sd(SAST, DAST).
+    DynamicAST = do_compile(Dynamic, Eng, State),
+    {Static, DynamicAST}.
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_to_module/2.
@@ -101,15 +99,6 @@ compile_to_module(FileOrModName, Tokens, Opts) ->
     end.
 
 %% -----------------------------------------------------------------------------
-%% @doc static_to_ast/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec static_to_ast(binary()) -> eel_engine:ast().
-
-static_to_ast(Bin) ->
-    [{bin, 1, [{bin_element, 1, {string, 1, binary_to_list(Bin)}, default, default}]}].
-
-%% -----------------------------------------------------------------------------
 %% @doc dynamic_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
@@ -119,24 +108,6 @@ dynamic_to_ast(Expr) ->
     {ok, Tokens, _} = erl_scan:string(normalize_expr(Expr)),
     {ok, AST} = erl_parse:parse_exprs(Tokens),
     AST.
-
-%% -----------------------------------------------------------------------------
-%% @doc merge_sd/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec merge_sd(eel_tokenizer:tokens()) -> list().
-
-merge_sd({Static, Dynamic}) ->
-    merge_sd(Static, Dynamic).
-
-%% -----------------------------------------------------------------------------
-%% @doc merge_sd/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec merge_sd([binary()], list()) -> list().
-
-merge_sd(Static, Dynamic) ->
-    do_merge_sd(Static, Dynamic, []).
 
 %%%=============================================================================
 %%% Internal functions
@@ -164,12 +135,3 @@ module_name(Mod) when is_atom(Mod) ->
 
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
-
-do_merge_sd([S | Static], [D | Dynamic], Acc) ->
-    do_merge_sd(Static, Dynamic, [D, S | Acc]);
-do_merge_sd([S | Static], [], Acc) ->
-    do_merge_sd(Static, [], [S | Acc]);
-do_merge_sd([], [], Acc) ->
-    lists:reverse(Acc);
-do_merge_sd([], Dynamic, Acc) ->
-    lists:reverse(Dynamic, Acc).
