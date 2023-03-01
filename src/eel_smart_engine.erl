@@ -459,7 +459,7 @@ handle_render_test() ->
     >>,
     Tokens = eel_tokenizer:tokenize(Bin),
     AST = eel_compiler:compile(Tokens),
-    Bindings = #{'List' => [foo, bar, baz], 'V' => #{}},
+    Bindings = #{list => [foo, bar, baz]},
     Result = eel_renderer:render(AST, Bindings),
     ?assertEqual(Expected, Result).
 
