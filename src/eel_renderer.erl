@@ -45,8 +45,8 @@ render(ASTList, Bindings) ->
 -spec render({eel_engine:ast(), eel_engine:dynamic()},
              map() | proplists:proplist(), map()) -> binary().
 
-render({Static, DynamicAST}, Bindings, Opts) ->
-    Dynamic = lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, DynamicAST),
+render({Static, AST}, Bindings, Opts) ->
+    Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings, Opts) end, AST),
     unicode:characters_to_nfc_binary(zip(Static, Dynamic)).
 
 %% -----------------------------------------------------------------------------
@@ -62,7 +62,7 @@ zip({Static, Dynamic}) ->
 %% @doc zip/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip([binary()], eel_engine:dynamic()) -> list().
+-spec zip(eel_engine:static(), eel_engine:dynamic()) -> list().
 
 zip(Static, Dynamic) ->
     do_zip(Static, Dynamic, []).
@@ -71,7 +71,7 @@ zip(Static, Dynamic) ->
 %%% Internal functions
 %%%=============================================================================
 
-eval(AST, Bindings0, Opts) ->
+eval(Exprs, Bindings0, Opts) ->
     Bindings1 =
         case maps:find(capitalize, Opts) of
             {ok, true} ->
@@ -82,7 +82,7 @@ eval(AST, Bindings0, Opts) ->
                 Bindings0
         end,
     Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
-    {value, Binary, _} = erl_eval:exprs(AST, Bindings),
+    {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
     Binary.
 
 do_zip([S | Static], [D | Dynamic], Acc) ->
