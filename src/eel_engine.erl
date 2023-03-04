@@ -42,5 +42,5 @@
 -callback handle_body(state()) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
--callback handle_compile(token(), state()) -> state().
--callback handle_ast(state()) -> ast().
+-callback handle_compile(token(), state()) -> {ok, state()} | {error, term()}.
+-callback handle_ast(state()) -> {ok, ast()} | {error, term()}.

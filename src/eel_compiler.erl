@@ -23,7 +23,7 @@
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_engine:dynamic()) -> eel_engine:ast().
+-spec compile(eel_engine:dynamic()) -> {ok, eel_engine:ast()} | {error, term()}.
 
 compile(Dynamic) ->
     compile(Dynamic, ?DEFAULT_ENGINE_OPTS).
@@ -32,7 +32,7 @@ compile(Dynamic) ->
 %% @doc compile/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_engine:dynamic(), map()) -> eel_engine:ast().
+-spec compile(eel_engine:dynamic(), map()) -> {ok, eel_engine:ast()} | {error, term()}.
 
 compile(Dynamic, Opts) when is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -62,56 +62,60 @@ compile_to_module({Static, Dynamic}, FileOrModName, Opts) ->
         true ->
             {ok, Module};
         false ->
-            AST = compile(Dynamic, Opts),
-            Vars = ast_vars(AST),
-            Forms = ?Q(["-module('@module').",
-                        "",
-                        "-export([filename/0,",
-                        "         timestamp/0,",
-                        "         static/0,",
-                        "         ast/0,",
-                        "         vars/0,",
-                        "         compile_opts/0,",
-                        "         render/1,",
-                        "         render/2]).",
-                        "",
-                        "filename() -> _@filename.",
-                        "",
-                        "timestamp() -> _@timestamp.",
-                        "",
-                        "static() -> _@static.",
-                        "",
-                        "ast() -> _@ast.",
-                        "",
-                        "vars() -> _@vars.",
-                        "",
-                        "compile_opts() -> _@compile_opts.",
-                        "",
-                        "render(Bindings) ->",
-                        "    render(Bindings, #{}).",
-                        "",
-                        "render(Bindings, Opts0) ->",
-                        "    Opts = maps:merge(compile_opts(), Opts0),",
-                        "    eel_renderer:render({static(), ast()}, Bindings, Opts).",
-                        ""],
-                        [{module, merl:term(Module)},
-                         {filename, merl:term(
-                            case is_binary(FileOrModName) of
-                                true -> FileOrModName;
-                                false -> undefined
-                            end)},
-                         {timestamp, merl:term(os:timestamp())},
-                         {static, merl:term(Static)},
-                         {ast, merl:term(AST)},
-                         {vars, merl:term(Vars)},
-                         {compile_opts, merl:term(Opts)}]),
-            Forms1 = [erl_syntax:revert(Form) || Form <- Forms],
-            {ok, Module, Bin} = compile:forms(Forms1),
-            ModuleBin = atom_to_binary(Module),
-            ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
-            case code:load_binary(Module, ModuleFileName, Bin) of
-                {module, Module} ->
-                    {ok, Module};
+            case compile(Dynamic, Opts) of
+                {ok, AST} ->
+                    Vars = ast_vars(AST),
+                    Forms = ?Q(["-module('@module').",
+                                "",
+                                "-export([filename/0,",
+                                "         timestamp/0,",
+                                "         static/0,",
+                                "         ast/0,",
+                                "         vars/0,",
+                                "         compile_opts/0,",
+                                "         render/1,",
+                                "         render/2]).",
+                                "",
+                                "filename() -> _@filename.",
+                                "",
+                                "timestamp() -> _@timestamp.",
+                                "",
+                                "static() -> _@static.",
+                                "",
+                                "ast() -> _@ast.",
+                                "",
+                                "vars() -> _@vars.",
+                                "",
+                                "compile_opts() -> _@compile_opts.",
+                                "",
+                                "render(Bindings) ->",
+                                "    render(Bindings, #{}).",
+                                "",
+                                "render(Bindings, Opts0) ->",
+                                "    Opts = maps:merge(compile_opts(), Opts0),",
+                                "    eel_renderer:render({static(), ast()}, Bindings, Opts).",
+                                ""],
+                                [{module, merl:term(Module)},
+                                {filename, merl:term(
+                                    case is_binary(FileOrModName) of
+                                        true -> FileOrModName;
+                                        false -> undefined
+                                    end)},
+                                {timestamp, merl:term(os:timestamp())},
+                                {static, merl:term(Static)},
+                                {ast, merl:term(AST)},
+                                {vars, merl:term(Vars)},
+                                {compile_opts, merl:term(Opts)}]),
+                    Forms1 = [erl_syntax:revert(Form) || Form <- Forms],
+                    {ok, Module, Bin} = compile:forms(Forms1),
+                    ModuleBin = atom_to_binary(Module),
+                    ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
+                    case code:load_binary(Module, ModuleFileName, Bin) of
+                        {module, Module} ->
+                            {ok, Module};
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
                 {error, Reason} ->
                     {error, Reason}
             end
@@ -121,12 +125,15 @@ compile_to_module({Static, Dynamic}, FileOrModName, Opts) ->
 %% @doc dynamic_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec dynamic_to_ast(binary() | string()) -> eel_engine:ast().
+-spec dynamic_to_ast(binary() | string()) -> {ok, eel_engine:ast()} | {error, term()}.
 
 dynamic_to_ast(Expr) ->
-    {ok, Tokens, _} = erl_scan:string(normalize_expr(Expr)),
-    {ok, AST} = erl_parse:parse_exprs(Tokens),
-    AST.
+    case erl_scan:string(normalize_expr(Expr)) of
+        {ok, Tokens, _} ->
+            erl_parse:parse_exprs(Tokens);
+        {error, ErrorInfo, ErrorLocation} ->
+            {error, {ErrorInfo, ErrorLocation}}
+    end.
 
 %% -----------------------------------------------------------------------------
 %% @doc ast_vars/1.
@@ -184,8 +191,12 @@ ast_vars(AST) when is_tuple(AST) ->
 %%%=============================================================================
 
 do_compile([D | Dynamic], Eng, State) ->
-    NewState = Eng:handle_compile(D, State),
-    do_compile(Dynamic, Eng, NewState);
+    case Eng:handle_compile(D, State) of
+        {ok, NewState} ->
+            do_compile(Dynamic, Eng, NewState);
+        {error, Reason} ->
+            {error, Reason}
+    end;
 do_compile([], Eng, State) ->
     Eng:handle_ast(State).
 
