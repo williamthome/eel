@@ -16,28 +16,32 @@
 %% TODO: docs/specs
 
 compile(Bin) ->
-    Tokens = eel_tokenizer:tokenize(Bin),
-    eel_compiler:compile(Tokens).
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
+    AST = eel_compiler:compile(Dynamic),
+    {Static, AST}.
 
 compile(Bin, Opts) ->
-    Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    eel_compiler:compile(Tokens, Opts).
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin, Opts),
+    AST = eel_compiler:compile(Dynamic, Opts),
+    {Static, AST}.
 
 compile_file(Filename) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename),
-    eel_compiler:compile(Tokens).
+    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
+    AST = eel_compiler:compile(Dynamic),
+    {Static, AST}.
 
 compile_file(Filename, Opts) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
-    eel_compiler:compile(Tokens, Opts).
+    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename, Opts),
+    AST = eel_compiler:compile(Dynamic, Opts),
+    {Static, AST}.
 
-compile_to_module(ModName, Bin) ->
+compile_to_module(Bin, ModName) ->
     Tokens = eel_tokenizer:tokenize(Bin),
-    eel_compiler:compile_to_module(ModName, Tokens).
+    eel_compiler:compile_to_module(Tokens, ModName).
 
-compile_to_module(ModName, Bin, Opts) ->
+compile_to_module(Bin, ModName, Opts) ->
     Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    eel_compiler:compile_to_module(ModName, Tokens, Opts).
+    eel_compiler:compile_to_module(Tokens, ModName, Opts).
 
 compile_file_to_module(Filename) ->
     Tokens = eel_tokenizer:tokenize_file(Filename),
@@ -48,31 +52,31 @@ compile_file_to_module(Filename, Opts) ->
     eel_compiler:compile_to_module(Filename, Tokens, Opts).
 
 render(Bin) ->
-    Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Tokens),
-    eel_renderer:render(AST).
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
+    AST = eel_compiler:compile(Dynamic),
+    eel_renderer:render({Static, AST}).
 
 render(Bin, Bindings) ->
-    Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Tokens),
-    eel_renderer:render(AST, Bindings).
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
+    AST = eel_compiler:compile(Dynamic),
+    eel_renderer:render({Static, AST}, Bindings).
 
 render(Bin, Bindings, Opts) ->
-    Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    AST = eel_compiler:compile(Tokens, Opts),
-    eel_renderer:render(AST, Bindings, Opts).
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin, Opts),
+    AST = eel_compiler:compile(Dynamic, Opts),
+    eel_renderer:render({Static, AST}, Bindings, Opts).
 
 render_file(Filename) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_compiler:compile(Tokens),
-    eel_renderer:render(AST).
+    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
+    AST = eel_compiler:compile(Dynamic),
+    eel_renderer:render({Static, AST}).
 
 render_file(Filename, Bindings) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_compiler:compile(Tokens),
-    eel_renderer:render(AST, Bindings).
+    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
+    AST = eel_compiler:compile(Dynamic),
+    eel_renderer:render({Static, AST}, Bindings).
 
 render_file(Filename, Bindings, Opts) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
-    AST = eel_compiler:compile(Tokens, Opts),
-    eel_renderer:render(AST, Bindings, Opts).
+    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename, Opts),
+    AST = eel_compiler:compile(Dynamic, Opts),
+    eel_renderer:render({Static, AST}, Bindings, Opts).
