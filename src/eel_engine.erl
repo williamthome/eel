@@ -39,7 +39,7 @@
 %% tokenize
 -callback handle_expr(position(), marker_id(), expressions(), state()) -> state().
 -callback handle_text(position(), binary(), state()) -> state().
--callback handle_body(state()) -> {static(), dynamic()}.
+-callback handle_body(state()) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
 -callback handle_compile(token(), state()) -> state().

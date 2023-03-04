@@ -38,7 +38,7 @@
 %% @doc tokenize/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary()) -> tokens().
+-spec tokenize(binary()) -> {ok, tokens()} | {error, end_marker_not_found}.
 
 tokenize(Bin) ->
     tokenize(Bin, ?DEFAULT_ENGINE_OPTS).
@@ -47,7 +47,7 @@ tokenize(Bin) ->
 %% @doc tokenize/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary(), map()) -> tokens().
+-spec tokenize(binary(), map()) -> {ok, tokens()} | {error, end_marker_not_found}.
 
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -59,7 +59,7 @@ tokenize(Bin, Opts) ->
 %% @doc tokenize_file/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all()) -> tokens().
+-spec tokenize_file(file:filename_all()) -> {ok, tokens()} | {error, end_marker_not_found}.
 
 tokenize_file(Filename) ->
     tokenize_file(Filename, ?DEFAULT_ENGINE_OPTS).
@@ -68,11 +68,15 @@ tokenize_file(Filename) ->
 %% @doc tokenize_file/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all(), map()) -> tokens().
+-spec tokenize_file(file:filename_all(), map()) -> {ok, tokens()} | {error, end_marker_not_found}.
 
 tokenize_file(Filename, Opts) ->
-    {ok, Bin} = file:read_file(Filename),
-    tokenize(Bin, Opts).
+    case file:read_file(Filename) of
+        {ok, Bin} ->
+            tokenize(Bin, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%%=============================================================================
 %%% Internal functions
@@ -96,14 +100,16 @@ do_tokenize(Bin, OldPos, CurPos, Text, Eng, State) ->
             do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
         false ->
             {BinRest, NewPos, TextAcc} = do_text_acc(Bin, OldPos, Text),
-            do_tokenize(BinRest, OldPos, NewPos, TextAcc, Eng, State)
+            do_tokenize(BinRest, OldPos, NewPos, TextAcc, Eng, State);
+        {error, end_marker_not_found} ->
+            {error, end_marker_not_found}
     end.
 
 retrieve_marker(EngMarkers, Bin) ->
     case match_markers_start(EngMarkers, Bin) of
         [] -> false;
         Markers -> case best_match(match_markers_end(Markers), undefined) of
-                       undefined -> error(end_marker_not_found);
+                       undefined -> {error, end_marker_not_found};
                        Marker -> {true, Marker}
                    end
     end.
