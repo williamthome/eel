@@ -457,10 +457,10 @@ handle_render_test() ->
         "<% ; false -> <<\"Empty list\">> end .%>"
         "<%  .%>"
     >>,
-    Tokens = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Tokens),
+    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
+    AST = eel_compiler:compile(Dynamic),
     Bindings = #{list => [foo, bar, baz]},
-    Result = eel_renderer:render(AST, Bindings),
+    Result = eel_renderer:render({Static, AST}, Bindings),
     ?assertEqual(Expected, Result).
 
 -endif.
