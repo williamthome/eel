@@ -92,7 +92,7 @@ handle_text(_Pos, Text, State) ->
     push(?text(Text), State).
 
 handle_body(#state{acc = Tokens}) ->
-    parse_tokens_to_sd(lists:reverse(Tokens)).
+    {ok, parse_tokens_to_sd(lists:reverse(Tokens))}.
 
 %% compile callbacks
 
@@ -361,7 +361,7 @@ handle_body_test() ->
                            {end_expr,<<"end">>}]]}},
                     {end_expr,<<"end">>}],
                    {expr,<<"Foo = foo, Foo">>}]},
-    Result = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
+    {ok, Result} = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
     ?assertEqual(Expected, Result).
 
 parse_tokens_to_sd_test() ->
@@ -457,7 +457,7 @@ handle_render_test() ->
         "<% ; false -> <<\"Empty list\">> end .%>"
         "<%  .%>"
     >>,
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
+    {ok, {Static, Dynamic}} = eel_tokenizer:tokenize(Bin),
     AST = eel_compiler:compile(Dynamic),
     Bindings = #{list => [foo, bar, baz]},
     Result = eel_renderer:render({Static, AST}, Bindings),
