@@ -16,67 +16,123 @@
 %% TODO: docs/specs
 
 compile(Bin) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Dynamic),
-    {Static, AST}.
+    case eel_tokenizer:tokenize(Bin) of
+        {ok, {Static, Dynamic}} ->
+            AST = eel_compiler:compile(Dynamic),
+            {Static, AST};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile(Bin, Opts) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin, Opts),
-    AST = eel_compiler:compile(Dynamic, Opts),
-    {Static, AST}.
+    case eel_tokenizer:tokenize(Bin, Opts) of
+        {ok, {Static, Dynamic}} ->
+            AST = eel_compiler:compile(Dynamic),
+            {Static, AST};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_file(Filename) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_compiler:compile(Dynamic),
-    {Static, AST}.
+    case eel_tokenizer:tokenize_file(Filename) of
+        {ok, {Static, Dynamic}} ->
+            AST = eel_compiler:compile(Dynamic),
+            {Static, AST};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_file(Filename, Opts) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename, Opts),
-    AST = eel_compiler:compile(Dynamic, Opts),
-    {Static, AST}.
+    case eel_tokenizer:tokenize_file(Filename, Opts) of
+        {ok, {Static, Dynamic}} ->
+            AST = eel_compiler:compile(Dynamic),
+            {Static, AST};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_to_module(Bin, ModName) ->
-    Tokens = eel_tokenizer:tokenize(Bin),
-    eel_compiler:compile_to_module(Tokens, ModName).
+    case eel_tokenizer:tokenize(Bin) of
+        {ok, Tokens} ->
+            eel_compiler:compile_to_module(Tokens, ModName);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_to_module(Bin, ModName, Opts) ->
-    Tokens = eel_tokenizer:tokenize(Bin, Opts),
-    eel_compiler:compile_to_module(Tokens, ModName, Opts).
+    case eel_tokenizer:tokenize(Bin, Opts) of
+        {ok, Tokens} ->
+            eel_compiler:compile_to_module(Tokens, ModName, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_file_to_module(Filename) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename),
-    eel_compiler:compile_to_module(Filename, Tokens).
+    case eel_tokenizer:tokenize_file(Filename) of
+        {ok, Tokens} ->
+            eel_compiler:compile_to_module(Filename, Tokens);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 compile_file_to_module(Filename, Opts) ->
-    Tokens = eel_tokenizer:tokenize_file(Filename, Opts),
-    eel_compiler:compile_to_module(Filename, Tokens, Opts).
+    case eel_tokenizer:tokenize_file(Filename, Opts) of
+        {ok, Tokens} ->
+            eel_compiler:compile_to_module(Filename, Tokens, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render(Bin) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Dynamic),
-    eel_renderer:render({Static, AST}).
+    case eel_tokenizer:tokenize(Bin) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic),
+            eel_renderer:render({Static, AST});
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render(Bin, Bindings) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Dynamic),
-    eel_renderer:render({Static, AST}, Bindings).
+    case eel_tokenizer:tokenize(Bin) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic),
+            eel_renderer:render({Static, AST}, Bindings);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render(Bin, Bindings, Opts) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize(Bin, Opts),
-    AST = eel_compiler:compile(Dynamic, Opts),
-    eel_renderer:render({Static, AST}, Bindings, Opts).
+    case eel_tokenizer:tokenize(Bin, Opts) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic, Opts),
+            eel_renderer:render({Static, AST}, Bindings, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render_file(Filename) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_compiler:compile(Dynamic),
-    eel_renderer:render({Static, AST}).
+    case eel_tokenizer:tokenize_file(Filename) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic),
+            eel_renderer:render({Static, AST});
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render_file(Filename, Bindings) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename),
-    AST = eel_compiler:compile(Dynamic),
-    eel_renderer:render({Static, AST}, Bindings).
+    case eel_tokenizer:tokenize_file(Filename) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic),
+            eel_renderer:render({Static, AST}, Bindings);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 render_file(Filename, Bindings, Opts) ->
-    {Static, Dynamic} = eel_tokenizer:tokenize_file(Filename, Opts),
-    AST = eel_compiler:compile(Dynamic, Opts),
-    eel_renderer:render({Static, AST}, Bindings, Opts).
+    case eel_tokenizer:tokenize_file(Filename, Opts) of
+        {ok, {Static, Dynamic} } ->
+            AST = eel_compiler:compile(Dynamic, Opts),
+            eel_renderer:render({Static, AST}, Bindings, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
