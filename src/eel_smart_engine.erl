@@ -97,10 +97,15 @@ handle_body(#state{acc = Tokens}) ->
 %% compile callbacks
 
 handle_compile(Token, #state{opts = Opts} = State) ->
-    push(eel_compiler:dynamic_to_ast(compile(Token, Opts)), State).
+    case eel_compiler:dynamic_to_ast(compile(Token, Opts)) of
+        {ok, AST} ->
+            {ok, push(AST, State)};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 handle_ast(#state{acc = AST}) ->
-    lists:reverse(AST).
+    {ok, lists:reverse(AST)}.
 
 %%%=============================================================================
 %%% Internal functions
@@ -458,7 +463,7 @@ handle_render_test() ->
         "<%  .%>"
     >>,
     {ok, {Static, Dynamic}} = eel_tokenizer:tokenize(Bin),
-    AST = eel_compiler:compile(Dynamic),
+    {ok, AST} = eel_compiler:compile(Dynamic),
     Bindings = #{list => [foo, bar, baz]},
     Result = eel_renderer:render({Static, AST}, Bindings),
     ?assertEqual(Expected, Result).
