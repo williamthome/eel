@@ -23,7 +23,7 @@
 %% @doc render/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(list()) -> binary().
+-spec render({eel_engine:ast(), eel_engine:dynamic()}) -> binary().
 
 render(AST) ->
     render(AST, ?DEFAULT_ENGINE_OPTS).
@@ -32,7 +32,8 @@ render(AST) ->
 %% @doc render/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(list(), map() | proplists:proplist()) -> binary().
+-spec render({eel_engine:ast(), eel_engine:dynamic()},
+             map() | proplists:proplist()) -> binary().
 
 render(ASTList, Bindings) ->
     render(ASTList, Bindings, ?DEFAULT_ENGINE_OPTS).
@@ -41,7 +42,8 @@ render(ASTList, Bindings) ->
 %% @doc render/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(list(), map() | proplists:proplist(), map()) -> binary().
+-spec render({eel_engine:ast(), eel_engine:dynamic()},
+             map() | proplists:proplist(), map()) -> binary().
 
 render({Static, DynamicAST}, Bindings, Opts) ->
     Dynamic = lists:map(fun(AST) -> eval(AST, Bindings, Opts) end, DynamicAST),
@@ -60,7 +62,7 @@ zip({Static, Dynamic}) ->
 %% @doc zip/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip([binary()], list()) -> list().
+-spec zip([binary()], eel_engine:dynamic()) -> list().
 
 zip(Static, Dynamic) ->
     do_zip(Static, Dynamic, []).
