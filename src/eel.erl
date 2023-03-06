@@ -2,18 +2,20 @@
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @copyright 2023 William Fank Thomé
 %%% @doc Embedded Erlang library.
+%%% TODO: docs/specs
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(eel).
 
--export([compile/1, compile/2,
-         compile_file/1, compile_file/2,
-         compile_to_module/2, compile_to_module/3,
-         compile_file_to_module/1, compile_file_to_module/2,
-         render/1, render/2, render/3,
-         render_file/1, render_file/2, render_file/3]).
+%% API functions
+-export([compile/1, compile/2, compile_file/1, compile_file/2,
+         compile_to_module/2, compile_to_module/3, compile_file_to_module/1,
+         compile_file_to_module/2, compile_file_to_module/3, render/1, render/2,
+         render/3, render_file/1, render_file/2, render_file/3]).
 
-%% TODO: docs/specs
+%%%=============================================================================
+%%% API functions
+%%%=============================================================================
 
 compile(Bin) ->
     case eel_tokenizer:tokenize(Bin) of
@@ -86,15 +88,30 @@ compile_to_module(Bin, ModName, Opts) ->
 compile_file_to_module(Filename) ->
     case eel_tokenizer:tokenize_file(Filename) of
         {ok, Tokens} ->
-            eel_compiler:compile_to_module(Filename, Tokens);
+            eel_compiler:compile_file_to_module(Filename, Tokens);
         {error, Reason} ->
             {error, Reason}
     end.
 
-compile_file_to_module(Filename, Opts) ->
+compile_file_to_module(Filename, Module) when is_atom(Module) ->
+    case eel_tokenizer:tokenize_file(Filename) of
+        {ok, Tokens} ->
+            eel_compiler:compile_file_to_module(Filename, Tokens, Module);
+        {error, Reason} ->
+            {error, Reason}
+    end;
+compile_file_to_module(Filename, Opts) when is_map(Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
         {ok, Tokens} ->
-            eel_compiler:compile_to_module(Filename, Tokens, Opts);
+            eel_compiler:compile_file_to_module(Filename, Tokens, Opts);
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+compile_file_to_module(Filename, Module, Opts) ->
+    case eel_tokenizer:tokenize_file(Filename, Opts) of
+        {ok, Tokens} ->
+            eel_compiler:compile_file_to_module(Filename, Tokens, Module, Opts);
         {error, Reason} ->
             {error, Reason}
     end.
