@@ -7,13 +7,19 @@
 -module(eel_compiler).
 
 %% API functions
--export([compile/1, compile/2,
-         compile_to_module/2, compile_to_module/3,
-         dynamic_to_ast/1, ast_vars/1]).
+-export([compile/1, compile/2, compile_to_module/2, compile_to_module/3,
+         compile_file_to_module/2, compile_file_to_module/3,
+         compile_file_to_module/4, dynamic_to_ast/1, ast_vars/1]).
+
+%% Types
+-export_type([options/0]).
 
 %% Includes
 -include("eel.hrl").
 -include_lib("syntax_tools/include/merl.hrl").
+
+%% Types
+-type options() :: map().
 
 %%%=============================================================================
 %%% API functions
@@ -32,7 +38,8 @@ compile(Dynamic) ->
 %% @doc compile/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_engine:dynamic(), map()) -> {ok, eel_engine:ast()} | {error, term()}.
+-spec compile(eel_engine:dynamic(), options()) -> {ok, eel_engine:ast()}
+                                                  | {error, term()}.
 
 compile(Dynamic, Opts) when is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -43,89 +50,74 @@ compile(Dynamic, Opts) when is_list(Dynamic) ->
 %% @doc compile_to_module/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile_to_module(file:filename_all(), eel_tokenizer:tokens()) ->
-    {ok, module()} | {error, term()}.
+-spec compile_to_module(Tokens, Module) -> Return when
+    Tokens :: eel_tokenizer:tokens(),
+    Module :: module(),
+    Return :: {ok, Module} | {error, term()}.
 
-compile_to_module(FileOrModName, Tokens) ->
-    compile_to_module(FileOrModName, Tokens, ?DEFAULT_ENGINE_OPTS).
+compile_to_module(Tokens, Module) ->
+    compile_to_module(Tokens, Module, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_to_module/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile_to_module(eel_tokenizer:tokens(), file:filename_all(), map()) ->
-    {ok, module()} | {error, term()}.
+-spec compile_to_module(Tokens, Module, Options) -> Return when
+    Tokens  :: eel_tokenizer:tokens(),
+    Module  :: module(),
+    Options :: options(),
+    Return  :: {ok, Module} | {error, term()}.
 
-compile_to_module({Static, Dynamic}, FileOrModName, Opts) ->
-    Module = module_name(FileOrModName),
-    case erlang:module_loaded(Module) of
-        true ->
-            {ok, Module};
-        false ->
-            case compile(Dynamic, Opts) of
-                {ok, AST} ->
-                    Vars = ast_vars(AST),
-                    Forms = ?Q(["-module('@module').",
-                                "",
-                                "-export([filename/0,",
-                                "         timestamp/0,",
-                                "         static/0,",
-                                "         ast/0,",
-                                "         vars/0,",
-                                "         compile_opts/0,",
-                                "         render/1,",
-                                "         render/2]).",
-                                "",
-                                "filename() -> _@filename.",
-                                "",
-                                "timestamp() -> _@timestamp.",
-                                "",
-                                "static() -> _@static.",
-                                "",
-                                "ast() -> _@ast.",
-                                "",
-                                "vars() -> _@vars.",
-                                "",
-                                "compile_opts() -> _@compile_opts.",
-                                "",
-                                "render(Bindings) ->",
-                                "    render(Bindings, #{}).",
-                                "",
-                                "render(Bindings, Opts0) ->",
-                                "    Opts = maps:merge(compile_opts(), Opts0),",
-                                "    eel_renderer:render({static(), ast()}, Bindings, Opts).",
-                                ""],
-                                [{module, merl:term(Module)},
-                                {filename, merl:term(
-                                    case is_binary(FileOrModName) of
-                                        true -> FileOrModName;
-                                        false -> undefined
-                                    end)},
-                                {timestamp, merl:term(os:timestamp())},
-                                {static, merl:term(Static)},
-                                {ast, merl:term(AST)},
-                                {vars, merl:term(Vars)},
-                                {compile_opts, merl:term(Opts)}]),
-                    Forms1 = [erl_syntax:revert(Form) || Form <- Forms],
-                    {ok, Module, Bin} = compile:forms(Forms1),
-                    ModuleBin = atom_to_binary(Module),
-                    ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
-                    case code:load_binary(Module, ModuleFileName, Bin) of
-                        {module, Module} ->
-                            {ok, Module};
-                        {error, Reason} ->
-                            {error, Reason}
-                    end;
-                {error, Reason} ->
-                    {error, Reason}
-            end
-    end.
+compile_to_module(Tokens, Module, Opts) ->
+    do_compile_to_module(Tokens, Module, undefined, Opts).
+
+%% -----------------------------------------------------------------------------
+%% @doc compile_file_to_module/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec compile_file_to_module(Filename, Tokens) -> Return when
+    Filename :: file:filename_all(),
+    Tokens   :: eel_tokenizer:tokens(),
+    Return   :: {ok, module()} | {error, term()}.
+
+compile_file_to_module(Filename, Tokens) ->
+    compile_file_to_module(Tokens, Filename, #{}).
+
+%% -----------------------------------------------------------------------------
+%% @doc compile_file_to_module/3.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec compile_file_to_module(Filename, Tokens, Options) -> Return when
+    Filename :: file:filename_all(),
+    Tokens   :: eel_tokenizer:tokens(),
+    Options  :: options(),
+    Return   :: {ok, module()} | {error, term()}.
+
+compile_file_to_module(Filename, Tokens, Module) when is_atom(Module) ->
+    compile_file_to_module(Tokens, Module, Filename, #{});
+compile_file_to_module(Filename, Tokens, Opts) when is_map(Opts) ->
+    compile_file_to_module(Tokens, file_module(Filename), Filename, Opts).
+
+%% -----------------------------------------------------------------------------
+%% @doc compile_file_to_module/4.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec compile_file_to_module(Filename, Tokens, Module, Options) -> Return when
+    Filename :: file:filename_all(),
+    Tokens   :: eel_tokenizer:tokens(),
+    Module   :: module(),
+    Options  :: options(),
+    Return   :: {ok, Module} | {error, term()}.
+
+compile_file_to_module(Filename, Tokens, Module, Opts) ->
+    do_compile_to_module(Tokens, Module, Filename, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc dynamic_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec dynamic_to_ast(binary() | string()) -> {ok, eel_engine:ast()} | {error, term()}.
+-spec dynamic_to_ast(binary() | string()) -> {ok, eel_engine:ast()}
+                                             | {error, term()}.
 
 dynamic_to_ast(Expr) ->
     case erl_scan:string(normalize_expr(Expr)) of
@@ -200,7 +192,68 @@ do_compile([D | Dynamic], Eng, State) ->
 do_compile([], Eng, State) ->
     Eng:handle_ast(State).
 
-module_name(Filename) when is_binary(Filename); is_list(Filename) ->
+% TODO: recompile/0 function
+do_compile_to_module({Static, Dynamic}, Module, Filename, Opts) ->
+    case erlang:module_loaded(Module) of
+        true ->
+            {ok, Module};
+        false ->
+            case compile(Dynamic, Opts) of
+                {ok, AST} ->
+                    Vars = ast_vars(AST),
+                    Forms = ?Q(["-module('@module').",
+                                "",
+                                "-export([filename/0,",
+                                "         timestamp/0,",
+                                "         static/0,",
+                                "         ast/0,",
+                                "         vars/0,",
+                                "         compile_opts/0,",
+                                "         render/1,",
+                                "         render/2]).",
+                                "",
+                                "file:filename_all() -> _@filename.",
+                                "",
+                                "timestamp() -> _@timestamp.",
+                                "",
+                                "static() -> _@static.",
+                                "",
+                                "ast() -> _@ast.",
+                                "",
+                                "vars() -> _@vars.",
+                                "",
+                                "compile_opts() -> _@compile_opts.",
+                                "",
+                                "render(Bindings) ->",
+                                "    render(Bindings, #{}).",
+                                "",
+                                "render(Bindings, Opts0) ->",
+                                "    Opts = maps:merge(compile_opts(), Opts0),",
+                                "    eel_renderer:render({static(), ast()}, Bindings, Opts).",
+                                ""],
+                               [{module, merl:term(Module)},
+                                {filename, merl:term(Filename)},
+                                {timestamp, merl:term(os:timestamp())},
+                                {static, merl:term(Static)},
+                                {ast, merl:term(AST)},
+                                {vars, merl:term(Vars)},
+                                {compile_opts, merl:term(Opts)}]),
+                    Forms1 = [erl_syntax:revert(Form) || Form <- Forms],
+                    {ok, Module, Bin} = compile:forms(Forms1),
+                    ModuleBin = atom_to_binary(Module),
+                    ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
+                    case code:load_binary(Module, ModuleFileName, Bin) of
+                        {module, Module} ->
+                            {ok, Module};
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
+                {error, Reason} ->
+                    {error, Reason}
+            end
+    end.
+
+file_module(Filename) when is_binary(Filename); is_list(Filename) ->
     Basename =
         case filename:basename(Filename) of
             N when is_binary(N) -> N;
@@ -210,9 +263,7 @@ module_name(Filename) when is_binary(Filename); is_list(Filename) ->
     case catch erlang:binary_to_existing_atom(Name) of
         Atom when is_atom(Atom) -> Atom;
         _ -> erlang:binary_to_atom(Name)
-    end;
-module_name(Mod) when is_atom(Mod) ->
-    Mod.
+    end.
 
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
