@@ -205,6 +205,11 @@ render_file(Filename, Bindings, Opts) ->
 
 -ifdef(TEST).
 
+compile_to_module_test() ->
+    Bin = <<"Hello, World!">>,
+    [?assertMatch({ok, foo}, compile_to_module(Bin, foo)),
+     ?assertMatch({ok, foo}, compile_to_module(Bin, foo, #{}))].
+
 compile_file_to_module_test() ->
     Filename = "/tmp/foo.eel",
     ok = file:write_file(Filename, <<"Hello, World!">>),
