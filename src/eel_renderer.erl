@@ -73,12 +73,10 @@ zip(Static, Dynamic) ->
 
 eval(Exprs, Bindings0, Opts) ->
     Bindings1 =
-        case maps:find(capitalize, Opts) of
-            {ok, true} ->
+        case maps:get(capitalize, Opts, true) of
+            true ->
                 capitalize_keys(Bindings0);
-            {ok, false} ->
-                Bindings0;
-            error ->
+            false ->
                 Bindings0
         end,
     Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
