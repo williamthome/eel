@@ -81,7 +81,7 @@ compile_to_module(Tokens, Module, Opts) ->
     Return   :: {ok, module()} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens) ->
-    compile_file_to_module(Filename, Tokens, #{}).
+    compile_file_to_module(Filename, Tokens, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_file_to_module/3.
@@ -94,7 +94,7 @@ compile_file_to_module(Filename, Tokens) ->
     Return   :: {ok, module()} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens, Module) when is_atom(Module) ->
-    compile_file_to_module(Filename, Tokens, Module, #{});
+    compile_file_to_module(Filename, Tokens, Module, ?DEFAULT_ENGINE_OPTS);
 compile_file_to_module(Filename, Tokens, Opts) when is_map(Opts) ->
     compile_file_to_module(Filename, Tokens, file_module(Filename), Opts).
 
