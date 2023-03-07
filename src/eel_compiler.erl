@@ -69,7 +69,7 @@ compile_to_module(Tokens, Module) ->
     Return  :: {ok, Module} | {error, term()}.
 
 compile_to_module(Tokens, Module, Opts) ->
-    do_compile_to_module(Tokens, Module, undefined, Opts).
+    do_compile_to_module(Tokens, Module, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_file_to_module/2.
@@ -81,7 +81,7 @@ compile_to_module(Tokens, Module, Opts) ->
     Return   :: {ok, module()} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens) ->
-    compile_file_to_module(Tokens, Filename, #{}).
+    compile_file_to_module(Filename, Tokens, #{}).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_file_to_module/3.
@@ -94,9 +94,9 @@ compile_file_to_module(Filename, Tokens) ->
     Return   :: {ok, module()} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens, Module) when is_atom(Module) ->
-    compile_file_to_module(Tokens, Module, Filename, #{});
+    compile_file_to_module(Filename, Tokens, Module, #{});
 compile_file_to_module(Filename, Tokens, Opts) when is_map(Opts) ->
-    compile_file_to_module(Tokens, file_module(Filename), Filename, Opts).
+    compile_file_to_module(Filename, Tokens, file_module(Filename), Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_file_to_module/4.
@@ -110,7 +110,7 @@ compile_file_to_module(Filename, Tokens, Opts) when is_map(Opts) ->
     Return   :: {ok, Module} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens, Module, Opts) ->
-    do_compile_to_module(Tokens, Module, Filename, Opts).
+    do_compile_file_to_module(Filename, Tokens, Module, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc dynamic_to_ast/1.
@@ -192,8 +192,11 @@ do_compile([D | Dynamic], Eng, State) ->
 do_compile([], Eng, State) ->
     Eng:handle_ast(State).
 
+do_compile_to_module(Tokens, Module, Opts) ->
+    do_compile_file_to_module(undefined, Tokens, Module, Opts).
+
 % TODO: recompile/0 function
-do_compile_to_module({Static, Dynamic}, Module, Filename, Opts) ->
+do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
     case erlang:module_loaded(Module) of
         true ->
             {ok, Module};
@@ -212,7 +215,7 @@ do_compile_to_module({Static, Dynamic}, Module, Filename, Opts) ->
                                 "         render/1,",
                                 "         render/2]).",
                                 "",
-                                "file:filename_all() -> _@filename.",
+                                "filename() -> _@filename.",
                                 "",
                                 "timestamp() -> _@timestamp.",
                                 "",
