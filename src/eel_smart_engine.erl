@@ -465,7 +465,7 @@ handle_render_test() ->
     {ok, {Static, Dynamic}} = eel_tokenizer:tokenize(Bin),
     {ok, AST} = eel_compiler:compile(Dynamic),
     Bindings = #{list => [foo, bar, baz]},
-    Result = eel_renderer:render({Static, AST}, Bindings),
+    {Result, _} = eel_renderer:render(Bindings, {Static, AST}),
     ?assertEqual(Expected, Result).
 
 -endif.
