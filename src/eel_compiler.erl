@@ -154,27 +154,37 @@ ast_vars(AST) when is_list(AST) ->
         nowarn_nif_inline,
         nowarn_keywords
     ],
-    case erl_lint:exprs_opt(lists:flatten(AST), [], Opts) of
-        {ok, _Warns} ->
-            [];
-        {error, Errs, _Warns} ->
-            lists:foldl(
-                fun({"nofile", Errs1}, Acc) ->
-                    lists:foldl(
-                        fun
-                            ({_Line, erl_lint, {unbound_var, Var}}, Acc1) ->
-                                [Var | Acc1];
-                            (_, Acc1) ->
-                                Acc1
-                        end,
-                        Acc,
-                        Errs1
-                    )
-                end,
-                [],
-                Errs
-            )
-    end;
+    lists:reverse(
+        lists:foldl(
+            fun({Index, Tree}, Acc) ->
+                Vars =
+                    case erl_lint:exprs_opt(Tree, [], Opts) of
+                        {ok, _Warns} ->
+                            [];
+                        {error, Errs, _Warns} ->
+                            lists:foldl(
+                                fun({"nofile", Errs1}, Acc1) ->
+                                    lists:foldl(
+                                        fun
+                                            ({_Line, erl_lint, {unbound_var, Var}}, Acc2) ->
+                                                [Var | Acc2];
+                                            (_, Acc2) ->
+                                                Acc2
+                                        end,
+                                        Acc1,
+                                        Errs1
+                                    )
+                                end,
+                                [],
+                                Errs
+                            )
+                    end,
+                [{Index, Vars} | Acc]
+            end,
+            [],
+            lists:enumerate(AST)
+        )
+    );
 ast_vars(AST) when is_tuple(AST) ->
     ast_vars([AST]).
 
@@ -213,7 +223,8 @@ do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
                                 "         vars/0,",
                                 "         compile_opts/0,",
                                 "         render/1,",
-                                "         render/2]).",
+                                "         render/2,",
+                                "         render/3]).",
                                 "",
                                 "filename() -> _@filename.",
                                 "",
@@ -230,9 +241,15 @@ do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
                                 "render(Bindings) ->",
                                 "    render(Bindings, #{}).",
                                 "",
-                                "render(Bindings, Opts0) ->",
+                                "render(Bindings, Opts0) when is_map(Opts0) ->",
                                 "    Opts = maps:merge(compile_opts(), Opts0),",
-                                "    eel_renderer:render({static(), ast()}, Bindings, Opts).",
+                                "    eel_renderer:render(Bindings, {static(), ast(), vars()}, Opts);",
+                                "render(Changes, Memo) ->",
+                                "    render(Changes, Memo, #{}).",
+                                "",
+                                "render(Changes, Memo, Opts0) ->",
+                                "    Opts = maps:merge(compile_opts(), Opts0),",
+                                "    eel_renderer:render(Changes, Memo, Opts).",
                                 ""],
                                [{module, merl:term(Module)},
                                 {filename, merl:term(Filename)},
