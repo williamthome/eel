@@ -9,11 +9,17 @@
 %% API functions
 -export([render/1, render/2, render/3, zip/1, zip/2]).
 
+%% Types
+-export_type([result/0]).
+
 %% Includes
 -include("eel.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
+
+%% Types
+-type result() :: tuple().
 
 %%%=============================================================================
 %%% API functions
@@ -23,31 +29,63 @@
 %% @doc render/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render({eel_engine:ast(), eel_engine:dynamic()}) -> binary().
+-spec render(Tokens) -> Result when
+    Tokens :: {eel_engine:static(), eel_engine:ast()},
+    Result :: result().
 
-render(AST) ->
-    render(AST, ?DEFAULT_ENGINE_OPTS).
+render(Tokens) ->
+    render(Tokens, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render({eel_engine:ast(), eel_engine:dynamic()},
-             map() | proplists:proplist()) -> binary().
+-spec render(TokensOrBindings, OptsOrTokens) -> Result when
+    TokensOrBindings :: {eel_engine:static(), eel_engine:ast()} | map(),
+    OptsOrTokens     :: map() | {eel_engine:static(), eel_engine:ast()},
+    Result           :: result().
 
-render(ASTList, Bindings) ->
-    render(ASTList, Bindings, ?DEFAULT_ENGINE_OPTS).
+render(Tokens, Opts) when is_map(Opts) ->
+    render(#{}, Tokens, Opts);
+render(Bindings, Tokens) ->
+    render(Bindings, Tokens, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render({eel_engine:ast(), eel_engine:dynamic()},
-             map() | proplists:proplist(), map()) -> binary().
+-spec render(Bindings, Tokens, Opts) -> Result when
+    Bindings :: map(),
+    Tokens   :: {eel_engine:static(), eel_engine:ast()},
+    Opts     :: map(),
+    Result   :: result().
 
-render({Static, AST}, Bindings, Opts) ->
-    Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings, Opts) end, AST),
-    unicode:characters_to_nfc_binary(zip(Static, Dynamic)).
+render(Bindings, {Static, AST}, Opts) ->
+    Vars = eel_compiler:ast_vars(AST),
+    render(Bindings, {Static, AST, Vars}, Opts);
+render(Bindings0, {Static, AST, Vars}, Opts) ->
+    Bindings1 = normalize_bindings(Bindings0, Opts),
+    Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
+    Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings) end, AST),
+    render_result(Static, AST, Vars, Dynamic, Bindings);
+render(Changes0, {Static, AST, Vars, DynamicMemo, BindingsMemo}, Opts) ->
+    Changes = normalize_bindings(Changes0, Opts),
+    ChangesKeys = maps:keys(Changes),
+    Bindings = maps:merge(BindingsMemo, Changes),
+    Dynamic =
+        lists:map(
+            fun({Index, IndexVars}) ->
+                case lists:any(fun(V) -> lists:member(V, ChangesKeys) end, IndexVars) of
+                    true ->
+                        Exprs = lists:nth(Index, AST),
+                        eval(Exprs, Bindings);
+                    false ->
+                        lists:nth(Index, DynamicMemo)
+                end
+            end,
+            Vars
+        ),
+    render_result(Static, AST, Vars, Dynamic, Bindings).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/1.
@@ -71,15 +109,12 @@ zip(Static, Dynamic) ->
 %%% Internal functions
 %%%=============================================================================
 
-eval(Exprs, Bindings0, Opts) ->
-    Bindings1 =
-        case maps:get(capitalize, Opts, true) of
-            true ->
-                capitalize_keys(Bindings0);
-            false ->
-                Bindings0
-        end,
-    Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
+normalize_bindings(Bindings0, #{capitalize := true}) ->
+    capitalize_keys(Bindings0);
+normalize_bindings(Bindings0, #{}) ->
+    Bindings0.
+
+eval(Exprs, Bindings) ->
     {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
     Binary.
 
@@ -112,6 +147,11 @@ capitalize(<<H, T/binary>>, Acc) ->
     capitalize(T, <<Acc/binary, H>>);
 capitalize(<<>>, Acc) ->
     binary_to_existing_atom(Acc).
+
+render_result(Static, AST, Vars, Dynamic, Bindings) ->
+    Render = unicode:characters_to_nfc_binary(zip(Static, Dynamic)),
+    Memo = {Static, AST, Vars, Dynamic, Bindings},
+    {Render, Memo}.
 
 %%%=============================================================================
 %%% Tests
