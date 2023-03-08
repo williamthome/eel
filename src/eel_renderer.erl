@@ -99,8 +99,8 @@ capitalize_keys(Bindings) when is_map(Bindings) ->
 
 capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
     capitalize(T, <<(H - 32)>>);
-capitalize(<<_, T/binary>>) ->
-    capitalize(T);
+capitalize(<<H, T/binary>>) when H >= $A, H =< $Z ->
+    capitalize(T, <<H>>);
 capitalize(Atom) when is_atom(Atom) ->
     capitalize(atom_to_binary(Atom));
 capitalize(List) when is_list(List) ->
