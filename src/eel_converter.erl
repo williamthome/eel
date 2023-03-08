@@ -49,7 +49,12 @@ to_binary(Int, undefined) when is_integer(Int) ->
 to_binary(Int, Base) when is_integer(Int), is_integer(Base) ->
     erlang:integer_to_binary(Int, Base);
 to_binary(List, undefined) when is_list(List) ->
-    erlang:list_to_binary(List);
+    case io_lib:deep_unicode_char_list(List) of
+        true ->
+            erlang:list_to_binary(List);
+        false ->
+            lists:map(fun to_binary/1, List)
+    end;
 to_binary(Tuple, undefined) when is_tuple(Tuple) ->
     to_binary(erlang:tuple_to_list(Tuple));
 to_binary(PID, undefined) when is_pid(PID) ->
