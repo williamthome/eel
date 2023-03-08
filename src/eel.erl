@@ -139,7 +139,7 @@ render(Bin, Bindings) ->
         {ok, {Static, Dynamic} } ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST}, Bindings);
+                    eel_renderer:render(Bindings, {Static, AST});
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -152,7 +152,7 @@ render(Bin, Bindings, Opts) ->
         {ok, {Static, Dynamic} } ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST}, Bindings, Opts);
+                    eel_renderer:render(Bindings, {Static, AST}, Opts);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -178,7 +178,7 @@ render_file(Filename, Bindings) ->
         {ok, {Static, Dynamic} } ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST}, Bindings);
+                    eel_renderer:render(Bindings, {Static, AST});
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -191,7 +191,7 @@ render_file(Filename, Bindings, Opts) ->
         {ok, {Static, Dynamic} } ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST}, Bindings, Opts);
+                    eel_renderer:render(Bindings, {Static, AST}, Opts);
                 {error, Reason} ->
                     {error, Reason}
             end;
