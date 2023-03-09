@@ -68,10 +68,10 @@ render(Bindings0, {Static, AST, Vars}, Opts) ->
     Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
     Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings) end, AST),
     render_result(Static, AST, Vars, Dynamic, Bindings);
-render(Changes0, {Static, AST, Vars, DynamicMemo, BindingsMemo}, Opts) ->
+render(Changes0, {Static, AST, Vars, DynamicSnap, BindingsSnap}, Opts) ->
     Changes = normalize_bindings(Changes0, Opts),
     ChangesKeys = maps:keys(Changes),
-    Bindings = maps:merge(BindingsMemo, Changes),
+    Bindings = maps:merge(BindingsSnap, Changes),
     Dynamic =
         lists:map(
             fun({Index, IndexVars}) ->
@@ -80,7 +80,7 @@ render(Changes0, {Static, AST, Vars, DynamicMemo, BindingsMemo}, Opts) ->
                         Exprs = lists:nth(Index, AST),
                         eval(Exprs, Bindings);
                     false ->
-                        lists:nth(Index, DynamicMemo)
+                        lists:nth(Index, DynamicSnap)
                 end
             end,
             Vars
@@ -176,8 +176,8 @@ capitalize_2(<<>>, Acc) ->
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
     Render = unicode:characters_to_nfc_binary(zip(Static, Dynamic)),
-    Memo = {Static, AST, Vars, Dynamic, Bindings},
-    {Render, Memo}.
+    Snapshot = {Static, AST, Vars, Dynamic, Bindings},
+    {Render, Snapshot}.
 
 %%%=============================================================================
 %%% Tests
