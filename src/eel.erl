@@ -11,9 +11,11 @@
 -export([compile/1, compile/2, compile_file/1, compile_file/2,
          compile_to_module/2, compile_to_module/3, compile_file_to_module/1,
          compile_file_to_module/2, compile_file_to_module/3, render/1, render/2,
-         render/3, render_file/1, render_file/2, render_file/3]).
+         render/3, render_file/1, render_file/2, render_file/3,
+         default_engine/0, default_engine_opts/0]).
 
 %% Includes
+-include("eel.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -198,6 +200,12 @@ render_file(Filename, Bindings, Opts) ->
         {error, Reason} ->
             {error, Reason}
     end.
+
+default_engine() ->
+    ?DEFAULT_ENGINE.
+
+default_engine_opts() ->
+    ?DEFAULT_ENGINE_OPTS.
 
 %%%=============================================================================
 %%% Tests
