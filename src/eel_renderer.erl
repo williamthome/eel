@@ -120,9 +120,6 @@ zip(Static, Dynamic) ->
 %% -----------------------------------------------------------------------------
 
 normalize_bindings(Bindings0, #{}) ->
-    % capitalize bindings keys
-    % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
-    % NOTE: eval expects capitalized atoms
     capitalize_keys(Bindings0).
 
 eval(Exprs, Bindings) ->
