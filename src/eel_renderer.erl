@@ -109,10 +109,21 @@ zip(Static, Dynamic) ->
 %%% Internal functions
 %%%=============================================================================
 
-normalize_bindings(Bindings0, #{capitalize := true}) ->
-    capitalize_keys(Bindings0);
+%% -----------------------------------------------------------------------------
+%% @private
+%% @doc Normalize bindings keys to capitalized key, e.g.:
+%%
+%%          #{foo_bar => baz} -> #{'FooBar' => baz}
+%%
+%%      This is for the eval/2, who expects capitalized atoms.
+%% @end
+%% -----------------------------------------------------------------------------
+
 normalize_bindings(Bindings0, #{}) ->
-    Bindings0.
+    % capitalize bindings keys
+    % e.g. #{foo_bar => baz} -> #{'FooBar' => baz}
+    % NOTE: eval expects capitalized atoms
+    capitalize_keys(Bindings0).
 
 eval(Exprs, Bindings) ->
     {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
@@ -132,20 +143,38 @@ capitalize_keys(Bindings) when is_list(Bindings) ->
 capitalize_keys(Bindings) when is_map(Bindings) ->
     maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K) => V} end, #{}, Bindings).
 
-capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
-    capitalize(T, <<(H - 32)>>);
-capitalize(<<H, T/binary>>) when H >= $A, H =< $Z ->
-    capitalize(T, <<H>>);
-capitalize(Atom) when is_atom(Atom) ->
-    capitalize(atom_to_binary(Atom));
-capitalize(List) when is_list(List) ->
-    capitalize(list_to_binary(List)).
+%% -----------------------------------------------------------------------------
+%% @private
+%% @doc Transform binary, list or atom to capital case. Snake case or camel case
+%%      can be provided to be parsed, e.g.:
+%%
+%%          - snake_case: foo_bar, <<"foo_bar">>, "foo_bar"
+%%          - camelCase: fooBar, <<"fooBar">>, "fooBar"
+%%
+%%      The result will be an atom: 'FooBar'.
+%%      NOTE: The atom must exists, otherwise an exception will be raised.
+%% @end
+%% -----------------------------------------------------------------------------
 
-capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
-    capitalize(T, <<Acc/binary, (H - 32)>>);
-capitalize(<<H, T/binary>>, Acc) ->
-    capitalize(T, <<Acc/binary, H>>);
-capitalize(<<>>, Acc) ->
+capitalize(Key) ->
+    capitalize_1(Key, Key).
+
+capitalize_1(<<H, T/binary>>, _) when H >= $a, H =< $z ->
+    capitalize_2(T, <<(H - 32)>>);
+capitalize_1(<<H, _/binary>>, Key) when H >= $A, H =< $Z, is_atom(Key) ->
+    Key;
+capitalize_1(<<H, _/binary>> = Key, _) when H >= $A, H =< $Z ->
+    binary_to_existing_atom(Key);
+capitalize_1(Atom, Key) when is_atom(Atom) ->
+    capitalize_1(atom_to_binary(Atom), Key);
+capitalize_1(List, Key) when is_list(List) ->
+    capitalize_1(list_to_binary(List), Key).
+
+capitalize_2(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
+    capitalize_2(T, <<Acc/binary, (H - 32)>>);
+capitalize_2(<<H, T/binary>>, Acc) ->
+    capitalize_2(T, <<Acc/binary, H>>);
+capitalize_2(<<>>, Acc) ->
     binary_to_existing_atom(Acc).
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
@@ -162,10 +191,11 @@ render_result(Static, AST, Vars, Dynamic, Bindings) ->
 capitalize_test() ->
     [?assertEqual('FooBar', capitalize(<<"foo_bar">>)),
      ?assertEqual('FooBar', capitalize("foo_bar")),
-     ?assertEqual('FooBar', capitalize(foo_bar))].
+     ?assertEqual('FooBar', capitalize(foo_bar)),
+     ?assertEqual('FooBar', capitalize(fooBar)),
+     ?assertEqual('FooBar', capitalize('FooBar'))].
 
 capitalize_keys_test() ->
-    [?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])),
-     ?assertEqual(#{'FooBar' => baz}, capitalize_keys(#{<<"foo_bar">> => baz}))].
+    ?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])).
 
 -endif.
