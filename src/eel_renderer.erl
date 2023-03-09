@@ -19,7 +19,12 @@
 -endif.
 
 %% Types
--type result() :: tuple().
+-type snapshot() :: #{static   => eel_engine:static(),
+                      ast      => eel_engine:ast(),
+                      vars     => map(),
+                      dynamic  => [binary()],
+                      bindings => map()}.
+-type result() :: {binary(), snapshot()}.
 
 %%%=============================================================================
 %%% API functions
@@ -45,10 +50,10 @@ render(Tokens) ->
     OptsOrTokens     :: map() | {eel_engine:static(), eel_engine:ast()},
     Result           :: result().
 
-render(Tokens, Opts) when is_map(Opts) ->
-    render(#{}, Tokens, Opts);
-render(Bindings, Tokens) ->
-    render(Bindings, Tokens, ?DEFAULT_ENGINE_OPTS).
+render({Static, AST}, Opts) when is_map(Opts) ->
+    render(#{}, #{static => Static, ast => AST}, Opts);
+render(Bindings, {Static, AST}) ->
+    render(Bindings, #{static => Static, ast => AST}, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/3.
@@ -60,15 +65,11 @@ render(Bindings, Tokens) ->
     Opts     :: map(),
     Result   :: result().
 
-render(Bindings, {Static, AST}, Opts) ->
-    Vars = eel_compiler:ast_vars(AST),
-    render(Bindings, {Static, AST, Vars}, Opts);
-render(Bindings0, {Static, AST, Vars}, Opts) ->
-    Bindings1 = normalize_bindings(Bindings0, Opts),
-    Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
-    Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings) end, AST),
-    render_result(Static, AST, Vars, Dynamic, Bindings);
-render(Changes0, {Static, AST, Vars, DynamicSnap, BindingsSnap}, Opts) ->
+render(Changes0, #{static := Static,
+                   ast := AST,
+                   vars := Vars,
+                   dynamic := DynamicSnap,
+                   bindings := BindingsSnap}, Opts) ->
     Changes = normalize_bindings(Changes0, Opts),
     ChangesKeys = maps:keys(Changes),
     Bindings = maps:merge(BindingsSnap, Changes),
@@ -85,7 +86,17 @@ render(Changes0, {Static, AST, Vars, DynamicSnap, BindingsSnap}, Opts) ->
             end,
             Vars
         ),
-    render_result(Static, AST, Vars, Dynamic, Bindings).
+    render_result(Static, AST, Vars, Dynamic, Bindings);
+render(Bindings0, #{static := Static,
+                    ast := AST,
+                    vars := Vars}, Opts) ->
+    Bindings1 = normalize_bindings(Bindings0, Opts),
+    Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
+    Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings) end, AST),
+    render_result(Static, AST, Vars, Dynamic, Bindings);
+render(Bindings, #{static := _, ast := AST} = Snapshot, Opts) ->
+    Vars = eel_compiler:ast_vars(AST),
+    render(Bindings, Snapshot#{vars => Vars}, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/1.
@@ -176,7 +187,13 @@ capitalize_2(<<>>, Acc) ->
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
     Render = unicode:characters_to_nfc_binary(zip(Static, Dynamic)),
-    Snapshot = {Static, AST, Vars, Dynamic, Bindings},
+    Snapshot = #{
+        static => Static,
+        ast => AST,
+        vars => Vars,
+        dynamic => Dynamic,
+        bindings => Bindings
+    },
     {Render, Snapshot}.
 
 %%%=============================================================================

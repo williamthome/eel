@@ -243,7 +243,10 @@ do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
                                 "",
                                 "render(Bindings, Opts0) when is_map(Opts0) ->",
                                 "    Opts = maps:merge(compile_opts(), Opts0),",
-                                "    eel_renderer:render(Bindings, {static(), ast(), vars()}, Opts);",
+                                "    Snapshot = #{static => static(),"
+                                "                 ast => ast(),"
+                                "                 vars => vars()},"
+                                "    eel_renderer:render(Bindings, Snapshot, Opts);",
                                 "render(Changes, Snapshot) ->",
                                 "    render(Changes, Snapshot, #{}).",
                                 "",
