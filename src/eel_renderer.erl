@@ -51,9 +51,9 @@ render(Tokens) ->
     Result           :: result().
 
 render({Static, AST}, Opts) when is_map(Opts) ->
-    render(#{}, #{static => Static, ast => AST}, Opts);
+    render(#{}, {Static, AST}, Opts);
 render(Bindings, {Static, AST}) ->
-    render(Bindings, #{static => Static, ast => AST}, ?DEFAULT_ENGINE_OPTS).
+    render(Bindings, {Static, AST}, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/3.
@@ -65,10 +65,10 @@ render(Bindings, {Static, AST}) ->
     Opts     :: map(),
     Result   :: result().
 
-render(Changes0, #{static := Static,
-                   ast := AST,
-                   vars := Vars,
-                   dynamic := DynamicSnap,
+render(Changes0, #{static   := Static,
+                   ast      := AST,
+                   vars     := Vars,
+                   dynamic  := DynamicSnap,
                    bindings := BindingsSnap}, Opts) ->
     Changes = normalize_bindings(Changes0, Opts),
     ChangesKeys = maps:keys(Changes),
@@ -88,15 +88,20 @@ render(Changes0, #{static := Static,
         ),
     render_result(Static, AST, Vars, Dynamic, Bindings);
 render(Bindings0, #{static := Static,
-                    ast := AST,
-                    vars := Vars}, Opts) ->
+                    ast    := AST,
+                    vars   := Vars}, Opts) ->
     Bindings1 = normalize_bindings(Bindings0, Opts),
     Bindings = erl_eval:add_binding('Bindings', Bindings1, Bindings1),
     Dynamic = lists:map(fun(Exprs) -> eval(Exprs, Bindings) end, AST),
     render_result(Static, AST, Vars, Dynamic, Bindings);
 render(Bindings, #{static := _, ast := AST} = Snapshot, Opts) ->
     Vars = eel_compiler:ast_vars(AST),
-    render(Bindings, Snapshot#{vars => Vars}, Opts).
+    render(Bindings, Snapshot#{vars => Vars}, Opts);
+render(Bindings, {Static, AST}, Opts) ->
+    Snapshot = #{static => Static,
+                 ast    => AST,
+                 vars   =>  eel_compiler:ast_vars(AST)},
+    render(Bindings, Snapshot, Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/1.
