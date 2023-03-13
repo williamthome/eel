@@ -18,7 +18,7 @@
 -endif.
 
 %% Types
--export_type([dynamic/0, tokens/0]).
+-export_type([tokens/0, result/0]).
 
 %% Includes
 -include("eel.hrl").
@@ -27,8 +27,8 @@
 -endif.
 
 %% Types
--type dynamic() :: term().
--type tokens() :: {eel_engine:static(), dynamic()}.
+-type tokens() :: {eel_engine:static(), eel_engine:dynamic()}.
+-type result() :: {ok, tokens()} | {error, end_marker_not_found}.
 
 %%%=============================================================================
 %%% API functions
@@ -38,7 +38,7 @@
 %% @doc tokenize/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary()) -> {ok, tokens()} | {error, end_marker_not_found}.
+-spec tokenize(binary()) -> result().
 
 tokenize(Bin) ->
     tokenize(Bin, ?DEFAULT_ENGINE_OPTS).
@@ -47,7 +47,7 @@ tokenize(Bin) ->
 %% @doc tokenize/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary(), map()) -> {ok, tokens()} | {error, end_marker_not_found}.
+-spec tokenize(binary(), map()) -> result().
 
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -59,7 +59,7 @@ tokenize(Bin, Opts) ->
 %% @doc tokenize_file/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all()) -> {ok, tokens()} | {error, end_marker_not_found}.
+-spec tokenize_file(file:filename_all()) -> result().
 
 tokenize_file(Filename) ->
     tokenize_file(Filename, ?DEFAULT_ENGINE_OPTS).
@@ -68,7 +68,7 @@ tokenize_file(Filename) ->
 %% @doc tokenize_file/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all(), map()) -> {ok, tokens()} | {error, end_marker_not_found}.
+-spec tokenize_file(file:filename_all(), map()) -> result().
 
 tokenize_file(Filename, Opts) ->
     case file:read_file(Filename) of
@@ -82,6 +82,7 @@ tokenize_file(Filename, Opts) ->
 %%% Internal functions
 %%%=============================================================================
 
+% TODO: Improve warnings/errors
 do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
     StateEOF = case Text =:= <<>> of
                    true -> State;
