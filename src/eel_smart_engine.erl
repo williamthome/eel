@@ -119,7 +119,9 @@ push(Term, #state{acc = Acc} = State) ->
 %% @doc Parses tokens to statics and dynamics.
 %% @end
 %% -----------------------------------------------------------------------------
--spec parse_tokens_to_sd(Tokens :: [token()]) -> {static(), dynamic()}.
+-spec parse_tokens_to_sd(Tokens) -> Result when
+    Tokens :: [token()],
+    Result :: {static(), dynamic()}.
 
 parse_tokens_to_sd(Tokens) ->
     {[], SD} = do_parse_tokens_to_sd(Tokens),
@@ -243,9 +245,9 @@ wrap_expr(Expr) ->
 %%% Tests
 %%%=============================================================================
 
-%% TODO: Improve tests
-
 -ifdef(TEST).
+
+% TODO: Improve tests
 
 handle_expr_test() ->
     [
