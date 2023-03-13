@@ -32,7 +32,9 @@
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_engine:dynamic()) -> {ok, eel_engine:ast()} | {error, term()}.
+-spec compile(Dynamic) -> Result when
+    Dynamic :: eel_engine:dynamic(),
+    Result  :: {ok, eel_engine:ast()} | {error, term()}.
 
 compile(Dynamic) ->
     compile(Dynamic, ?DEFAULT_ENGINE_OPTS).
@@ -41,8 +43,10 @@ compile(Dynamic) ->
 %% @doc compile/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(eel_engine:dynamic(), options()) -> {ok, eel_engine:ast()}
-                                                  | {error, term()}.
+-spec compile(Dynamic, Opts) -> Result when
+    Dynamic :: eel_engine:dynamic(),
+    Opts    :: options(),
+    Result  :: {ok, eel_engine:ast()} | {error, term()}.
 
 compile(Dynamic, Opts) when is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
@@ -119,8 +123,9 @@ compile_file_to_module(Filename, Tokens, Module, Opts) ->
 %% @doc dynamic_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec dynamic_to_ast(binary() | string()) -> {ok, eel_engine:ast()}
-                                             | {error, term()}.
+-spec dynamic_to_ast(Expr) -> Result when
+    Expr   :: binary() | string(),
+    Result :: {ok, eel_engine:ast()} | {error, term()}.
 
 dynamic_to_ast(Expr) ->
     case erl_scan:string(normalize_expr(Expr)) of
@@ -134,7 +139,9 @@ dynamic_to_ast(Expr) ->
 %% @doc ast_vars/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec ast_vars(eel_engine:ast()) -> [atom()].
+-spec ast_vars(AST) -> Result when
+    AST    :: eel_engine:ast(),
+    Result :: [atom()].
 
 ast_vars(AST) when is_list(AST) ->
     Opts = [nowarn_underscore_match,

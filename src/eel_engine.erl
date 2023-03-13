@@ -21,13 +21,14 @@
 -type position()      :: {line(), column()}.
 -type marker_id()     :: atom().
 -type marker_symbol() :: nonempty_string().
--type marker()        :: {marker_id(), {Start :: marker_symbol(), End :: marker_symbol()}}.
+-type marker()        :: {marker_id(), {Start :: marker_symbol(),
+                                        End   :: marker_symbol()}}.
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
 -type options()       :: map().
 
 -export_type([line/0, column/0, expression/0, state/0, token/0, static/0,
-              dynamic/0, ast/0, position/0, marker_id/0, marker_symbol/0, marker/0,
-              expressions/0, options/0]).
+              dynamic/0, ast/0, position/0, marker_id/0, marker_symbol/0,
+              marker/0, expressions/0, options/0]).
 
 %%%=============================================================================
 %%% Callbacks
