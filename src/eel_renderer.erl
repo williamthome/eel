@@ -50,8 +50,12 @@ render(Tokens) ->
     OptsOrTokens     :: map() | {eel_engine:static(), eel_engine:ast()},
     Result           :: result().
 
-render({Static, AST}, Opts) when is_map(Opts) ->
-    render(#{}, {Static, AST}, Opts);
+render(#{static := _, ast := _} = Tokens, Opts) ->
+    render(#{}, Tokens, Opts);
+render(Bindings, #{static := _, ast := _} = Tokens) ->
+    render(Bindings, Tokens, ?DEFAULT_ENGINE_OPTS);
+render(Tokens, Opts) when is_map(Opts) ->
+    render(#{}, Tokens, Opts);
 render(Bindings, {Static, AST}) ->
     render(Bindings, {Static, AST}, ?DEFAULT_ENGINE_OPTS).
 
