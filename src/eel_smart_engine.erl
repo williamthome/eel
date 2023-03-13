@@ -29,13 +29,13 @@
 -define(end_expr,       ?token(end_expr)).
 -define(nested_expr,    ?token(nested_expr)).
 -define(comment,        ?token(comment)).
--define(debug,          ?token(debug)).
+-define(code,           ?token(code)).
 -define(is_expr(Token), is_tuple(Token) andalso
                         (element(1, Token) =:= expr orelse
                          element(1, Token) =:= start_expr orelse
                          element(1, Token) =:= end_expr orelse
                          element(1, Token) =:= nested_expr orelse
-                         element(1, Token) =:= debug)).
+                         element(1, Token) =:= code)).
 
 %% Types
 -type token_name() :: text
@@ -45,7 +45,7 @@
                       | end_expr
                       | nested_expr
                       | comment
-                      | debug.
+                      | code.
 -type token()      :: {token_name(), binary()}.
 -type ast()        :: eel_engine:ast().
 -type static()     :: eel_engine:static().
@@ -65,7 +65,7 @@ markers() -> [{expr,       {"<%=", ".%>"}},
               {start_expr, {"<%=",  "%>"}},
               {mid_expr,   {"<%",   "%>"}},
               {end_expr,   {"<%",  ".%>"}},
-              {debug,      {"<%:", ":%>"}},
+              {code,       {"<%:", ":%>"}},
               {comment,    {"<%%", "%%>"}}].
 
 init(Opts) ->
@@ -81,8 +81,8 @@ handle_expr(_Pos, mid_expr, Expr, State) ->
     push(?mid_expr(Expr), State);
 handle_expr(_Pos, end_expr, Expr, State) ->
     push(?end_expr(Expr), State);
-handle_expr(_Pos, debug, Expr, State) ->
-    push(?debug(Expr), State);
+handle_expr(_Pos, code, Expr, State) ->
+    push(?code(Expr), State);
 handle_expr(_Pos, comment, Expr, State) ->
     push(?comment(Expr), State);
 handle_expr(Pos, Marker, Expr, _State) ->
@@ -162,9 +162,9 @@ do_parse_tokens_to_sd_1([{text, _} | _] = T, in_expr, Prev, SD) ->
 do_parse_tokens_to_sd_1([{comment, _} | T], In, Prev, {S, D}) ->
     do_parse_tokens_to_sd_1(T, In, Prev, {S, D});
 % Debug
-do_parse_tokens_to_sd_1([{debug, _} = H | T], in_text, Prev, {S, D}) ->
+do_parse_tokens_to_sd_1([{code, _} = H | T], in_text, Prev, {S, D}) ->
     do_parse_tokens_to_sd_2(T, H, in_text, Prev, {S, [H | D]});
-do_parse_tokens_to_sd_1([{debug, _} = H | T], in_expr, Prev, {S, [HD | D]}) ->
+do_parse_tokens_to_sd_1([{code, _} = H | T], in_expr, Prev, {S, [HD | D]}) ->
     do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
 % Done
 do_parse_tokens_to_sd_1([], _, _, SD) ->
@@ -199,7 +199,7 @@ parse_nested_sd_1([{text, Text} = H | T], _, {S, D}) ->
     parse_nested_sd_1(T, H, {[Text | S], D});
 parse_nested_sd_1([{expr, _} = H | T], _, {S, D}) ->
     parse_nested_sd_1(T, H, {S, [H | D]});
-parse_nested_sd_1([{debug, _} = H | T], _, {S, D}) ->
+parse_nested_sd_1([{code, _} = H | T], _, {S, D}) ->
     parse_nested_sd_1(T, H, {S, [H | D]});
 parse_nested_sd_1([{comment, _} | T], Prev, {S, D}) ->
     parse_nested_sd_1(T, Prev, {S, D}).
@@ -227,7 +227,7 @@ compile({nested_expr, Tokens}, Opts) ->
     Expr1 = lists:join(", ", Expr0),
     Expr = erlang:iolist_to_binary([" erlang:iolist_to_binary([", Expr1, "])"]),
     wrap_expr(Expr);
-compile({debug, Expr}, _) ->
+compile({code, Expr}, _) ->
     wrap_expr(<<Expr/binary, ", <<>>">>).
 
 wrap_expr_begin(Expr) ->
@@ -278,10 +278,10 @@ handle_expr_test() ->
             )
         },
         {
-            "Should return debug token",
+            "Should return code token",
             ?assertEqual(
-                #state{acc = [{debug, <<"Foo">>}]},
-                handle_expr({1, 1}, debug, <<"Foo">>, #state{})
+                #state{acc = [{code, <<"Foo">>}]},
+                handle_expr({1, 1}, code, <<"Foo">>, #state{})
             )
         },
         {
@@ -343,7 +343,7 @@ handle_body_test() ->
     Expected = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
                    <<"<footer>Footer</footer>">>],
                   [{expr,<<"foo">>},
-                   {debug,<<"io:format(\"Print but not render me!~n\")">>},
+                   {code,<<"io:format(\"Print but not render me!~n\")">>},
                    [{start_expr,<<"case 1 of">>},
                     {mid_expr,<<"2 ->">>},
                     {nested_expr,{[<<"<p>Foo</p>">>],[]}},
@@ -356,7 +356,7 @@ handle_body_test() ->
                            {mid_expr,<<"; false ->">>},
                            {nested_expr,
                                {[<<"<p>">>,<<>>,<<"</p>">>],
-                                [{debug,<<"ignore_me">>},
+                                [{code,<<"ignore_me">>},
                                  [{start_expr,<<"case car =:= bus of">>},
                                   {mid_expr,<<"true ->">>},
                                   {nested_expr,{[<<"Car">>],[]}},
@@ -373,7 +373,7 @@ parse_tokens_to_sd_test() ->
     Tokens = [
         {expr, <<"foo">>},
         {text,<<"<h1>Title</h1>">>},
-        {debug,<<"io:format(\"Print but not render me!~n\")">>},
+        {code,<<"io:format(\"Print but not render me!~n\")">>},
         {start_expr,<<"case 1 of">>},
         {mid_expr,<<"2 ->">>},
         {text,<<"<p>Foo</p>">>},
@@ -385,7 +385,7 @@ parse_tokens_to_sd_test() ->
         {mid_expr,<<"; false ->">>},
         {text,<<"<p>">>},
         {comment,<<"This is a comment">>},
-        {debug,<<"ignore_me">>},
+        {code,<<"ignore_me">>},
         {start_expr,<<"case car =:= bus of">>},
         {mid_expr,<<"true ->">>},
         {text,<<"Car">>},
@@ -402,7 +402,7 @@ parse_tokens_to_sd_test() ->
     Expected = {[<<>>,<<"<h1>Title</h1>">>,<<>>,<<>>,
                    <<"<footer>Footer</footer>">>],
                   [{expr,<<"foo">>},
-                   {debug,<<"io:format(\"Print but not render me!~n\")">>},
+                   {code,<<"io:format(\"Print but not render me!~n\")">>},
                    [{start_expr,<<"case 1 of">>},
                     {mid_expr,<<"2 ->">>},
                     {nested_expr,{[<<"<p>Foo</p>">>],[]}},
@@ -415,7 +415,7 @@ parse_tokens_to_sd_test() ->
                            {mid_expr,<<"; false ->">>},
                            {nested_expr,
                                {[<<"<p>">>,<<>>,<<"</p>">>],
-                                [{debug,<<"ignore_me">>},
+                                [{code,<<"ignore_me">>},
                                  [{start_expr,<<"case car =:= bus of">>},
                                   {mid_expr,<<"true ->">>},
                                   {nested_expr,{[<<"Car">>],[]}},
