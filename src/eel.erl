@@ -12,6 +12,8 @@
          compile_to_module/2, compile_to_module/3, compile_file_to_module/1,
          compile_file_to_module/2, compile_file_to_module/3, render/1, render/2,
          render/3, render_file/1, render_file/2, render_file/3,
+         render_to_file/2, render_to_file/3, render_to_file/4,
+         render_file_to_file/2, render_file_to_file/3, render_file_to_file/4,
          default_engine/0, default_engine_opts/0]).
 
 %% Includes
@@ -201,11 +203,51 @@ render_file(Filename, Bindings, Opts) ->
             {error, Reason}
     end.
 
+render_to_file(Bin, OutFilename) ->
+    render_to_file(Bin, #{}, OutFilename).
+
+render_to_file(Bin, Bindings, OutFilename) ->
+    render_to_file(Bin, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+
+render_to_file(Bin, Bindings, OutFilename, Opts) ->
+    case render(Bin, Bindings, Opts) of
+        {ok, {Data, _}} ->
+            write_file(OutFilename, Data);
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+render_file_to_file(InFilename, OutFilename) ->
+    render_file_to_file(InFilename, #{}, OutFilename).
+
+render_file_to_file(InFilename, Bindings, OutFilename) ->
+    render_file_to_file(InFilename, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+
+render_file_to_file(InFilename, Bindings, OutFilename, Opts) ->
+    case render_file(InFilename, Bindings, Opts) of
+        {ok, {Data, _}} ->
+            write_file(OutFilename, Data);
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
 default_engine() ->
     ?DEFAULT_ENGINE.
 
 default_engine_opts() ->
     ?DEFAULT_ENGINE_OPTS.
+
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+write_file(Filename, Data) ->
+    case file:write_file(Filename, Data) of
+        ok ->
+            {ok, Data};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%%=============================================================================
 %%% Tests
