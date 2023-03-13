@@ -17,6 +17,9 @@
 %% Includes
 -include("eel.hrl").
 -include_lib("syntax_tools/include/merl.hrl").
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 %% Types
 -type options() :: map().
@@ -134,52 +137,46 @@ dynamic_to_ast(Expr) ->
 -spec ast_vars(eel_engine:ast()) -> [atom()].
 
 ast_vars(AST) when is_list(AST) ->
-    Opts = [
-        nowarn_underscore_match,
-        nowarn_export_all,
-        nowarn_export_vars,
-        nowarn_shadow_vars,
-        nowarn_unused_import,
-        nowarn_unused_function,
-        nowarn_unused_type,
-        nowarn_bif_clash,
-        nowarn_unused_record,
-        nowarn_deprecated_function,
-        nowarn_deprecated_type,
-        nowarn_obsolete_guard,
-        nowarn_untyped_record,
-        nowarn_missing_spec,
-        nowarn_missing_spec_all,
-        nowarn_removed,
-        nowarn_nif_inline,
-        nowarn_keywords
-    ],
+    Opts = [nowarn_underscore_match,
+            nowarn_export_all,
+            nowarn_export_vars,
+            nowarn_shadow_vars,
+            nowarn_unused_import,
+            nowarn_unused_function,
+            nowarn_unused_type,
+            nowarn_bif_clash,
+            nowarn_unused_record,
+            nowarn_deprecated_function,
+            nowarn_deprecated_type,
+            nowarn_obsolete_guard,
+            nowarn_untyped_record,
+            nowarn_missing_spec,
+            nowarn_missing_spec_all,
+            nowarn_removed,
+            nowarn_nif_inline,
+            nowarn_keywords],
     lists:reverse(
         lists:foldl(
-            fun({Index, Tree}, Acc) ->
-                Vars =
-                    case erl_lint:exprs_opt(Tree, [], Opts) of
-                        {ok, _Warns} ->
-                            [];
-                        {error, Errs, _Warns} ->
-                            lists:foldl(
-                                fun({"nofile", Errs1}, Acc1) ->
-                                    lists:foldl(
-                                        fun
-                                            ({_Line, erl_lint, {unbound_var, Var}}, Acc2) ->
+            fun({Index, Forms}, Acc) ->
+                Vars = lists:foldl(
+                           fun({"nofile", Errs}, Acc1) ->
+                               lists:foldl(
+                                   fun(Err, Acc2) ->
+                                        case is_unbound_var_err(Err) of
+                                            {true, Var} ->
                                                 [Var | Acc2];
-                                            (_, Acc2) ->
+                                            false ->
                                                 Acc2
-                                        end,
-                                        Acc1,
-                                        Errs1
-                                    )
-                                end,
-                                [],
-                                Errs
-                            )
-                    end,
-                [{Index, Vars} | Acc]
+                                        end
+                                   end,
+                                   Acc1,
+                                   Errs
+                               )
+                           end,
+                           [],
+                           get_forms_errs(Forms, Opts)
+                       ),
+                [{Index, lists:reverse(Vars)} | Acc]
             end,
             [],
             lists:enumerate(AST)
@@ -300,3 +297,34 @@ file_module(Filename) when is_binary(Filename); is_list(Filename) ->
 
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
+
+get_forms_errs(Forms, Opts) ->
+    case erl_lint:exprs_opt(Forms, [], Opts) of
+        {ok, _Warns} ->
+            [];
+        {error, Errs, _Warns} ->
+            Errs
+    end.
+
+is_unbound_var_err({_Line, erl_lint, {unbound_var, Var}}) ->
+    {true, Var};
+is_unbound_var_err(_) ->
+    false.
+
+%%%=============================================================================
+%%% Tests
+%%%=============================================================================
+
+-ifdef(TEST).
+
+ast_vars_test() ->
+    {ok, {_, Dynamic}} = eel_tokenizer:tokenize(<<
+        "<%= Foo .%>"
+        "<%= Foo = Bar, Foo .%>"
+        "<%= [Foo, Bar] .%>"
+    >>),
+    {ok, AST} = compile(Dynamic),
+    Expected = [{1, ['Foo']}, {2, ['Bar']}, {3, ['Foo', 'Bar']}],
+    [?assertEqual(Expected, ast_vars(AST))].
+
+-endif.
