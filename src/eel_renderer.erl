@@ -24,7 +24,7 @@
                       vars     => map(),
                       dynamic  => [binary()],
                       bindings => map()}.
--type result() :: {binary(), snapshot()}.
+-type result()   :: {ok, {binary(), snapshot()}}.
 
 %%%=============================================================================
 %%% API functions
@@ -194,7 +194,7 @@ render_result(Static, AST, Vars, Dynamic, Bindings) ->
         dynamic => Dynamic,
         bindings => Bindings
     },
-    {Render, Snapshot}.
+    {ok, {Render, Snapshot}}.
 
 %%%=============================================================================
 %%% Tests
