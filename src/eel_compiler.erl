@@ -228,7 +228,6 @@ do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
             end
     end.
 
-% TODO: recompile/0 function
 module_forms(Module, Filename, Static, AST, Vars, Opts) ->
     Forms =
         ?Q(["-module('@module').",
