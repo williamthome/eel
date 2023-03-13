@@ -125,7 +125,7 @@ compile_file_to_module(Filename, Module, Opts) ->
 
 render(Bin) ->
     case eel_tokenizer:tokenize(Bin) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render({Static, AST});
@@ -138,7 +138,7 @@ render(Bin) ->
 
 render(Bin, Bindings) ->
     case eel_tokenizer:tokenize(Bin) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render(Bindings, {Static, AST});
@@ -151,7 +151,7 @@ render(Bin, Bindings) ->
 
 render(Bin, Bindings, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render(Bindings, {Static, AST}, Opts);
@@ -164,7 +164,7 @@ render(Bin, Bindings, Opts) ->
 
 render_file(Filename) ->
     case eel_tokenizer:tokenize_file(Filename) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render({Static, AST});
