@@ -21,7 +21,7 @@
 -export_type([tokens/0, result/0]).
 
 %% Includes
--include("eel.hrl").
+-include("eel_core.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
