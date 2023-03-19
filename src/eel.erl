@@ -12,8 +12,9 @@
          compile_to_module/2, compile_to_module/3, compile_file_to_module/1,
          compile_file_to_module/2, compile_file_to_module/3, render/1, render/2,
          render/3, render_file/1, render_file/2, render_file/3,
-         render_to_file/2, render_to_file/3, render_to_file/4,
-         render_file_to_file/2, render_file_to_file/3, render_file_to_file/4,
+         eval/1, eval/2, eval/3, eval_file/1, eval_file/2, eval_file/3,
+         eval_to_file/2, eval_to_file/3, eval_to_file/4,
+         eval_file_to_file/2, eval_file_to_file/3, eval_file_to_file/4,
          default_engine/0, default_engine_opts/0]).
 
 %% Includes
@@ -203,33 +204,43 @@ render_file(Filename, Bindings, Opts) ->
             {error, Reason}
     end.
 
-render_to_file(Bin, OutFilename) ->
-    render_to_file(Bin, #{}, OutFilename).
+eval(Bin) ->
+    eel_evaluator:eval(render(Bin)).
 
-render_to_file(Bin, Bindings, OutFilename) ->
-    render_to_file(Bin, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+eval(Bin, Bindings) ->
+    eel_evaluator:eval(render(Bin, Bindings)).
 
-render_to_file(Bin, Bindings, OutFilename, Opts) ->
-    case render(Bin, Bindings, Opts) of
-        {ok, {Data, _}} ->
-            write_file(OutFilename, Data);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+eval(Bin, Bindings, Opts) ->
+    eel_evaluator:eval(render(Bin, Bindings, Opts)).
 
-render_file_to_file(InFilename, OutFilename) ->
-    render_file_to_file(InFilename, #{}, OutFilename).
+eval_file(Filename) ->
+    eel_evaluator:eval(render_file(Filename)).
 
-render_file_to_file(InFilename, Bindings, OutFilename) ->
-    render_file_to_file(InFilename, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+eval_file(Filename, Bindings) ->
+    eel_evaluator:eval(render_file(Filename, Bindings)).
 
-render_file_to_file(InFilename, Bindings, OutFilename, Opts) ->
-    case render_file(InFilename, Bindings, Opts) of
-        {ok, {Data, _}} ->
-            write_file(OutFilename, Data);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+eval_file(Filename, Bindings, Opts) ->
+    eel_evaluator:eval(render_file(Filename, Bindings, Opts)).
+
+eval_to_file(Bin, OutFilename) ->
+    eval_to_file(Bin, #{}, OutFilename).
+
+eval_to_file(Bin, Bindings, OutFilename) ->
+    eval_to_file(Bin, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+
+eval_to_file(Bin, Bindings, OutFilename, Opts) ->
+    Data = eval(Bin, Bindings, Opts),
+    write_file(OutFilename, Data).
+
+eval_file_to_file(InFilename, OutFilename) ->
+    eval_file_to_file(InFilename, #{}, OutFilename).
+
+eval_file_to_file(InFilename, Bindings, OutFilename) ->
+    eval_file_to_file(InFilename, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+
+eval_file_to_file(InFilename, Bindings, OutFilename, Opts) ->
+    Data = eval_file(InFilename, Bindings, Opts),
+    write_file(OutFilename, Data).
 
 default_engine() ->
     ?DEFAULT_ENGINE.
