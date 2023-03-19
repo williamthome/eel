@@ -31,7 +31,7 @@ compile(Bin) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {Static, AST};
+                    {ok, {Static, AST}};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -44,7 +44,7 @@ compile(Bin, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {Static, AST};
+                    {ok, {Static, AST}};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -57,7 +57,7 @@ compile_file(Filename) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {Static, AST};
+                    {ok, {Static, AST}};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -70,7 +70,7 @@ compile_file(Filename, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {Static, AST};
+                    {ok, {Static, AST}};
                 {error, Reason} ->
                     {error, Reason}
             end;
