@@ -16,7 +16,6 @@
 
 %% Includes
 -include("eel.hrl").
--include_lib("syntax_tools/include/merl.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -234,7 +233,8 @@ do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
 
 module_forms(Module, Filename, Static, AST, Vars, Opts) ->
     Forms =
-        ?Q(["-module('@module').",
+        merl:qquote([
+            "-module('@module').",
             "",
             "-export([filename/0,",
             "         timestamp/0,",
