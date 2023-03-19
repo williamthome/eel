@@ -1,38 +1,93 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl parse transform module.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_transform).
 
--export([ parse_transform/2 ]).
+-export([parse_transform/2]).
 
 parse_transform(Forms, _Options) ->
-    deepmap(fun transform/1, Forms).
+    case parserl:find_all_attributes(eel_fun, Forms) of
+        [] ->
+            logger:warning("No eel attribute found in ~p", [parserl:get_module(Forms)]),
+            Forms;
 
-transform({call, _, {remote, _, {atom, _, eel}, {atom, _, compile}}, _} = Form0) ->
-    {value, Form, []} = erl_eval:expr(Form0, []),
-    erl_syntax:revert(erl_syntax:abstract(Form));
-transform(Form) ->
-    Form.
+        Attrs ->
+            GlobalOpts = #{ if_fun_exists => append },
+            parserl_trans:form(Forms, GlobalOpts, [
+                parserl_trans:remove_attribute(eel_fun),
+                parserl_trans:foreach(
+                    fun(Attr) ->
+                        Args = parserl:eval(erl_syntax:attribute_arguments(Attr)),
+                        {FunName, Kind, FunOpts} = Args,
+                        {ok, {Static, AST}} =
+                            case Kind of
+                                {bin, Bin, CompOpts} ->
+                                    eel:compile(Bin, CompOpts);
 
-deepmap(Fun, Forms) when is_function(Fun, 1), is_list(Forms) ->
-    do_deepmap(Forms, Fun).
+                                {file, Filename, CompOpts} ->
+                                    eel:compile_file(Filename, CompOpts)
+                            end,
+                        Vars = eel_compiler:ast_vars(AST),
+                        Opts = #{ env => #{fun_name => FunName}
+                                , export => maps:get(export, FunOpts, true) },
+                        [
+                            parserl_trans:insert_function(
+                                "static('@fun_name') -> _@static.",
+                                #{ env => #{ fun_name => FunName
+                                           , static => Static } }),
+                            parserl_trans:insert_function(
+                                "ast('@fun_name') -> _@ast.",
+                                #{ env => #{ fun_name => FunName
+                                           , ast => AST } }),
+                            parserl_trans:insert_function(
+                                "vars('@fun_name') -> _@vars.",
+                                #{ env => #{ fun_name => FunName
+                                           , vars => Vars } }),
+                            parserl_trans:if_else(
+                                Vars =:= [],
+                                [
+                                    parserl_trans:if_else(
+                                        maps:get(eval, FunOpts, false),
+                                        parserl_trans:insert_function(
+                                            ["'@fun_name'() ->",
+                                             "    eel_evaluator:eval(eel_renderer:render(",
+                                             "        #{ static => static('@fun_name')",
+                                             "         , ast => ast('@fun_name')",
+                                             "         , vars => vars('@fun_name') }",
+                                             "    ))."], Opts),
+                                        parserl_trans:insert_function(
+                                            ["'@fun_name'() ->",
+                                             "    eel_renderer:render(",
+                                             "        #{ static => static('@fun_name')",
+                                             "         , ast => ast('@fun_name')",
+                                             "         , vars => vars('@fun_name') }",
+                                             "    )."], Opts)
+                                    )
+                                ],
+                                [
+                                    parserl_trans:if_else(
+                                        maps:get(eval, FunOpts, false),
+                                        parserl_trans:insert_function(
+                                            ["'@fun_name'(Bindings) ->",
+                                             "    eel_evaluator:eval(eel_renderer:render(",
+                                             "        Bindings,",
+                                             "        #{ static => static('@fun_name')",
+                                             "         , ast => ast('@fun_name')",
+                                             "         , vars => vars('@fun_name') }",
+                                             "    ))."], Opts),
+                                        parserl_trans:insert_function(
+                                            ["'@fun_name'(Bindings) ->",
+                                             "    eel_renderer:render(",
+                                             "        Bindings,",
+                                             "        #{ static => static('@fun_name')",
+                                             "         , ast => ast('@fun_name')",
+                                             "         , vars => vars('@fun_name') }",
+                                             "    )."], Opts)
+                                    )
+                                ]
+                            )
+                        ]
+                    end,
+                    Attrs
+                ),
 
-do_deepmap({match, Pos, A, B}, F) ->
-    F({match, Pos, do_deepmap(A, F), do_deepmap(B, F)});
-do_deepmap({call, Pos, Fun, Args}, F) ->
-    F({call, Pos, Fun, do_deepmap(Args, F)});
-do_deepmap({clause, CPos, CPattern, CGuards, CBody}, F) ->
-    F({clause, CPos, do_deepmap(CPattern, F), do_deepmap(CGuards, F), do_deepmap(CBody, F)});
-do_deepmap({function, Pos, Name, Arity, Clauses}, F) ->
-    F({function, Pos, Name, Arity, do_deepmap(Clauses, F)});
-do_deepmap({'case', Pos, Cond, Clauses}, F) ->
-    F({'case', Pos, do_deepmap(Cond, F), do_deepmap(Clauses, F)});
-do_deepmap({'if', Pos, Clauses}, F) ->
-    F({'if', Pos, do_deepmap(Clauses, F)});
-do_deepmap(Forms, F) when is_list(Forms) ->
-    lists:map(fun(Form) -> do_deepmap(Form, F) end, Forms);
-do_deepmap(Form, F) ->
-    F(Form).
+                parserl_trans:debug()
+            ])
+    end.
