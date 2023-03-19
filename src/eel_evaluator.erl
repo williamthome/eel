@@ -1,83 +1,19 @@
 %%%-----------------------------------------------------------------------------
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @copyright 2023 William Fank Thomé
-%%% @doc EEl evaluator module.
+%%% @doc EEl compiler module.
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(eel_evaluator).
 
 %% API functions
--export([ eval/1
-        , eval/2
-        , zip/1
-        , zip/2
-        ]).
-
-% Types
--type snapshot() :: eel_renderer:snapshot().
--type tokens()   :: eel_tokenizer:tokens().
--type static()   :: eel_engine:static().
--type dynamic()  :: eel_engine:dynamic().
+-export([eval/1]).
 
 %%%=============================================================================
 %%% API functions
 %%%=============================================================================
 
-%% -----------------------------------------------------------------------------
-%% @doc eval/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec eval(Snapshot) -> Result
-    when Snapshot :: snapshot()
-       , Result   :: binary()
-       .
-
-eval(#{static := Static, dynamic := Dynamic}) ->
-    eval(Static, Dynamic).
-
-%% -----------------------------------------------------------------------------
-%% @doc eval/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec eval(Static, Dynamic) -> Result
-    when Static  :: static()
-       , Dynamic :: [binary()]
-       , Result  :: binary()
-       .
-
-eval(Static, Dynamic) ->
-    unicode:characters_to_binary(retrieve_bin(zip(Static, Dynamic))).
-
-retrieve_bin(Tokens) ->
-    lists:map(fun({_, {_, Bin}}) -> Bin end, Tokens).
-
-%% -----------------------------------------------------------------------------
-%% @doc zip/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec zip(tokens()) -> list().
-
-zip({Static, Dynamic}) ->
-    zip(Static, Dynamic).
-
-%% -----------------------------------------------------------------------------
-%% @doc zip/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec zip(static(), dynamic()) -> list().
-
-zip(Static, Dynamic) ->
-    do_zip(Static, Dynamic, []).
-
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
-
-do_zip([S | Static], [D | Dynamic], Acc) ->
-    do_zip(Static, Dynamic, [D, S | Acc]);
-do_zip([S | Static], [], Acc) ->
-    do_zip(Static, [], [S | Acc]);
-do_zip([], [], Acc) ->
-    lists:reverse(Acc);
-do_zip([], Dynamic, Acc) ->
-    lists:reverse(Dynamic, Acc).
+eval({ok, {Data, _}}) ->
+    Data;
+eval(Err) ->
+    error(Err).
