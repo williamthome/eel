@@ -297,10 +297,7 @@ file_module(Filename) when is_binary(Filename); is_list(Filename) ->
             N when is_list(N) -> list_to_binary(N)
         end,
     Name = binary:replace(Basename, <<".">>, <<"_">>, [global]),
-    case catch erlang:binary_to_existing_atom(Name) of
-        Atom when is_atom(Atom) -> Atom;
-        _ -> erlang:binary_to_atom(Name)
-    end.
+    erlang:binary_to_atom(Name).
 
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
