@@ -181,18 +181,18 @@ capitalize_1(<<H, T/binary>>, _) when H >= $a, H =< $z ->
 capitalize_1(<<H, _/binary>>, Key) when H >= $A, H =< $Z, is_atom(Key) ->
     Key;
 capitalize_1(<<H, _/binary>> = Key, _) when H >= $A, H =< $Z ->
-    binary_to_existing_atom(Key);
+    erlang:binary_to_atom(Key);
 capitalize_1(Atom, Key) when is_atom(Atom) ->
-    capitalize_1(atom_to_binary(Atom), Key);
+    capitalize_1(erlang:atom_to_binary(Atom), Key);
 capitalize_1(List, Key) when is_list(List) ->
-    capitalize_1(list_to_binary(List), Key).
+    capitalize_1(erlang:list_to_binary(List), Key).
 
 capitalize_2(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
     capitalize_2(T, <<Acc/binary, (H - 32)>>);
 capitalize_2(<<H, T/binary>>, Acc) ->
     capitalize_2(T, <<Acc/binary, H>>);
 capitalize_2(<<>>, Acc) ->
-    binary_to_existing_atom(Acc).
+    erlang:binary_to_atom(Acc).
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
     Render = unicode:characters_to_nfc_binary(zip(Static, Dynamic)),
