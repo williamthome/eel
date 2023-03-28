@@ -3,91 +3,90 @@
 -export([parse_transform/2]).
 
 parse_transform(Forms, _Options) ->
-    case parserl:find_all_attributes(eel_fun, Forms) of
-        [] ->
-            logger:warning("No eel attribute found in ~p", [parserl:get_module(Forms)]),
-            Forms;
+    lists:map(
+        fun(Form) ->
+            case erl_syntax:type(Form) =:= function andalso
+                 erl_syntax:function_clauses(Form)
+            of
+                [{clause, Pos, Patterns, Guards, Body}] ->
+                    case erl_syntax:tuple_elements(lists:last(Body)) of
+                        [{atom, _, eel}, Defs] ->
+                            [{atom, _, Action}, ActionArgs] = erl_syntax:tuple_elements(Defs),
+                            EElAction = eel(Action, erl_syntax:tuple_elements(ActionArgs)),
+                            NewBody = lists:droplast(Body) ++ [erl_syntax:revert(EElAction)],
+                            NewForm = setelement(tuple_size(Form), Form, [
+                                {clause, Pos, Patterns, Guards, NewBody}
+                            ]),
+                            NewForm;
+                        _ ->
+                            Form
+                    end;
+                _ ->
+                    Form
+            end
+        end,
+        Forms
+    ).
 
-        Attrs ->
-            GlobalOpts = #{ if_fun_exists => append },
-            parserl_trans:form(Forms, GlobalOpts, [
-                parserl_trans:remove_attribute(eel_fun),
-                parserl_trans:foreach(
-                    fun(Attr) ->
-                        Args = parserl:eval(erl_syntax:attribute_arguments(Attr)),
-                        {FunName, Kind, FunOpts} = Args,
-                        {ok, {Static, AST}} =
-                            case Kind of
-                                {bin, Bin, CompOpts} ->
-                                    eel:compile(Bin, CompOpts);
+eel(fun_from_binary, [{var, _, 'Bindings'}, {string, _, Text}, Opts]) ->
+    eel_fun_from({binary, {Text, Opts}});
+eel(fun_from_file, [{var, _, 'Bindings'}, {string, _, Filename}, Opts]) ->
+    eel_fun_from({file, {Filename, Opts}}).
 
-                                {file, Filename, CompOpts} ->
-                                    eel:compile_file(Filename, CompOpts)
-                            end,
-                        Vars = eel_compiler:ast_vars(AST),
-                        Opts = #{ env => #{fun_name => FunName}
-                                , export => maps:get(export, FunOpts, true) },
-                        [
-                            parserl_trans:insert_function(
-                                "static('@fun_name') -> _@static.",
-                                #{ env => #{ fun_name => FunName
-                                           , static => Static } }),
-                            parserl_trans:insert_function(
-                                "ast('@fun_name') -> _@ast.",
-                                #{ env => #{ fun_name => FunName
-                                           , ast => AST } }),
-                            parserl_trans:insert_function(
-                                "vars('@fun_name') -> _@vars.",
-                                #{ env => #{ fun_name => FunName
-                                           , vars => Vars } }),
-                            parserl_trans:if_else(
-                                Vars =:= [],
-                                [
-                                    parserl_trans:if_else(
-                                        maps:get(eval, FunOpts, false),
-                                        parserl_trans:insert_function(
-                                            ["'@fun_name'() ->",
-                                             "    eel_evaluator:eval(eel_renderer:render(",
-                                             "        #{ static => static('@fun_name')",
-                                             "         , ast => ast('@fun_name')",
-                                             "         , vars => vars('@fun_name') }",
-                                             "    ))."], Opts),
-                                        parserl_trans:insert_function(
-                                            ["'@fun_name'() ->",
-                                             "    eel_renderer:render(",
-                                             "        #{ static => static('@fun_name')",
-                                             "         , ast => ast('@fun_name')",
-                                             "         , vars => vars('@fun_name') }",
-                                             "    )."], Opts)
-                                    )
-                                ],
-                                [
-                                    parserl_trans:if_else(
-                                        maps:get(eval, FunOpts, false),
-                                        parserl_trans:insert_function(
-                                            ["'@fun_name'(Bindings) ->",
-                                             "    eel_evaluator:eval(eel_renderer:render(",
-                                             "        Bindings,",
-                                             "        #{ static => static('@fun_name')",
-                                             "         , ast => ast('@fun_name')",
-                                             "         , vars => vars('@fun_name') }",
-                                             "    ))."], Opts),
-                                        parserl_trans:insert_function(
-                                            ["'@fun_name'(Bindings) ->",
-                                             "    eel_renderer:render(",
-                                             "        Bindings,",
-                                             "        #{ static => static('@fun_name')",
-                                             "         , ast => ast('@fun_name')",
-                                             "         , vars => vars('@fun_name') }",
-                                             "    )."], Opts)
-                                    )
-                                ]
-                            )
-                        ]
-                    end,
-                    Attrs
-                ),
+eel_fun_from({binary, {Text0, Opts0}}) ->
+    Bin = flatten_ws(4, Text0),
+    Opts = parserl_trans:eval(Opts0),
+    Result = maps:get(result, Opts),
+    do_eel_fun(Result, {binary, Bin, Opts});
+eel_fun_from({file, {Filename, Opts0}}) ->
+    Opts = parserl_trans:eval(Opts0),
+    Result = maps:get(result, Opts),
+    do_eel_fun(Result, {file, Filename, Opts}).
 
-                parserl_trans:debug()
-            ])
-    end.
+do_eel_fun(render, Defs) ->
+    {ok, {Static, AST}} = compile(Defs),
+    Vars = eel_compiler:ast_vars(AST),
+    parserl_trans:quote(
+        [ "eel_renderer:render( Bindings"
+          "                   , #{ static => _@static",
+          "                      , ast => _@ast",
+          "                      , vars => _@vars } )" ]
+        , #{ static => Static
+           , ast => AST
+           , vars => Vars } );
+do_eel_fun(eval, Defs) ->
+    {ok, {Static, AST}} = compile(Defs),
+    Vars = eel_compiler:ast_vars(AST),
+    parserl_trans:quote(
+        [ "eel_evaluator:eval(",
+          "    eel_renderer:render( Bindings"
+          "                       , #{ static => _@static",
+          "                          , ast => _@ast",
+          "                          , vars => _@vars } ) )" ]
+        , #{ static => Static
+           , ast => AST
+           , vars => Vars } ).
+
+flatten_ws(N, Text) ->
+    RE = lists:flatten(["\n", lists:duplicate(N, " ")]),
+    re:replace(Text, RE, <<>>, [global, {return, binary}, unicode]).
+
+compile({binary, Bin, Opts}) ->
+    eel:compile(Bin, Opts);
+compile({file, {priv, Filename}, Opts}) ->
+    case application:get_application() of
+        {ok, App} ->
+            compile_priv_file(App, Filename, Opts);
+        undefined ->
+            error(undefined_application)
+    end;
+compile({file, {priv, App, Filename}, Opts})  ->
+    compile_priv_file(App, Filename, Opts);
+compile({file, Filename, Opts}) ->
+    eel:compile_file(Filename, Opts).
+
+compile_priv_file(App, Filename0, Opts) when is_atom(App),
+                                             ( is_binary(Filename0) orelse
+                                               is_list(Filename0) ) ->
+    Filename = filename:join([code:priv_dir(App), Filename0]),
+    eel:compile_file(Filename, Opts).
