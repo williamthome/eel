@@ -2,28 +2,28 @@
 
 % Binary
 
--define(eel_fun_from_bin(FunName, Bin, Opts, FunOpts),
-    -eel_fun({FunName, {bin, Bin, Opts}, FunOpts})
-).
+-define(eel_bin(Bin, Opts), {eel, {fun_from_binary, {Bindings, Bin, Opts}}}).
 
--define(eel_fun_from_bin(FunName, Bin, Opts),
-    ?eel_fun_from_bin(FunName, Bin, Opts, #{eval => true})
-).
+-define(eel_bin(Bin), ?eel_bin(Bin, #{})).
 
--define(eel_fun_from_bin(FunName, Bin),
-    ?eel_fun_from_bin(FunName, Bin, #{})
-).
+-define(eel_bin_render(Bin, Opts), ?eel_bin(Bin, Opts#{result => render})).
+
+-define(eel_bin_render(Bin), ?eel_bin_render(Bin, #{})).
+
+-define(eel_bin_eval(Bin, Opts), ?eel_bin(Bin, Opts#{result => eval})).
+
+-define(eel_bin_eval(Bin), ?eel_bin_eval(Bin, #{})).
 
 % File
 
--define(eel_fun_from_file(FunName, Filename, Opts, FunOpts),
-    -eel_fun({FunName, {file, Filename, Opts}, FunOpts})
-).
+-define(eel_file(Filename, Opts), {eel, {fun_from_file, {Bindings, Filename, Opts}}}).
 
--define(eel_fun_from_file(FunName, Filename, Opts),
-    ?eel_fun_from_file(FunName, Filename, Opts, #{eval => true})
-).
+-define(eel_file(Filename), ?eel_file(Filename, #{})).
 
--define(eel_fun_from_file(FunName, Filename),
-    ?eel_fun_from_file(FunName, Filename, #{})
-).
+-define(eel_file_render(Filename, Opts), ?eel_file(Filename, Opts#{result => render})).
+
+-define(eel_file_render(Filename), ?eel_file_render(Filename, #{})).
+
+-define(eel_file_eval(Filename, Opts), ?eel_file(Filename, Opts#{result => eval})).
+
+-define(eel_file_eval(Filename), ?eel_file_eval(Filename, #{})).
