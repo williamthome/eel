@@ -180,7 +180,7 @@ render_file(Filename) ->
 
 render_file(Filename, Bindings) ->
     case eel_tokenizer:tokenize_file(Filename) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render(Bindings, {Static, AST});
@@ -193,7 +193,7 @@ render_file(Filename, Bindings) ->
 
 render_file(Filename, Bindings, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
-        {ok, {Static, Dynamic} } ->
+        {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
                     eel_renderer:render(Bindings, {Static, AST}, Opts);
