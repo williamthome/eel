@@ -9,7 +9,10 @@ parse_transform(Forms, _Options) ->
                  erl_syntax:function_clauses(Form)
             of
                 [{clause, Pos, Patterns, Guards, Body}] ->
-                    case erl_syntax:tuple_elements(lists:last(Body)) of
+                    LastBodyElem = lists:last(Body),
+                    case erl_syntax:type(LastBodyElem) =:= tuple andalso 
+                         erl_syntax:tuple_elements(LastBodyElem) 
+                    of
                         [{atom, _, eel}, Defs] ->
                             [{atom, _, Action}, ActionArgs] = erl_syntax:tuple_elements(Defs),
                             EElAction = eel(Action, erl_syntax:tuple_elements(ActionArgs)),
