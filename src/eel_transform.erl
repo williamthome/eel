@@ -50,7 +50,7 @@ do_eel_fun(render, Defs) ->
     {ok, {Static, AST}} = compile(Defs),
     Vars = eel_compiler:ast_vars(AST),
     parserl_trans:quote(
-        [ "eel_renderer:render( Bindings"
+        [ "eel_renderer:render( Bindings",
           "                   , #{ static => _@static",
           "                      , ast => _@ast",
           "                      , vars => _@vars } )" ]
@@ -62,7 +62,7 @@ do_eel_fun(eval, Defs) ->
     Vars = eel_compiler:ast_vars(AST),
     parserl_trans:quote(
         [ "eel_evaluator:eval(",
-          "    eel_renderer:render( Bindings"
+          "    eel_renderer:render( Bindings",
           "                       , #{ static => _@static",
           "                          , ast => _@ast",
           "                          , vars => _@vars } ) )" ]
