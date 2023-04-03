@@ -139,8 +139,8 @@ zip(Static, Dynamic) ->
 %% @end
 %% -----------------------------------------------------------------------------
 
-normalize_bindings(Bindings0, #{}) ->
-    capitalize_keys(Bindings0).
+normalize_bindings(Bindings0, Opts) ->
+    capitalize_keys(Bindings0, Opts).
 
 eval(Exprs, Bindings) ->
     {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
@@ -155,10 +155,10 @@ do_zip([], [], Acc) ->
 do_zip([], Dynamic, Acc) ->
     lists:reverse(Dynamic, Acc).
 
-capitalize_keys(Bindings) when is_list(Bindings) ->
-    lists:map(fun({K, V}) -> {capitalize(K), V} end, Bindings);
-capitalize_keys(Bindings) when is_map(Bindings) ->
-    maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K) => V} end, #{}, Bindings).
+capitalize_keys(Bindings, Opts) when is_list(Bindings) ->
+    lists:map(fun({K, V}) -> {capitalize(K, Opts), V} end, Bindings);
+capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
+    maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K, Opts) => V} end, #{}, Bindings).
 
 %% -----------------------------------------------------------------------------
 %% @private
@@ -169,30 +169,34 @@ capitalize_keys(Bindings) when is_map(Bindings) ->
 %%          - camelCase: fooBar, <<"fooBar">>, "fooBar"
 %%
 %%      The result will be an atom: 'FooBar'.
-%%      NOTE: The atom must exists, otherwise an exception will be raised.
 %% @end
 %% -----------------------------------------------------------------------------
 
-capitalize(Key) ->
-    capitalize_1(Key, Key).
+capitalize(Key, Opts) ->
+    capitalize_1(Key, Key, Opts).
 
-capitalize_1(<<H, T/binary>>, _) when H >= $a, H =< $z ->
-    capitalize_2(T, <<(H - 32)>>);
-capitalize_1(<<H, _/binary>>, Key) when H >= $A, H =< $Z, is_atom(Key) ->
+capitalize_1(<<H, T/binary>>, _, Opts) when H >= $a, H =< $z ->
+    capitalize_2(T, Opts, <<(H - 32)>>);
+capitalize_1(<<H, _/binary>>, Key, _) when H >= $A, H =< $Z, is_atom(Key) ->
     Key;
-capitalize_1(<<H, _/binary>> = Key, _) when H >= $A, H =< $Z ->
-    erlang:binary_to_atom(Key);
-capitalize_1(Atom, Key) when is_atom(Atom) ->
-    capitalize_1(erlang:atom_to_binary(Atom), Key);
-capitalize_1(List, Key) when is_list(List) ->
-    capitalize_1(erlang:list_to_binary(List), Key).
+capitalize_1(<<H, _/binary>> = Key, _, Opts) when H >= $A, H =< $Z ->
+    to_atom(Key, Opts);
+capitalize_1(Atom, Key, Opts) when is_atom(Atom) ->
+    capitalize_1(erlang:atom_to_binary(Atom), Key, Opts);
+capitalize_1(List, Key, Opts) when is_list(List) ->
+    capitalize_1(erlang:list_to_binary(List), Key, Opts).
  
-capitalize_2(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
-    capitalize_2(T, <<Acc/binary, (H - 32)>>);
-capitalize_2(<<H, T/binary>>, Acc) ->
-    capitalize_2(T, <<Acc/binary, H>>);
-capitalize_2(<<>>, Acc) ->
-    erlang:binary_to_atom(Acc).
+capitalize_2(<<$_, H, T/binary>>, Opts, Acc) when H >= $a, H =< $z ->
+    capitalize_2(T, Opts, <<Acc/binary, (H - 32)>>);
+capitalize_2(<<H, T/binary>>, Opts, Acc) ->
+    capitalize_2(T, Opts, <<Acc/binary, H>>);
+capitalize_2(<<>>, Opts, Acc) ->
+    to_atom(Acc, Opts).
+
+to_atom(Bin, #{safe_atoms := true}) ->
+    erlang:binary_to_existing_atom(Bin);
+to_atom(Bin, #{}) ->
+    erlang:binary_to_atom(Bin).
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
     Render = unicode:characters_to_binary(zip(Static, Dynamic)),
@@ -212,13 +216,13 @@ render_result(Static, AST, Vars, Dynamic, Bindings) ->
 -ifdef(TEST).
 
 capitalize_test() ->
-    [?assertEqual('FooBar', capitalize(<<"foo_bar">>)),
-     ?assertEqual('FooBar', capitalize("foo_bar")),
-     ?assertEqual('FooBar', capitalize(foo_bar)),
-     ?assertEqual('FooBar', capitalize(fooBar)),
-     ?assertEqual('FooBar', capitalize('FooBar'))].
+    [?assertEqual('FooBar', capitalize(<<"foo_bar">>, #{})),
+     ?assertEqual('FooBar', capitalize("foo_bar", #{})),
+     ?assertEqual('FooBar', capitalize(foo_bar, #{})),
+     ?assertEqual('FooBar', capitalize(fooBar, #{})),
+     ?assertEqual('FooBar', capitalize('FooBar', #{}))].
 
 capitalize_keys_test() ->
-    ?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}])).
+    ?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}], #{})).
 
 -endif.
