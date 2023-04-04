@@ -279,3 +279,4 @@ compile_file_to_module_test() ->
      ?assertMatch({ok, foo_eel}, compile_file_to_module(Filename, #{}))].
 
 -endif.
+
