@@ -7,13 +7,69 @@
 -module(eel_evaluator).
 
 %% API functions
--export([eval/1]).
+-export([eval/1, eval/2, zip/1, zip/2]).
 
 %%%=============================================================================
 %%% API functions
 %%%=============================================================================
 
-eval({ok, {Data, _}}) ->
-    Data;
-eval(Err) ->
-    error(Err).
+%% -----------------------------------------------------------------------------
+%% @evall/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec eval(Payload) -> Result when
+    Payload :: eel_renderer:snapshot() 
+             | eel_renderer:result() 
+             | {error, term()},
+    Result  :: binary() | no_return().
+
+eval(#{static := Static, dynamic := Dynamic}) ->
+    eval(Static, Dynamic);
+eval({ok, #{static := Static, dynamic := Dynamic}}) ->
+    eval(Static, Dynamic);
+eval({error, Reason}) ->
+    error(Reason).
+
+%% -----------------------------------------------------------------------------
+%% @evall/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec eval(Static, Dynamic) -> Result when
+    Static  :: eel_engine:static(),
+    Dynamic :: [binary()],
+    Result  :: binary() | no_return().
+
+eval(Static, Dynamic) ->
+    unicode:characters_to_binary(zip(Static, Dynamic)).
+
+%% -----------------------------------------------------------------------------
+%% @doc zip/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec zip(eel_tokenizer:tokens()) -> list().
+
+zip({Static, Dynamic}) ->
+    zip(Static, Dynamic).
+
+%% -----------------------------------------------------------------------------
+%% @doc zip/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec zip(eel_engine:static(), eel_engine:dynamic()) -> list().
+
+zip(Static, Dynamic) ->
+    do_zip(Static, Dynamic, []).
+
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+do_zip([S | Static], [D | Dynamic], Acc) ->
+    do_zip(Static, Dynamic, [D, S | Acc]);
+do_zip([S | Static], [], Acc) ->
+    do_zip(Static, [], [S | Acc]);
+do_zip([], [], Acc) ->
+    lists:reverse(Acc);
+do_zip([], Dynamic, Acc) ->
+    lists:reverse(Dynamic, Acc).
+
