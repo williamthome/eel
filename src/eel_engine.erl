@@ -45,3 +45,4 @@
 %% compile
 -callback handle_compile(token(), state()) -> {ok, state()} | {error, term()}.
 -callback handle_ast(state()) -> {ok, ast()} | {error, term()}.
+

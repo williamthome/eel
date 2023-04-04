@@ -27,3 +27,4 @@
 -define(eel_file_eval(Filename, Opts), ?eel_file(Filename, Opts#{result => eval})).
 
 -define(eel_file_eval(Filename), ?eel_file_eval(Filename, #{})).
+

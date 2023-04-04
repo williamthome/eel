@@ -61,3 +61,4 @@ to_binary(PID, undefined) when is_pid(PID) ->
     erlang:list_to_binary(erlang:pid_to_list(PID));
 to_binary(Term, _) ->
     erlang:list_to_binary(io_lib:format("~p", [Term])).
+
