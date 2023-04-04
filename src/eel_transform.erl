@@ -93,3 +93,4 @@ compile_priv_file(App, Filename0, Opts) when is_atom(App),
                                                is_list(Filename0) ) ->
     Filename = filename:join([code:priv_dir(App), Filename0]),
     eel:compile_file(Filename, Opts).
+

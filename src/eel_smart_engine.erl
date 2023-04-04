@@ -39,13 +39,13 @@
 
 %% Types
 -type token_name() :: text
-                      | expr
-                      | start_expr
-                      | mid_expr
-                      | end_expr
-                      | nested_expr
-                      | comment
-                      | code.
+                    | expr
+                    | start_expr
+                    | mid_expr
+                    | end_expr
+                    | nested_expr
+                    | comment
+                    | code.
 -type token()      :: {token_name(), binary()}.
 -type ast()        :: eel_engine:ast().
 -type static()     :: eel_engine:static().
@@ -472,3 +472,4 @@ handle_render_test() ->
     ?assertEqual(Expected, Result).
 
 -endif.
+
