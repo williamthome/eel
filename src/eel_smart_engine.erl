@@ -225,7 +225,7 @@ compile(Tokens, Opts) when is_list(Tokens) ->
 compile({nested_expr, Tokens}, Opts) ->
     Expr0 = lists:map(fun(S) when is_binary(S) -> <<"<<\"", S/binary, "\">>">>;
                          (Token) -> compile(Token, Opts) end,
-                      eel_renderer:zip(Tokens)),
+                      eel_evaluator:zip(Tokens)),
     Expr1 = lists:join(", ", Expr0),
     Expr = erlang:iolist_to_binary([" erlang:iolist_to_binary([", Expr1, "])"]),
     wrap_expr(Expr);
@@ -467,7 +467,8 @@ handle_render_test() ->
     {ok, {Static, Dynamic}} = eel_tokenizer:tokenize(Bin),
     {ok, AST} = eel_compiler:compile(Dynamic),
     Bindings = #{list => [foo, bar, baz]},
-    {ok, {Result, _}} = eel_renderer:render(Bindings, {Static, AST}),
+    {ok, Snapshot} = eel_renderer:render(Bindings, {Static, AST}),
+    Result = eel_evaluator:eval(Snapshot),
     ?assertEqual(Expected, Result).
 
 -endif.

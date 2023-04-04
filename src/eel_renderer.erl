@@ -7,10 +7,10 @@
 -module(eel_renderer).
 
 %% API functions
--export([render/1, render/2, render/3, zip/1, zip/2]).
+-export([render/1, render/2, render/3]).
 
 %% Types
--export_type([result/0]).
+-export_type([bindings/0, snapshot/0, tokens/0, result/0]).
 
 %% Includes
 -include("eel_core.hrl").
@@ -18,13 +18,22 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-%% Types
+%% Type
+-type bindings() :: map().
 -type snapshot() :: #{static   => eel_engine:static(),
                       ast      => eel_engine:ast(),
                       vars     => map(),
                       dynamic  => [binary()],
-                      bindings => map()}.
--type result()   :: {ok, {binary(), snapshot()}}.
+                      bindings => bindings()}.
+-type tokens()   :: {eel_engine:static(), eel_engine:ast()}
+                  | snapshot()
+                  | #{static => eel_engine:static(), 
+                      ast    => eel_engine:ast()}
+                  | #{static => eel_engine:static(),
+                      ast    => eel_engine:ast(),
+                      vars   => term()}.
+-type options()  :: map().
+-type result()   :: {ok, snapshot()}.
 
 %%%=============================================================================
 %%% API functions
@@ -34,21 +43,21 @@
 %% @doc render/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Tokens) -> Result when
-    Tokens :: {eel_engine:static(), eel_engine:ast()},
-    Result :: result().
+-spec render(Payload) -> Result when
+    Payload :: tokens(),
+    Result  :: result().
 
-render(Tokens) ->
-    render(Tokens, ?DEFAULT_ENGINE_OPTS).
+render(Payload) ->
+    render(Payload, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc render/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(TokensOrBindings, OptsOrTokens) -> Result when
-    TokensOrBindings :: {eel_engine:static(), eel_engine:ast()} | map(),
-    OptsOrTokens     :: map() | {eel_engine:static(), eel_engine:ast()},
-    Result           :: result().
+-spec render(Arg1, Arg2) -> Result when
+    Arg1   :: tokens() | bindings(),
+    Arg2   :: tokens() | options(),
+    Result :: result().
 
 render(#{static := _, ast := _} = Tokens, Opts) ->
     render(#{}, Tokens, Opts);
@@ -64,9 +73,9 @@ render(Bindings, {Static, AST}) ->
 %% @end
 %% -----------------------------------------------------------------------------
 -spec render(Bindings, Tokens, Opts) -> Result when
-    Bindings :: map(),
-    Tokens   :: {eel_engine:static(), eel_engine:ast()},
-    Opts     :: map(),
+    Bindings :: bindings(),
+    Tokens   :: tokens(),
+    Opts     :: options(),
     Result   :: result().
 
 render(Changes0, #{static   := Static,
@@ -107,24 +116,6 @@ render(Bindings, {Static, AST}, Opts) ->
                  vars   =>  eel_compiler:ast_vars(AST)},
     render(Bindings, Snapshot, Opts).
 
-%% -----------------------------------------------------------------------------
-%% @doc zip/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec zip(eel_tokenizer:tokens()) -> list().
-
-zip({Static, Dynamic}) ->
-    zip(Static, Dynamic).
-
-%% -----------------------------------------------------------------------------
-%% @doc zip/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec zip(eel_engine:static(), eel_engine:dynamic()) -> list().
-
-zip(Static, Dynamic) ->
-    do_zip(Static, Dynamic, []).
-
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
@@ -145,15 +136,6 @@ normalize_bindings(Bindings0, Opts) ->
 eval(Exprs, Bindings) ->
     {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
     Binary.
-
-do_zip([S | Static], [D | Dynamic], Acc) ->
-    do_zip(Static, Dynamic, [D, S | Acc]);
-do_zip([S | Static], [], Acc) ->
-    do_zip(Static, [], [S | Acc]);
-do_zip([], [], Acc) ->
-    lists:reverse(Acc);
-do_zip([], Dynamic, Acc) ->
-    lists:reverse(Dynamic, Acc).
 
 capitalize_keys(Bindings, Opts) when is_list(Bindings) ->
     lists:map(fun({K, V}) -> {capitalize(K, Opts), V} end, Bindings);
@@ -199,7 +181,6 @@ to_atom(Bin, #{}) ->
     erlang:binary_to_atom(Bin).
 
 render_result(Static, AST, Vars, Dynamic, Bindings) ->
-    Render = unicode:characters_to_binary(zip(Static, Dynamic)),
     Snapshot = #{
         static => Static,
         ast => AST,
@@ -207,7 +188,7 @@ render_result(Static, AST, Vars, Dynamic, Bindings) ->
         dynamic => Dynamic,
         bindings => Bindings
     },
-    {ok, {Render, Snapshot}}.
+    {ok, Snapshot}.
 
 %%%=============================================================================
 %%% Tests
