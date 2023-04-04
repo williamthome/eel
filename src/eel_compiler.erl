@@ -93,11 +93,11 @@ compile_file_to_module(Filename, Tokens) ->
 %% @doc compile_file_to_module/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile_file_to_module(Filename, Tokens, Options) -> Return when
-    Filename :: file:filename_all(),
-    Tokens   :: eel_tokenizer:tokens(),
-    Options  :: options(),
-    Return   :: {ok, module()} | {error, term()}.
+-spec compile_file_to_module(Filename, Tokens, OptsOrMod) -> Return when
+    Filename  :: file:filename_all(),
+    Tokens    :: eel_tokenizer:tokens(),
+    OptsOrMod :: options() | module(),
+    Return    :: {ok, module()} | {error, term()}.
 
 compile_file_to_module(Filename, Tokens, Module) when is_atom(Module) ->
     compile_file_to_module(Filename, Tokens, Module, ?DEFAULT_ENGINE_OPTS);
