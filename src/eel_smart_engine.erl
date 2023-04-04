@@ -21,21 +21,14 @@
 -endif.
 
 %% Defines
--define(token(Name),    fun(BinOrSD) -> {Name, BinOrSD} end).
--define(text,           ?token(text)).
--define(expr,           ?token(expr)).
--define(start_expr,     ?token(start_expr)).
--define(mid_expr,       ?token(mid_expr)).
--define(end_expr,       ?token(end_expr)).
--define(nested_expr,    ?token(nested_expr)).
--define(comment,        ?token(comment)).
--define(code,           ?token(code)).
--define(is_expr(Token), is_tuple(Token) andalso
-                        (element(1, Token) =:= expr orelse
-                         element(1, Token) =:= start_expr orelse
-                         element(1, Token) =:= end_expr orelse
-                         element(1, Token) =:= nested_expr orelse
-                         element(1, Token) =:= code)).
+-define(text(X),        {text, X}).
+-define(expr(X),        {expr, X}).
+-define(start_expr(X),  {start_expr, X}).
+-define(mid_expr(X),    {mid_expr, X}).
+-define(end_expr(X),    {end_expr, X}).
+-define(nested_expr(X), {nested_expr, X}).
+-define(comment(X),     {comment, X}).
+-define(code(X),        {code, X}).
 
 %% Types
 -type token_name() :: text
@@ -179,10 +172,19 @@ do_parse_tokens_to_sd_2(Tokens, Curr, In, Prev, {S, D}) ->
          end,
     do_parse_tokens_to_sd_1(Tokens, In, Curr, SD).
 
-% FIXME: Dialyzer warnings (maybe false positive)
-should_push_empty_static(_, Curr, {[], _}) when ?is_expr(Curr) -> true;
-should_push_empty_static(Prev, Curr, {_, _}) -> ?is_expr(Prev) andalso
-                                                ?is_expr(Curr).
+should_push_empty_static(_, Curr, {[], _}) ->
+    is_expr(Curr);
+should_push_empty_static(Prev, Curr, {_, _}) -> 
+    is_expr(Prev) andalso is_expr(Curr).
+
+is_expr({Name, _}) when Name =:= expr;
+                        Name =:= start_expr;
+                        Name =:= end_expr;
+                        Name =:= nested_expr;
+                        Name =:= code ->
+    true;
+is_expr(_) ->
+    false.
 
 % Nested
 parse_nested_sd(T, Prev, {S, [HD | D]}) ->
