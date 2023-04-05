@@ -31,10 +31,10 @@ parse_transform(Forms, _Options) ->
         Forms
     ).
 
-eel(fun_from_binary, [{var, _, 'Bindings'}, {string, _, Text}, Opts]) ->
-    eel_fun_from({binary, {Text, Opts}});
-eel(fun_from_file, [{var, _, 'Bindings'}, {string, _, Filename}, Opts]) ->
-    eel_fun_from({file, {Filename, Opts}}).
+eel(fun_from_binary, [{var, _, 'Bindings'}, Text, Opts]) ->
+    eel_fun_from({binary, {parserl_trans:eval(Text), Opts}});
+eel(fun_from_file, [{var, _, 'Bindings'}, Filename, Opts]) ->
+    eel_fun_from({file, {parserl_trans:eval(Filename), Opts}}).
 
 eel_fun_from({binary, {Text0, Opts0}}) ->
     Bin = flatten_ws(4, Text0),
@@ -75,7 +75,7 @@ flatten_ws(N, Text) ->
     re:replace(Text, RE, <<>>, [global, {return, binary}, unicode]).
 
 compile({binary, Bin, Opts}) ->
-    eel:compile(Bin, Opts);
+    compile(Bin, Opts);
 compile({file, {priv, Filename}, Opts}) ->
     case application:get_application() of
         {ok, App} ->
@@ -86,11 +86,29 @@ compile({file, {priv, Filename}, Opts}) ->
 compile({file, {priv, App, Filename}, Opts})  ->
     compile_priv_file(App, Filename, Opts);
 compile({file, Filename, Opts}) ->
-    eel:compile_file(Filename, Opts).
+    compile_file(Filename, Opts).
 
 compile_priv_file(App, Filename0, Opts) when is_atom(App),
                                              ( is_binary(Filename0) orelse
                                                is_list(Filename0) ) ->
     Filename = filename:join([code:priv_dir(App), Filename0]),
-    eel:compile_file(Filename, Opts).
+    compile_file(Filename, Opts).
+
+compile(Bin, Opts) ->
+    case eel:compile(Bin, Opts) of
+        {ok, Result} ->
+            {ok, Result};
+        {error, Reason} ->
+            error(Reason, #{ bin => Bin
+                           , opts => Opts })
+    end.
+
+compile_file(Filename, Opts) ->
+    case eel:compile_file(Filename, Opts) of
+        {ok, Result} ->
+            {ok, Result};
+        {error, Reason} ->
+            error({Reason, #{ filename => Filename
+                            , opts => Opts }})
+    end.
 
