@@ -147,8 +147,8 @@ capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
 %% @doc Transform binary, list or atom to capital case. Snake case or camel case
 %%      can be provided to be parsed, e.g.:
 %%
-%%          - snake_case: foo_bar, <<"foo_bar">>, "foo_bar"
-%%          - camelCase: fooBar, <<"fooBar">>, "fooBar"
+%%          - snake_case: foo_bar, &lt;&lt;"foo_bar"&gt;&gt;, "foo_bar"
+%%          - camelCase: fooBar, &lt;&lt;"fooBar"&gt;&gt;, "fooBar"
 %%
 %%      The result will be an atom: 'FooBar'.
 %% @end
