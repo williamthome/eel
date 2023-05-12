@@ -10,8 +10,8 @@ parse_transform(Forms, _Options) ->
             of
                 [{clause, Pos, Patterns, Guards, Body}] ->
                     LastBodyElem = lists:last(Body),
-                    case erl_syntax:type(LastBodyElem) =:= tuple andalso 
-                         erl_syntax:tuple_elements(LastBodyElem) 
+                    case erl_syntax:type(LastBodyElem) =:= tuple andalso
+                         erl_syntax:tuple_elements(LastBodyElem)
                     of
                         [{atom, _, eel}, Defs] ->
                             [{atom, _, Action}, ActionArgs] = erl_syntax:tuple_elements(Defs),
@@ -47,28 +47,15 @@ eel_fun_from({file, {Filename, Opts0}}) ->
     do_eel_fun(Result, {file, Filename, Opts}).
 
 do_eel_fun(render, Defs) ->
-    {ok, {Static, AST}} = compile(Defs),
-    Vars = eel_compiler:ast_vars(AST),
+    {ok, Snapshot} = compile(Defs),
     parserl_trans:quote(
-        [ "eel_renderer:render( Bindings",
-          "                   , #{ static => _@static",
-          "                      , ast => _@ast",
-          "                      , vars => _@vars } )" ]
-        , #{ static => Static
-           , ast => AST
-           , vars => Vars } );
+        "eel_renderer:render(Bindings, _@snapshot)"
+        , #{ snapshot => Snapshot } );
 do_eel_fun(eval, Defs) ->
-    {ok, {Static, AST}} = compile(Defs),
-    Vars = eel_compiler:ast_vars(AST),
+    {ok, Snapshot} = compile(Defs),
     parserl_trans:quote(
-        [ "eel_evaluator:eval(",
-          "    eel_renderer:render( Bindings",
-          "                       , #{ static => _@static",
-          "                          , ast => _@ast",
-          "                          , vars => _@vars } ) )" ]
-        , #{ static => Static
-           , ast => AST
-           , vars => Vars } ).
+        "eel_evaluator:eval(eel_renderer:render(Bindings, _@snapshot))"
+        , #{ snapshot => Snapshot } ).
 
 flatten_ws(N, Text) ->
     RE = lists:flatten(["\n", lists:duplicate(N, " ")]),

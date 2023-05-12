@@ -174,7 +174,7 @@ do_parse_tokens_to_sd_2(Tokens, Curr, In, Prev, {S, D}) ->
 
 should_push_empty_static(_, Curr, {[], _}) ->
     is_expr(Curr);
-should_push_empty_static(Prev, Curr, {_, _}) -> 
+should_push_empty_static(Prev, Curr, {_, _}) ->
     is_expr(Prev) andalso is_expr(Curr).
 
 is_expr({Name, _}) when Name =:= expr;
@@ -466,10 +466,9 @@ handle_render_test() ->
         "<% ; false -> <<\"Empty list\">> end .%>"
         "<%  .%>"
     >>,
-    {ok, {Static, Dynamic}} = eel_tokenizer:tokenize(Bin),
-    {ok, AST} = eel_compiler:compile(Dynamic),
+    {ok, Snapshot0} = eel:compile(Bin),
     Bindings = #{list => [foo, bar, baz]},
-    {ok, Snapshot} = eel_renderer:render(Bindings, {Static, AST}),
+    {ok, Snapshot} = eel_renderer:render(Bindings, Snapshot0),
     Result = eel_evaluator:eval(Snapshot),
     ?assertEqual(Expected, Result).
 
