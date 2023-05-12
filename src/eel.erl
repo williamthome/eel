@@ -32,7 +32,7 @@ compile(Bin) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {ok, {Static, AST}};
+                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -45,7 +45,7 @@ compile(Bin, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {ok, {Static, AST}};
+                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -58,7 +58,7 @@ compile_file(Filename) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {ok, {Static, AST}};
+                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -71,7 +71,7 @@ compile_file(Filename, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    {ok, {Static, AST}};
+                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -131,7 +131,8 @@ render(Bin) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST});
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Snapshot);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -144,7 +145,8 @@ render(Bin, Bindings) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render(Bindings, {Static, AST});
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Bindings, Snapshot);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -157,7 +159,8 @@ render(Bin, Bindings, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render(Bindings, {Static, AST}, Opts);
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -170,7 +173,8 @@ render_file(Filename) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render({Static, AST});
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Snapshot);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -183,7 +187,8 @@ render_file(Filename, Bindings) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render(Bindings, {Static, AST});
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Bindings, Snapshot);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -196,7 +201,8 @@ render_file(Filename, Bindings, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic) of
                 {ok, AST} ->
-                    eel_renderer:render(Bindings, {Static, AST}, Opts);
+                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -205,22 +211,28 @@ render_file(Filename, Bindings, Opts) ->
     end.
 
 eval(Bin) ->
-    eel_evaluator:eval(render(Bin)).
+    {ok, Snapshot} = render(Bin),
+    eel_evaluator:eval(Snapshot).
 
 eval(Bin, Bindings) ->
-    eel_evaluator:eval(render(Bin, Bindings)).
+    {ok, Snapshot} = render(Bin, Bindings),
+    eel_evaluator:eval(Snapshot).
 
 eval(Bin, Bindings, Opts) ->
-    eel_evaluator:eval(render(Bin, Bindings, Opts)).
+    {ok, Snapshot} = render(Bin, Bindings, Opts),
+    eel_evaluator:eval(Snapshot).
 
 eval_file(Filename) ->
-    eel_evaluator:eval(render_file(Filename)).
+    {ok, Snapshot} = render_file(Filename),
+    eel_evaluator:eval(Snapshot).
 
 eval_file(Filename, Bindings) ->
-    eel_evaluator:eval(render_file(Filename, Bindings)).
+    {ok, Snapshot} = render_file(Filename, Bindings),
+    eel_evaluator:eval(Snapshot).
 
 eval_file(Filename, Bindings, Opts) ->
-    eel_evaluator:eval(render_file(Filename, Bindings, Opts)).
+    {ok, Snapshot} = render_file(Filename, Bindings, Opts),
+    eel_evaluator:eval(Snapshot).
 
 eval_to_file(Bin, OutFilename) ->
     eval_to_file(Bin, #{}, OutFilename).
