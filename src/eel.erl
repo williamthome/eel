@@ -28,17 +28,7 @@
 %%%=============================================================================
 
 compile(Bin) ->
-    case eel_tokenizer:tokenize(Bin) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    compile(Bin, default_engine_opts()).
 
 compile(Bin, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
@@ -54,17 +44,7 @@ compile(Bin, Opts) ->
     end.
 
 compile_file(Filename) ->
-    case eel_tokenizer:tokenize_file(Filename) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    compile_file(Filename, default_engine_opts()).
 
 compile_file(Filename, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
@@ -80,12 +60,7 @@ compile_file(Filename, Opts) ->
     end.
 
 compile_to_module(Bin, ModName) ->
-    case eel_tokenizer:tokenize(Bin) of
-        {ok, Tokens} ->
-            eel_compiler:compile_to_module(Tokens, ModName);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    compile_to_module(Bin, ModName, default_engine_opts()).
 
 compile_to_module(Bin, ModName, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
@@ -96,27 +71,13 @@ compile_to_module(Bin, ModName, Opts) ->
     end.
 
 compile_file_to_module(Filename) ->
-    case eel_tokenizer:tokenize_file(Filename) of
-        {ok, Tokens} ->
-            eel_compiler:compile_file_to_module(Filename, Tokens);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    compile_file_to_module(Filename, default_engine_opts()).
 
 compile_file_to_module(Filename, Module) when is_atom(Module) ->
-    case eel_tokenizer:tokenize_file(Filename) of
-        {ok, Tokens} ->
-            eel_compiler:compile_file_to_module(Filename, Tokens, Module);
-        {error, Reason} ->
-            {error, Reason}
-    end;
+    compile_file_to_module(Filename, Module, default_engine_opts());
 compile_file_to_module(Filename, Opts) when is_map(Opts) ->
-    case eel_tokenizer:tokenize_file(Filename, Opts) of
-        {ok, Tokens} ->
-            eel_compiler:compile_file_to_module(Filename, Tokens, Opts);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    Module = eel_compiler:file_module(Filename),
+    compile_file_to_module(Filename, Module, Opts).
 
 compile_file_to_module(Filename, Module, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
@@ -127,32 +88,10 @@ compile_file_to_module(Filename, Module, Opts) ->
     end.
 
 render(Bin) ->
-    case eel_tokenizer:tokenize(Bin) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
-                    eel_renderer:render(Snapshot);
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    render(Bin, #{}).
 
 render(Bin, Bindings) ->
-    case eel_tokenizer:tokenize(Bin) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
-                    eel_renderer:render(Bindings, Snapshot);
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    render(Bin, Bindings, default_engine_opts()).
 
 render(Bin, Bindings, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
@@ -169,32 +108,10 @@ render(Bin, Bindings, Opts) ->
     end.
 
 render_file(Filename) ->
-    case eel_tokenizer:tokenize_file(Filename) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
-                    eel_renderer:render(Snapshot);
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    render_file(Filename, #{}).
 
 render_file(Filename, Bindings) ->
-    case eel_tokenizer:tokenize_file(Filename) of
-        {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
-                {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
-                    eel_renderer:render(Bindings, Snapshot);
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    render_file(Filename, Bindings, default_engine_opts()).
 
 render_file(Filename, Bindings, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
@@ -211,24 +128,20 @@ render_file(Filename, Bindings, Opts) ->
     end.
 
 eval(Bin) ->
-    {ok, Snapshot} = render(Bin),
-    eel_evaluator:eval(Snapshot).
+    eval(Bin, #{}).
 
 eval(Bin, Bindings) ->
-    {ok, Snapshot} = render(Bin, Bindings),
-    eel_evaluator:eval(Snapshot).
+    eval(Bin, Bindings, default_engine_opts()).
 
 eval(Bin, Bindings, Opts) ->
     {ok, Snapshot} = render(Bin, Bindings, Opts),
     eel_evaluator:eval(Snapshot).
 
 eval_file(Filename) ->
-    {ok, Snapshot} = render_file(Filename),
-    eel_evaluator:eval(Snapshot).
+    eval_file(Filename, #{}).
 
 eval_file(Filename, Bindings) ->
-    {ok, Snapshot} = render_file(Filename, Bindings),
-    eel_evaluator:eval(Snapshot).
+    eval_file(Filename, Bindings, default_engine_opts()).
 
 eval_file(Filename, Bindings, Opts) ->
     {ok, Snapshot} = render_file(Filename, Bindings, Opts),
