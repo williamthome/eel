@@ -17,18 +17,12 @@
 %% @evall/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec eval(Payload) -> Result when
-    Payload :: eel_renderer:snapshot() 
-             | eel_renderer:result() 
-             | {error, term()},
-    Result  :: binary() | no_return().
+-spec eval(Snapshot) -> Result when
+    Snapshot :: eel_renderer:snapshot(),
+    Result   :: binary().
 
 eval(#{static := Static, dynamic := Dynamic}) ->
-    eval(Static, Dynamic);
-eval({ok, #{static := Static, dynamic := Dynamic}}) ->
-    eval(Static, Dynamic);
-eval({error, Reason}) ->
-    error(Reason).
+    eval(Static, Dynamic).
 
 %% -----------------------------------------------------------------------------
 %% @evall/2.
@@ -37,7 +31,7 @@ eval({error, Reason}) ->
 -spec eval(Static, Dynamic) -> Result when
     Static  :: eel_engine:static(),
     Dynamic :: [binary()],
-    Result  :: binary() | no_return().
+    Result  :: binary().
 
 eval(Static, Dynamic) ->
     unicode:characters_to_binary(zip(Static, Dynamic)).
