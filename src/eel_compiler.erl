@@ -9,7 +9,7 @@
 %% API functions
 -export([compile/1, compile/2, compile_to_module/2, compile_to_module/3,
          compile_file_to_module/2, compile_file_to_module/3,
-         compile_file_to_module/4, dynamic_to_ast/1, ast_vars/1]).
+         compile_file_to_module/4, dynamic_to_ast/1, ast_vars/1, file_module/1]).
 
 %% Types
 -export_type([options/0]).
@@ -191,6 +191,25 @@ ast_vars(AST) when is_list(AST) ->
 ast_vars(AST) when is_tuple(AST) ->
     ast_vars([AST]).
 
+%% -----------------------------------------------------------------------------
+%% @doc ast_vars/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec file_module(Filename) -> Result when
+    Filename :: file:filename_all(),
+    Result   :: module().
+
+% TODO: Rename fun to file_module_name
+% TODO: safe option, and when true use erlang:binary_to_existing_atom/1
+file_module(Filename) when is_binary(Filename); is_list(Filename) ->
+    Basename =
+        case filename:basename(Filename) of
+            N when is_binary(N) -> N;
+            N when is_list(N) -> list_to_binary(N)
+        end,
+    Name = binary:replace(Basename, <<".">>, <<"_">>, [global]),
+    erlang:binary_to_atom(Name).
+
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
@@ -289,15 +308,6 @@ module_forms(Module, Filename, Static, AST, Vars, Opts) ->
              {vars, merl:term(Vars)},
              {compile_opts, merl:term(Opts)}]),
     [erl_syntax:revert(Form) || Form <- Forms].
-
-file_module(Filename) when is_binary(Filename); is_list(Filename) ->
-    Basename =
-        case filename:basename(Filename) of
-            N when is_binary(N) -> N;
-            N when is_list(N) -> list_to_binary(N)
-        end,
-    Name = binary:replace(Basename, <<".">>, <<"_">>, [global]),
-    erlang:binary_to_atom(Name).
 
 normalize_expr(Expr) ->
     erlang:binary_to_list(erlang:iolist_to_binary([Expr, "."])).
