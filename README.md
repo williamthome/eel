@@ -47,7 +47,10 @@ and type this in the Erlang shell
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings =>
+       #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+         'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   changes => [{1,<<"Hey!">>},{2,<<"World">>}],
    dynamic => [<<"Hey!">>,<<"World">>],
    static =>
        [<<"<html><head><title>">>,
@@ -62,7 +65,12 @@ and type this in the Erlang shell
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
+   bindings =>
+       #{'Bindings' =>
+             #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+               'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
+         'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
+   changes => [{2,<<"Erlang">>}],
    dynamic => [<<"Hey!">>,<<"Erlang">>],
    static =>
        [<<"<html><head><title>">>,
@@ -83,7 +91,10 @@ and the second a metadata called `snapshot` (see next)
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings =>
+       #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+         'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   changes => [{1,<<"Hey!">>},{2,<<"World">>}],
    dynamic => [<<"Hey!">>,<<"World">>],
    static =>
        [<<"<html><head><title>">>,
