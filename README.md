@@ -2,6 +2,15 @@
 
 Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can embed and evaluate Erlang inside binaries.
 
+## API
+
+### Evaluation
+
+```erlang
+1> eel:eval(<<"Hello, <%= Who .%>!">>, #{'Who' => <<"World">>}).
+<<"Hello, World!">>
+```
+
 ## Example
 
 Given this module
@@ -47,9 +56,7 @@ and type this in the Erlang shell
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings =>
-       #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
-         'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
    changes => [{1,<<"Hey!">>},{2,<<"World">>}],
    dynamic => [<<"Hey!">>,<<"World">>],
    static =>
@@ -65,11 +72,7 @@ and type this in the Erlang shell
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings =>
-       #{'Bindings' =>
-             #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
-               'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
-         'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
+   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
    changes => [{2,<<"Erlang">>}],
    dynamic => [<<"Hey!">>,<<"Erlang">>],
    static =>
@@ -91,9 +94,7 @@ and the second a metadata called `snapshot` (see next)
         [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
                [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
-   bindings =>
-       #{'Bindings' => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
-         'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
    changes => [{1,<<"Hey!">>},{2,<<"World">>}],
    dynamic => [<<"Hey!">>,<<"World">>],
    static =>
@@ -161,7 +162,7 @@ The template should have the `.eel` extension and a structure like this:
 
 ## Highlight
 
-If you use VSCode, there is an [Embedded Erlang (EEl)](https://marketplace.visualstudio.com/items?itemName=williamthome.eel) extension in the Marketplace.
+If you use VSCode, you can get highlighting by installing the [Embedded Erlang (EEl)](https://github.com/williamthome/vscode_eel) extension.
 
 ## Sponsors
 
