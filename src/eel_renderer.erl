@@ -7,7 +7,8 @@
 -module(eel_renderer).
 
 %% API functions
--export([render/1, render/2, render/3, snapshot/3, snapshot/4, snapshot/5]).
+-export([render/1, render/2, render/3]).
+-export([snapshot/2, snapshot/3, snapshot/4, snapshot/5]).
 
 %% Types
 -export_type([bindings/0, snapshot/0, result/0]).
@@ -20,8 +21,9 @@
 
 %% Type
 -type bindings() :: map().
+-type dynamic()  :: undefined | [binary()].
 -type snapshot() :: #{static   => eel_engine:static(),
-                      dynamic  => [binary()],
+                      dynamic  => dynamic(),
                       ast      => eel_engine:ast(),
                       bindings => bindings(),
                       vars     => [atom()]}.
@@ -71,12 +73,12 @@ render(Changes0, #{static   := Static,
                    bindings := BindingsSnap,
                    vars     := Vars}, Opts) ->
     Changes = normalize_bindings(Changes0, Opts),
-    ChangesKeys = maps:keys(Changes),
-    Bindings = maps:merge(BindingsSnap, Changes),
+    Bindings0 = maps:merge(BindingsSnap, Changes),
+    Bindings = Bindings0#{'Bindings' => Bindings0},
     Dynamic =
         lists:map(
             fun({Index, IndexVars}) ->
-                case lists:any(fun(V) -> lists:member(V, ChangesKeys) end, IndexVars) of
+                case should_eval_exprs(DynamicSnap, Changes, IndexVars) of
                     true ->
                         Exprs = lists:nth(Index, AST),
                         eval(Exprs, Bindings);
@@ -88,13 +90,34 @@ render(Changes0, #{static   := Static,
         ),
     {ok, snapshot(Static, Dynamic, AST, Bindings, Vars)}.
 
+should_eval_exprs(undefined, _, _) ->
+    true;
+should_eval_exprs(_, Changes, Vars) ->
+    lists:member('Bindings', Vars) orelse contains_any_var(Changes, Vars).
+
+contains_any_var(Map, Vars) ->
+    MapKeys = maps:keys(Map),
+    lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
+
+%% -----------------------------------------------------------------------------
+%% @doc snapshot/2.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec snapshot(Static, AST) -> Result when
+    Static   :: eel_engine:static(),
+    AST      :: eel_engine:ast(),
+    Result   :: snapshot().
+
+snapshot(Static, AST) ->
+    snapshot(Static, undefined, AST).
+
 %% -----------------------------------------------------------------------------
 %% @doc snapshot/3.
 %% @end
 %% -----------------------------------------------------------------------------
 -spec snapshot(Static, Dynamic, AST) -> Result when
     Static   :: eel_engine:static(),
-    Dynamic  :: [binary()],
+    Dynamic  :: dynamic(),
     AST      :: eel_engine:ast(),
     Result   :: snapshot().
 
@@ -107,7 +130,7 @@ snapshot(Static, Dynamic, AST) ->
 %% -----------------------------------------------------------------------------
 -spec snapshot(Static, Dynamic, AST, Bindings) -> Result when
     Static   :: eel_engine:static(),
-    Dynamic  :: [binary()],
+    Dynamic  :: dynamic(),
     AST      :: eel_engine:ast(),
     Bindings :: bindings(),
     Result   :: snapshot().
@@ -122,7 +145,7 @@ snapshot(Static, Dynamic, AST, Bindings) ->
 %% -----------------------------------------------------------------------------
 -spec snapshot(Static, Dynamic, AST, Bindings, Vars) -> Result when
     Static   :: eel_engine:static(),
-    Dynamic  :: [binary()],
+    Dynamic  :: dynamic(),
     AST      :: eel_engine:ast(),
     Bindings :: bindings(),
     Vars     :: [atom()],
