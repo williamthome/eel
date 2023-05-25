@@ -342,4 +342,3 @@ ast_vars_test() ->
     [?assertEqual(Expected, ast_vars(AST))].
 
 -endif.
-
