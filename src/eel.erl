@@ -33,7 +33,7 @@ compile(Bin) ->
 compile(Bin, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
         {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
+            case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
                     {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
@@ -49,7 +49,7 @@ compile_file(Filename) ->
 compile_file(Filename, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
         {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
+            case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
                     {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
                 {error, Reason} ->
@@ -96,7 +96,7 @@ render(Bin, Bindings) ->
 render(Bin, Bindings, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
         {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
+            case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
                     Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
                     eel_renderer:render(Bindings, Snapshot, Opts);
@@ -116,7 +116,7 @@ render_file(Filename, Bindings) ->
 render_file(Filename, Bindings, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
         {ok, {Static, Dynamic}} ->
-            case eel_compiler:compile(Dynamic) of
+            case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
                     Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
                     eel_renderer:render(Bindings, Snapshot, Opts);
