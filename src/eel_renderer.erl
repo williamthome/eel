@@ -8,10 +8,10 @@
 
 %% API functions
 -export([render/1, render/2, render/3]).
--export([snapshot/2, snapshot/3, snapshot/4, snapshot/5]).
+-export([snapshot/2, snapshot/3, snapshot/4, snapshot/6]).
 
 %% Types
--export_type([bindings/0, snapshot/0, result/0]).
+-export_type([bindings/0, dynamic/0, changes/0, snapshot/0, result/0]).
 
 %% Includes
 -include("eel_core.hrl").
@@ -22,11 +22,13 @@
 %% Type
 -type bindings() :: map().
 -type dynamic()  :: undefined | [binary()].
+-type changes()  :: [{non_neg_integer(), binary()}].
 -type snapshot() :: #{static   => eel_engine:static(),
                       dynamic  => dynamic(),
                       ast      => eel_engine:ast(),
                       bindings => bindings(),
-                      vars     => [atom()]}.
+                      vars     => [atom()],
+                      changes  => changes()}.
 -type options()  :: map().
 -type result()   :: {ok, snapshot()}.
 
@@ -67,33 +69,37 @@ render(Bindings, Snapshot) ->
     Opts     :: options(),
     Result   :: result().
 
-render(Changes0, #{static   := Static,
-                   dynamic  := DynamicSnap,
-                   ast      := AST,
-                   bindings := BindingsSnap,
-                   vars     := Vars}, Opts) ->
-    Changes = normalize_bindings(Changes0, Opts),
-    Bindings0 = maps:merge(BindingsSnap, Changes),
+render(Params0, #{static   := Static,
+                  dynamic  := DynamicSnap,
+                  ast      := AST,
+                  bindings := BindingsSnap,
+                  vars     := Vars}, Opts) ->
+    Params = normalize_bindings(Params0, Opts),
+    Bindings0 = maps:merge(BindingsSnap, Params),
     Bindings = Bindings0#{'Bindings' => Bindings0},
-    Dynamic =
-        lists:map(
-            fun({Index, IndexVars}) ->
-                case should_eval_exprs(DynamicSnap, Changes, IndexVars) of
+    {Dynamic0, Changes0} =
+        lists:foldl(
+            fun({Index, IndexVars}, {DAcc, CAcc}) ->
+                case should_eval_exprs(DynamicSnap, Params, IndexVars) of
                     true ->
                         Exprs = lists:nth(Index, AST),
-                        eval(Exprs, Bindings);
+                        Bin = eval(Exprs, Bindings),
+                        {[Bin | DAcc], [{Index, Bin} | CAcc]};
                     false ->
-                        lists:nth(Index, DynamicSnap)
+                        {[lists:nth(Index, DynamicSnap) | DAcc], CAcc}
                 end
             end,
+            {[], []},
             Vars
         ),
-    {ok, snapshot(Static, Dynamic, AST, Bindings, Vars)}.
+    Dynamic = lists:reverse(Dynamic0),
+    Changes = lists:reverse(Changes0),
+    {ok, snapshot(Static, Dynamic, AST, Bindings, Vars, Changes)}.
 
 should_eval_exprs(undefined, _, _) ->
     true;
-should_eval_exprs(_, Changes, Vars) ->
-    lists:member('Bindings', Vars) orelse contains_any_var(Changes, Vars).
+should_eval_exprs(_, Params, Vars) ->
+    lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
 
 contains_any_var(Map, Vars) ->
     MapKeys = maps:keys(Map),
@@ -137,26 +143,28 @@ snapshot(Static, Dynamic, AST) ->
 
 snapshot(Static, Dynamic, AST, Bindings) ->
     Vars = eel_compiler:ast_vars(AST),
-    snapshot(Static, Dynamic, AST, Bindings, Vars).
+    snapshot(Static, Dynamic, AST, Bindings, Vars, []).
 
 %% -----------------------------------------------------------------------------
 %% @doc snapshot/5.
 %% @end
 %% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings, Vars) -> Result when
+-spec snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) -> Result when
     Static   :: eel_engine:static(),
     Dynamic  :: dynamic(),
     AST      :: eel_engine:ast(),
     Bindings :: bindings(),
     Vars     :: [atom()],
+    Changes  :: changes(),
     Result   :: snapshot().
 
-snapshot(Static, Dynamic, AST, Bindings, Vars) ->
+snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) ->
     #{static => Static,
       dynamic => Dynamic,
       ast => AST,
       bindings => Bindings,
-      vars => Vars}.
+      vars => Vars,
+      changes => Changes}.
 
 %%%=============================================================================
 %%% Internal functions
