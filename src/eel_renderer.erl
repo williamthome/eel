@@ -75,15 +75,15 @@ render(Params0, #{static   := Static,
                   bindings := BindingsSnap,
                   vars     := Vars}, Opts) ->
     Params = normalize_bindings(Params0, Opts),
-    Bindings0 = maps:merge(BindingsSnap, Params),
-    Bindings = Bindings0#{'Bindings' => Bindings0},
+    Bindings = maps:merge(BindingsSnap, Params),
+    EvalBindings = Bindings#{'Bindings' => Bindings},
     {Dynamic0, Changes0} =
         lists:foldl(
             fun({Index, IndexVars}, {DAcc, CAcc}) ->
                 case should_eval_exprs(DynamicSnap, Params, IndexVars) of
                     true ->
                         Exprs = lists:nth(Index, AST),
-                        Bin = eval(Exprs, Bindings),
+                        Bin = eval(Exprs, EvalBindings),
                         {[Bin | DAcc], [{Index, Bin} | CAcc]};
                     false ->
                         {[lists:nth(Index, DynamicSnap) | DAcc], CAcc}
