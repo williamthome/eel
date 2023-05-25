@@ -216,4 +216,3 @@ capitalize_keys_test() ->
     ?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}], #{})).
 
 -endif.
-
