@@ -473,4 +473,3 @@ handle_render_test() ->
     ?assertEqual(Expected, Result).
 
 -endif.
-
