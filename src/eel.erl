@@ -35,7 +35,7 @@ compile(Bin, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
+                    {ok, eel_renderer:snapshot(Static, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -51,7 +51,7 @@ compile_file(Filename, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, Dynamic, AST)};
+                    {ok, eel_renderer:snapshot(Static, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
