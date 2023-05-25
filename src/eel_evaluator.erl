@@ -66,4 +66,3 @@ do_zip([], [], Acc) ->
     lists:reverse(Acc);
 do_zip([], Dynamic, Acc) ->
     lists:reverse(Dynamic, Acc).
-
