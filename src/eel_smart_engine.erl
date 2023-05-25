@@ -46,8 +46,8 @@
 
 %% States
 -record(state, {
-    opts :: map(),
-    acc = [] :: [token() | ast()]
+    opts = #{} :: map(),
+    acc  = []  :: [token() | ast()]
 }).
 
 %%%=============================================================================
@@ -225,14 +225,23 @@ compile({end_expr, Expr}, _) ->
 compile(Tokens, Opts) when is_list(Tokens) ->
     lists:map(fun(Token) -> compile(Token, Opts) end, Tokens);
 compile({nested_expr, Tokens}, Opts) ->
-    Expr0 = lists:map(fun(S) when is_binary(S) -> <<"<<\"", S/binary, "\">>">>;
-                         (Token) -> compile(Token, Opts) end,
-                      eel_evaluator:zip(Tokens)),
+    Expr0 = zip_compile(Tokens, Opts),
     Expr1 = lists:join(", ", Expr0),
     Expr = erlang:iolist_to_binary([" erlang:iolist_to_binary([", Expr1, "])"]),
     wrap_expr(Expr);
 compile({code, Expr}, _) ->
     wrap_expr(<<Expr/binary, ", <<>>">>).
+
+zip_compile(Tokens, Opts) ->
+    lists:map(
+        fun
+            (S) when is_binary(S) ->
+                <<"<<\"", S/binary, "\">>">>;
+            (Token) ->
+                compile(Token, Opts)
+        end,
+        eel_evaluator:zip(Tokens)
+    ).
 
 wrap_expr_begin(Expr) ->
     erlang:iolist_to_binary([" eel_converter:to_binary(fun() -> ", Expr]).
