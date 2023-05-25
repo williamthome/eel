@@ -93,8 +93,17 @@ and the second a metadata called `snapshot` (see next)
 
 The line `1` will evaluate the bindings `title` and `who`, but the line `2`
 will only eval the `who` variable, because it uses the snapshot of the previous
-render. It only eval the changes and does not need to compile the binary again,
+render. It only eval the changes and does not need to compile the binary again, unless the expression contains the global `Bindings` variable (see below),
 because the `snapshot` includes the required information.
+
+The global `Bindings` variable can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
+
+```
+<%= maps:get(foo, Bindings, bar) .%>
+```
+
+Including `Bindings` to the expression makes it to be always evaluated by the render function.
+
 
 Including the header
 
