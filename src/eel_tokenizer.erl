@@ -22,6 +22,7 @@
 
 %% Includes
 -include("eel_core.hrl").
+-include_lib("kernel/include/logger.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -82,28 +83,53 @@ tokenize_file(Filename, Opts) ->
 %%% Internal functions
 %%%=============================================================================
 
-% TODO: Improve warnings/errors
 do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
-    StateEOF = case Text =:= <<>> of
-                   true -> State;
-                   false -> Eng:handle_text(Pos, Text, State)
-               end,
-    Eng:handle_body(StateEOF);
-do_tokenize(Bin, OldPos, CurPos, Text, Eng, State) ->
-    case retrieve_marker(Eng:markers(), Bin) of
-        {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
-            StateText = case string:trim(Text) of
-                            <<>> -> State;
-                            _ -> Eng:handle_text(OldPos, Text, State)
-                        end,
-            StateExpr = Eng:handle_expr(CurPos, MarkerId, Expr, StateText),
-            NewPos = expr_position(Expr, Marker, CurPos),
-            do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
-        false ->
-            {BinRest, NewPos, TextAcc} = do_text_acc(Bin, OldPos, Text),
-            do_tokenize(BinRest, OldPos, NewPos, TextAcc, Eng, State);
-        {error, end_marker_not_found} ->
-            {error, end_marker_not_found}
+    try
+        StateEOF = case Text =:= <<>> of
+                       true -> State;
+                       false -> Eng:handle_text(Pos, Text, State)
+                   end,
+        Eng:handle_body(StateEOF)
+    catch
+        Class:Reason:Stacktrace ->
+            ?LOG_ERROR(#{
+                class => Class,
+                reason => Reason,
+                stacktrace => Stacktrace,
+                text => Text,
+                position => Pos,
+                eof => true
+            }),
+            {error, Reason}
+    end;
+do_tokenize(Bin, PrevPos, Pos, Text, Eng, State) ->
+    try
+        case retrieve_marker(Eng:markers(), Bin) of
+            {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
+                StateText = case string:trim(Text) of
+                                <<>> -> State;
+                                _ -> Eng:handle_text(PrevPos, Text, State)
+                            end,
+                StateExpr = Eng:handle_expr(Pos, MarkerId, Expr, StateText),
+                NewPos = expr_position(Expr, Marker, Pos),
+                do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
+            false ->
+                {BinRest, NewPos, TextAcc} = do_text_acc(Bin, PrevPos, Text),
+                do_tokenize(BinRest, PrevPos, NewPos, TextAcc, Eng, State);
+            {error, end_marker_not_found} ->
+                error({end_marker_not_found, {Pos, Text}})
+        end
+    catch
+        Class:Reason:Stacktrace ->
+            ?LOG_ERROR(#{
+                class => Class,
+                reason => Reason,
+                stacktrace => Stacktrace,
+                text => Text,
+                position => Pos,
+                eof => false
+            }),
+            {error, Reason}
     end.
 
 retrieve_marker(EngMarkers, Bin) ->
@@ -166,8 +192,8 @@ do_text_acc(<<H, T/binary>>, {Ln, Col}, Text) ->
 do_text_acc(<<>>, Pos, Text) ->
     {<<>>, Pos, Text}.
 
-expr_position(Expr, {_, {StartMarker, EndMarker}}, OldPos) ->
-    Pos = add_marker_length(StartMarker, OldPos),
+expr_position(Expr, {_, {StartMarker, EndMarker}}, PrevPos) ->
+    Pos = add_marker_length(StartMarker, PrevPos),
     do_expr_position(Expr, EndMarker, Pos).
 
 do_expr_position(<<"\n", T/binary>>, EndMarker, {Ln, _}) ->
