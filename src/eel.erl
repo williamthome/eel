@@ -63,9 +63,9 @@ compile_to_module(Bin, ModName) ->
     compile_to_module(Bin, ModName, default_engine_opts()).
 
 compile_to_module(Bin, ModName, Opts) ->
-    case eel_tokenizer:tokenize(Bin, Opts) of
-        {ok, Tokens} ->
-            eel_compiler:compile_to_module(Tokens, ModName, Opts);
+    case compile(Bin, Opts) of
+        {ok, Snapshot} ->
+            eel_compiler:compile_to_module(Snapshot, ModName);
         {error, Reason} ->
             {error, Reason}
     end.
@@ -80,9 +80,9 @@ compile_file_to_module(Filename, Opts) when is_map(Opts) ->
     compile_file_to_module(Filename, Module, Opts).
 
 compile_file_to_module(Filename, Module, Opts) ->
-    case eel_tokenizer:tokenize_file(Filename, Opts) of
-        {ok, Tokens} ->
-            eel_compiler:compile_file_to_module(Filename, Tokens, Module, Opts);
+    case compile_file(Filename, Opts) of
+        {ok, Snapshot} ->
+            eel_compiler:compile_file_to_module(Filename, Snapshot, Module);
         {error, Reason} ->
             {error, Reason}
     end.
