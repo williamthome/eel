@@ -50,35 +50,49 @@ and type this in the Erlang shell
 1> {_, Snapshot} = foo:render(#{title => <<"Hey!">>, who => <<"World">>}).
 {<<"<html><head><title>Hey!</title></head><body>Hello, World!</body></html>">>,
  #{ast =>
-       [[{call,1,
+       [{2,
+         {{1,20},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}],
-        [{call,1,
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
+        {4,
+         {{1,61},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
+               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
-   changes => [{1,<<"Hey!">>},{2,<<"World">>}],
-   dynamic => [<<"Hey!">>,<<"World">>],
+   changes => [{2,<<"Hey!">>},{4,<<"World">>}],
+   dynamic =>
+       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
    static =>
-       [<<"<html><head><title>">>,
-        <<"</title></head><body>Hello, ">>,<<"!</body></html>">>],
-   vars => [{1,['Title']},{2,['Who']}]}}
+       [{1,{{1,1},<<"<html><head><title>">>}},
+        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
+        {5,{{1,72},<<"!</body></html>">>}}],
+   vars => [{2,['Title']},{4,['Who']}]}}
 2> {Bin, _} = foo:render(#{who => <<"Erlang">>}, Snapshot).
 {<<"<html><head><title>Hey!</title></head><body>Hello, Erlang!</body></html>">>,
  #{ast =>
-       [[{call,1,
+       [{2,
+         {{1,20},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}],
-        [{call,1,
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
+        {4,
+         {{1,61},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
+               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
-   changes => [{2,<<"Erlang">>}],
-   dynamic => [<<"Hey!">>,<<"Erlang">>],
+   changes => [{4,<<"Erlang">>}],
+   dynamic =>
+       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"Erlang">>}}],
    static =>
-       [<<"<html><head><title>">>,
-        <<"</title></head><body>Hello, ">>,<<"!</body></html>">>],
-   vars => [{1,['Title']},{2,['Who']}]}}
+       [{1,{{1,1},<<"<html><head><title>">>}},
+        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
+        {5,{{1,72},<<"!</body></html>">>}}],
+   vars => [{2,['Title']},{4,['Who']}]}}
 ```
 
 Looking at the pattern matched results, the first tuple element contains the evaluated value
@@ -88,19 +102,26 @@ Looking at the pattern matched results, the first tuple element contains the eva
 and the second a metadata called `snapshot` (see next)
 ```erlang
 #{ast =>
-       [[{call,1,
+       [{2,
+         {{1,20},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}],
-        [{call,1,
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
+        {4,
+         {{1,61},
+          [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]],
+               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
-   changes => [{1,<<"Hey!">>},{2,<<"World">>}],
-   dynamic => [<<"Hey!">>,<<"World">>],
+   changes => [{2,<<"Hey!">>},{4,<<"World">>}],
+   dynamic =>
+       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
    static =>
-       [<<"<html><head><title>">>,
-        <<"</title></head><body>Hello, ">>,<<"!</body></html>">>],
-   vars => [{1,['Title']},{2,['Who']}]}
+       [{1,{{1,1},<<"<html><head><title>">>}},
+        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
+        {5,{{1,72},<<"!</body></html>">>}}],
+   vars => [{2,['Title']},{4,['Who']}]}
 ```
 
 The line `1` will evaluate the bindings `title` and `who`, but the line `2`
