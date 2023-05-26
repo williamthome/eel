@@ -84,7 +84,7 @@ tokenize_file(Filename, Opts) ->
 %%% Internal functions
 %%%=============================================================================
 
-do_tokenize(<<>>, Index, _, Pos, Text, Eng, State) ->
+do_tokenize(<<>>, Index, Pos, _, Text, Eng, State) ->
     try
         StateEOF = case Text =:= <<>> of
                        true -> State;
@@ -107,12 +107,14 @@ do_tokenize(Bin, Index, PrevPos, Pos, Text, Eng, State) ->
     try
         case retrieve_marker(Eng:markers(), Bin) of
             {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
-                {NewIndex, StateText} = case string:trim(Text) of
-                                <<>> -> {Index, State};
-                                _ -> {Index + 1, Eng:handle_text(Index, PrevPos, Text, State)}
-                            end,
-                StateExpr = Eng:handle_expr(NewIndex, Pos, MarkerId, Expr, StateText),
-                NewPos = expr_position(Expr, Marker, Pos),
+                {NewIndex, StateText} =
+                    case string:trim(Text) of
+                        <<>> -> {Index, State};
+                        _ -> {Index + 1, Eng:handle_text(Index, PrevPos, Text, State)}
+                    end,
+                TextPos = text_pos(Text, PrevPos),
+                StateExpr = Eng:handle_expr(NewIndex, TextPos, MarkerId, Expr, StateText),
+                NewPos = expr_position(Expr, Marker, TextPos),
                 do_tokenize(BinRest, NewIndex + 1, NewPos, NewPos, <<>>, Eng, StateExpr);
             false ->
                 {BinRest, NewPos, TextAcc} = do_text_acc(Bin, PrevPos, Text),
@@ -186,26 +188,24 @@ best_match([_ | Rest], Best) ->
 best_match([], Best) ->
     Best.
 
-do_text_acc(<<"\n", T/binary>>, {Ln, _}, Text) ->
-    {T, {Ln + 1, 1}, Text};
+do_text_acc(<<$\n, T/binary>>, {Ln, _}, Text) ->
+    {T, {Ln + 1, 1}, <<Text/binary, $\n>>};
 do_text_acc(<<H, T/binary>>, {Ln, Col}, Text) ->
     {T, {Ln, Col + 1}, <<Text/binary, H>>};
 do_text_acc(<<>>, Pos, Text) ->
     {<<>>, Pos, Text}.
 
 expr_position(Expr, {_, {StartMarker, EndMarker}}, PrevPos) ->
-    Pos = add_marker_length(StartMarker, PrevPos),
-    do_expr_position(Expr, EndMarker, Pos).
+    text_pos(iolist_to_binary([StartMarker, 32, Expr, 32, EndMarker]), PrevPos).
 
-do_expr_position(<<"\n", T/binary>>, EndMarker, {Ln, _}) ->
-    do_expr_position(T, EndMarker, {Ln + 1, 1});
-do_expr_position(<<_, T/binary>>, EndMarker, {Ln, Col}) ->
-    do_expr_position(T, EndMarker, {Ln, Col + 1});
-do_expr_position(<<>>, EndMarker, Pos) ->
-    add_marker_length(EndMarker, Pos).
+% FIXME: How to deal with position when text quoted?
 
-add_marker_length(Marker, {Ln, Col}) ->
-    {Ln, Col + length(Marker)}.
+text_pos(<<$\n, T/binary>>, {Ln, _}) ->
+    text_pos(T, {Ln + 1, 1});
+text_pos(<<_, T/binary>>, {Ln, Col}) ->
+    text_pos(T, {Ln, Col + 1});
+text_pos(<<>>, Pos) ->
+    Pos.
 
 %%%=============================================================================
 %%% Tests
@@ -213,13 +213,14 @@ add_marker_length(Marker, {Ln, Col}) ->
 
 -ifdef(TEST).
 
-% TODO: Test position (check if trims are causing issues).
 tokenize_test() ->
-    Bin = <<"Hello,\n{{ World }}!">>,
+    Bin = <<"{{ Hey }}!\nSay hello to {{ This }}\n{{ World }}!">>,
     Expected = [
-        {text, {{1, 1}, <<"Hello,">>}},
-        {expr, {{2, 1}, var, <<"World">>}},
-        {text, {{2, 11}, <<"!">>}}
+        {expr,{{1,1},var,<<"Hey">>}},
+        {text,{{1,10},<<"!\nSay hello to ">>}},
+        {expr,{{2,14},var,<<"This">>}},
+        {expr,{{3,1},var,<<"World">>}},
+        {text,{{3,12},<<"!">>}}
     ],
     ?assertEqual(Expected, tokenize(Bin, #{engine => ?MODULE})).
 
@@ -227,7 +228,7 @@ tokenize_file_test() ->
     Filename = "/tmp/foo.eel",
     Bin = <<"\"Foo\"">>,
     ok = file:write_file(Filename, Bin),
-    Expected = [{text, {{1, 2}, <<"\"Foo\"">>}}],
+    Expected = [{text, {{1, 1}, <<"\"Foo\"">>}}],
     ?assertEqual(Expected, tokenize_file(Filename, #{engine => ?MODULE})).
 
 % Engine
