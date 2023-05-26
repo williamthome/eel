@@ -34,7 +34,10 @@ eval(#{static := Static, dynamic := Dynamic}) ->
     Result  :: binary().
 
 eval(Static, Dynamic) ->
-    unicode:characters_to_binary(zip(Static, Dynamic)).
+    unicode:characters_to_binary(retrieve_bin(zip(Static, Dynamic))).
+
+retrieve_bin(Tokens) ->
+    lists:map(fun({_, {_, Bin}}) -> Bin end, Tokens).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/1.
