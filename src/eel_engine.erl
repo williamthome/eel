@@ -10,6 +10,7 @@
 %%% Types
 %%%=============================================================================
 
+-type index()         :: pos_integer().
 -type line()          :: pos_integer().
 -type column()        :: pos_integer().
 -type expression()    :: binary().
@@ -26,9 +27,9 @@
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
 -type options()       :: map().
 
--export_type([line/0, column/0, expression/0, state/0, token/0, static/0,
-              dynamic/0, ast/0, position/0, marker_id/0, marker_symbol/0,
-              marker/0, expressions/0, options/0]).
+-export_type([index/0, line/0, column/0, expression/0, state/0, token/0,
+              static/0, dynamic/0, ast/0, position/0, marker_id/0,
+              marker_symbol/0, marker/0, expressions/0, options/0]).
 
 %%%=============================================================================
 %%% Callbacks
@@ -38,8 +39,8 @@
 -callback init(options()) -> state().
 
 %% tokenize
--callback handle_expr(position(), marker_id(), expressions(), state()) -> state().
--callback handle_text(position(), binary(), state()) -> state().
+-callback handle_expr(index(), position(), marker_id(), expressions(), state()) -> state().
+-callback handle_text(index(), position(), binary(), state()) -> state().
 -callback handle_body(state()) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
