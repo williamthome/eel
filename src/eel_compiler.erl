@@ -7,9 +7,8 @@
 -module(eel_compiler).
 
 %% API functions
--export([compile/1, compile/2, compile_to_module/2, compile_to_module/3,
-         compile_file_to_module/2, compile_file_to_module/3,
-         compile_file_to_module/4, dynamic_to_ast/1, ast_vars/1, file_module/1]).
+-export([compile/1, compile/2, compile_to_module/2, compile_file_to_module/3]).
+-export([dynamic_to_ast/1, ast_vars/1, file_module/1]).
 
 %% Types
 -export_type([options/0]).
@@ -56,67 +55,26 @@ compile(Dynamic, Opts) when is_list(Dynamic) ->
 %% @doc compile_to_module/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile_to_module(Tokens, Module) -> Return when
-    Tokens :: eel_tokenizer:tokens(),
-    Module :: module(),
-    Return :: {ok, Module} | {error, term()}.
+-spec compile_to_module(Snapshot, Module) -> Return when
+    Snapshot :: eel_renderer:snapshot(),
+    Module   :: module(),
+    Return   :: {ok, Module} | {error, term()}.
 
-compile_to_module(Tokens, Module) ->
-    compile_to_module(Tokens, Module, ?DEFAULT_ENGINE_OPTS).
-
-%% -----------------------------------------------------------------------------
-%% @doc compile_to_module/3.
-%% @end
-%% -----------------------------------------------------------------------------
--spec compile_to_module(Tokens, Module, Options) -> Return when
-    Tokens  :: eel_tokenizer:tokens(),
-    Module  :: module(),
-    Options :: options(),
-    Return  :: {ok, Module} | {error, term()}.
-
-compile_to_module(Tokens, Module, Opts) ->
-    do_compile_to_module(Tokens, Module, Opts).
-
-%% -----------------------------------------------------------------------------
-%% @doc compile_file_to_module/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec compile_file_to_module(Filename, Tokens) -> Return when
-    Filename :: file:filename_all(),
-    Tokens   :: eel_tokenizer:tokens(),
-    Return   :: {ok, module()} | {error, term()}.
-
-compile_file_to_module(Filename, Tokens) ->
-    compile_file_to_module(Filename, Tokens, ?DEFAULT_ENGINE_OPTS).
+compile_to_module(Snapshot, Module) ->
+    do_compile_to_module(Snapshot, Module).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_file_to_module/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile_file_to_module(Filename, Tokens, OptsOrMod) -> Return when
+-spec compile_file_to_module(Filename, Snapshot, Module) -> Return when
     Filename  :: file:filename_all(),
-    Tokens    :: eel_tokenizer:tokens(),
-    OptsOrMod :: options() | module(),
+    Snapshot  :: eel_renderer:snapshot(),
+    Module    :: module(),
     Return    :: {ok, module()} | {error, term()}.
 
-compile_file_to_module(Filename, Tokens, Module) when is_atom(Module) ->
-    compile_file_to_module(Filename, Tokens, Module, ?DEFAULT_ENGINE_OPTS);
-compile_file_to_module(Filename, Tokens, Opts) when is_map(Opts) ->
-    compile_file_to_module(Filename, Tokens, file_module(Filename), Opts).
-
-%% -----------------------------------------------------------------------------
-%% @doc compile_file_to_module/4.
-%% @end
-%% -----------------------------------------------------------------------------
--spec compile_file_to_module(Filename, Tokens, Module, Options) -> Return when
-    Filename :: file:filename_all(),
-    Tokens   :: eel_tokenizer:tokens(),
-    Module   :: module(),
-    Options  :: options(),
-    Return   :: {ok, Module} | {error, term()}.
-
-compile_file_to_module(Filename, Tokens, Module, Opts) ->
-    do_compile_file_to_module(Filename, Tokens, Module, Opts).
+compile_file_to_module(Filename, Snapshot, Module) when is_atom(Module) ->
+    do_compile_file_to_module(Filename, Snapshot, Module).
 
 %% -----------------------------------------------------------------------------
 %% @doc dynamic_to_ast/1.
@@ -229,89 +187,58 @@ do_compile([D | Dynamic], Eng, State) ->
 do_compile([], Eng, State) ->
     Eng:handle_ast(State).
 
-do_compile_to_module(Tokens, Module, Opts) ->
-    do_compile_file_to_module(undefined, Tokens, Module, Opts).
+do_compile_to_module(Snapshot, Module) ->
+    do_compile_file_to_module(undefined, Snapshot, Module).
 
-do_compile_file_to_module(Filename, {Static, Dynamic}, Module, Opts) ->
+% TODO: Check if we should skip the module_loaded verification.
+%       Maybe the module should be updated with the new snapshot.
+do_compile_file_to_module(Filename, Snapshot, Module) ->
     case erlang:module_loaded(Module) of
         true ->
             {ok, Module};
         false ->
-            case compile(Dynamic, Opts) of
-                {ok, AST} ->
-                    Vars = ast_vars(AST),
-                    Forms = module_forms(Module, Filename, Static, AST, Vars, Opts),
-                    {ok, Module, Bin} = compile:forms(Forms),
-                    ModuleBin = atom_to_binary(Module),
-                    ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
-                    case code:load_binary(Module, ModuleFileName, Bin) of
-                        {module, Module} ->
-                            {ok, Module};
-                        {error, Reason} ->
-                            {error, Reason}
-                    end;
+            Forms = module_forms(Module, Filename, Snapshot),
+            {ok, Module, Bin} = compile:forms(Forms),
+            ModuleBin = atom_to_binary(Module),
+            ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
+            case code:load_binary(Module, ModuleFileName, Bin) of
+                {module, Module} ->
+                    {ok, Module};
                 {error, Reason} ->
                     {error, Reason}
             end
     end.
 
-module_forms(Module, Filename, Static, AST, Vars, Opts) ->
+module_forms(Module, Filename, Snapshot) ->
     Forms =
         merl:qquote([
             "-module('@module').",
             "",
             "-export([filename/0,",
             "         timestamp/0,",
-            "         static/0,",
-            "         ast/0,",
-            "         vars/0,",
-            "         compile_opts/0,",
+            "         snapshot/0,",
             "         render/1,",
-            "         render/2,",
-            "         render/3]).",
+            "         render/2]).",
+            "",
+            "-include(\"eel.hrl\").",
             "",
             "filename() -> _@filename.",
             "",
             "timestamp() -> _@timestamp.",
             "",
-            "static() -> _@static.",
-            "",
-            "ast() -> _@ast.",
-            "",
-            "vars() -> _@vars.",
-            "",
-            "compile_opts() -> _@compile_opts.",
+            "snapshot() -> _@snapshot.",
             "",
             "render(Bindings) ->",
-            "    render(Bindings, #{}).",
+            "    render(Bindings, snapshot()).",
             "",
-            "render(Bindings, Opts0) when is_map(Opts0) ->",
-            "    Snapshot0 = #{static => static(),",
-            "                  ast => ast(),",
-            "                  vars => vars()},",
-            "    Opts = maps:merge(compile_opts(), Opts0),",
-            "    {ok, {Render, Snapshot}} = eel_renderer:render(Bindings, Snapshot0, Opts),",
-            "    {ok, {Render, maps:with([dynamic, bindings], Snapshot)}};",
-            "render(Changes, Snapshot) ->",
-            "    render(Changes, Snapshot, #{}).",
-            "",
-            "render(Changes, #{dynamic := DynamicSnap, bindings := BindingsSnap}, Opts0) ->",
-            "    Snapshot0 = #{static => static(),",
-            "                  ast => ast(),",
-            "                  vars => vars(),",
-            "                  dynamic => DynamicSnap,",
-            "                  bindings => BindingsSnap},",
-            "    Opts = maps:merge(compile_opts(), Opts0),",
-            "    {ok, {Render, Snapshot}} = eel_renderer:render(Changes, Snapshot0, Opts),",
-            "    {ok, {Render, maps:with([dynamic, bindings], Snapshot)}}.",
+            "render(Bindings, Snapshot) ->",
+            "    {ok, RenderSnapshot} = eel_renderer:render(Bindings, Snapshot),",
+            "    {eel_evaluator:eval(RenderSnapshot), RenderSnapshot}.",
             ""],
             [{module, merl:term(Module)},
              {filename, merl:term(Filename)},
              {timestamp, merl:term(os:timestamp())},
-             {static, merl:term(Static)},
-             {ast, merl:term(AST)},
-             {vars, merl:term(Vars)},
-             {compile_opts, merl:term(Opts)}]),
+             {snapshot, merl:term(Snapshot)}]),
     [erl_syntax:revert(Form) || Form <- Forms].
 
 normalize_expr(Expr) ->
