@@ -6,9 +6,34 @@ Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can em
 
 ### Evaluation
 
+A binary or a file can be evaluated to a binary, e.g.:
+
 ```erlang
 1> eel:eval(<<"Hello, <%= Who .%>!">>, #{'Who' => <<"World">>}).
 <<"Hello, World!">>
+```
+
+### Module
+
+A binary or a file can be compiled to a module, e.g.:
+
+```erlang
+1> eel:compile_to_module(<<"Hello, <%= Who .%>!">>, foo).
+{ok,foo}
+2> foo:render(#{who => 'World'}).
+{<<"Hello, World!">>,
+ #{ast =>
+       [{2,
+         {{1,8},
+          [{call,1,
+                 {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+                 [{'fun',1,
+                         {clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]}}],
+   bindings => #{'Who' => world},
+   changes => [{2,<<"world">>}],
+   dynamic => [{2,{{1,8},<<"world">>}}],
+   static => [{1,{{1,1},<<"Hello, ">>}},{3,{{1,19},<<"!">>}}],
+   vars => [{2,['Who']}]}}
 ```
 
 ## Example
@@ -184,6 +209,15 @@ The template should have the `.eel` extension and a structure like this:
 ## Highlight
 
 If you use VSCode, you can get highlighting by installing the [Embedded Erlang (EEl)](https://github.com/williamthome/vscode_eel) extension.
+
+## Next steps
+
+- Explain how this lib works
+- Better explanation about the API
+- Improve the code
+- Functions documentations
+- Functions specs
+- Test everything
 
 ## Sponsors
 
