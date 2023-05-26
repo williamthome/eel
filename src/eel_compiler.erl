@@ -123,13 +123,18 @@ compile_file_to_module(Filename, Tokens, Module, Opts) ->
 %% @end
 %% -----------------------------------------------------------------------------
 -spec dynamic_to_ast(Expr) -> Result when
-    Expr   :: binary() | string(),
+    Expr   :: {eel_engine:index(), {eel_engine:position(), binary() | string()}},
     Result :: {ok, eel_engine:ast()} | {error, term()}.
 
-dynamic_to_ast(Expr) ->
+dynamic_to_ast({Index, {Pos, Expr}}) ->
     case erl_scan:string(normalize_expr(Expr)) of
         {ok, Tokens, _} ->
-            erl_parse:parse_exprs(Tokens);
+            case erl_parse:parse_exprs(Tokens) of
+                {ok, AST} ->
+                    {ok, {Index, {Pos, AST}}};
+                {error, Reason} ->
+                    {error, Reason}
+            end;
         {error, ErrorInfo, ErrorLocation} ->
             {error, {ErrorInfo, ErrorLocation}}
     end.
@@ -163,7 +168,7 @@ ast_vars(AST) when is_list(AST) ->
             nowarn_keywords],
     lists:reverse(
         lists:foldl(
-            fun({Index, Forms}, Acc) ->
+            fun({Index, {_Pos, Forms}}, Acc) ->
                 Vars = lists:foldl(
                            fun({"nofile", Errs}, Acc1) ->
                                lists:foldl(
@@ -185,7 +190,7 @@ ast_vars(AST) when is_list(AST) ->
                 [{Index, lists:reverse(Vars)} | Acc]
             end,
             [],
-            lists:enumerate(AST)
+            AST
         )
     );
 ast_vars(AST) when is_tuple(AST) ->

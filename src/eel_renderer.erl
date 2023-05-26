@@ -15,6 +15,7 @@
 
 %% Includes
 -include("eel_core.hrl").
+-include_lib("kernel/include/logger.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -82,11 +83,24 @@ render(Params0, #{static   := Static,
             fun({Index, IndexVars}, {DAcc, CAcc}) ->
                 case should_eval_exprs(DynamicSnap, Params, IndexVars) of
                     true ->
-                        Exprs = lists:nth(Index, AST),
-                        Bin = eval(Exprs, EvalBindings),
-                        {[Bin | DAcc], [{Index, Bin} | CAcc]};
+                        {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
+                        try
+                            Bin = eval(EvalAST, EvalBindings),
+                            {[{Index, {Pos, Bin}} | DAcc], [{Index, Bin} | CAcc]}
+                        catch
+                            Class:Reason:Stacktrace ->
+                                ?LOG_ERROR(#{
+                                    class => Class,
+                                    reason => Reason,
+                                    stacktrace => Stacktrace,
+                                    ast => EvalAST,
+                                    position => Pos
+                                }),
+                                erlang:raise(Class, Reason, Stacktrace)
+                        end;
                     false ->
-                        {[lists:nth(Index, DynamicSnap) | DAcc], CAcc}
+                        DCache = proplists:lookup(Index, DynamicSnap),
+                        {[DCache | DAcc], CAcc}
                 end
             end,
             {[], []},

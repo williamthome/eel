@@ -14,7 +14,7 @@
 %% Test functions
 -export([markers/0,
          init/1,
-         handle_expr/4, handle_text/3, handle_body/1]).
+         handle_expr/5, handle_text/4, handle_body/1]).
 -endif.
 
 %% Types
@@ -53,8 +53,9 @@ tokenize(Bin) ->
 tokenize(Bin, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     State = Eng:init(Opts),
+    Index = 1,
     Pos = {1, 1},
-    do_tokenize(Bin, Pos, Pos, <<>>, Eng, State).
+    do_tokenize(Bin, Index, Pos, Pos, <<>>, Eng, State).
 
 %% -----------------------------------------------------------------------------
 %% @doc tokenize_file/1.
@@ -83,11 +84,11 @@ tokenize_file(Filename, Opts) ->
 %%% Internal functions
 %%%=============================================================================
 
-do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
+do_tokenize(<<>>, Index, _, Pos, Text, Eng, State) ->
     try
         StateEOF = case Text =:= <<>> of
                        true -> State;
-                       false -> Eng:handle_text(Pos, Text, State)
+                       false -> Eng:handle_text(Index, Pos, Text, State)
                    end,
         Eng:handle_body(StateEOF)
     catch
@@ -102,20 +103,20 @@ do_tokenize(<<>>, _, Pos, Text, Eng, State) ->
             }),
             {error, Reason}
     end;
-do_tokenize(Bin, PrevPos, Pos, Text, Eng, State) ->
+do_tokenize(Bin, Index, PrevPos, Pos, Text, Eng, State) ->
     try
         case retrieve_marker(Eng:markers(), Bin) of
             {true, {{MarkerId, _} = Marker, Expr, BinRest}} ->
-                StateText = case string:trim(Text) of
-                                <<>> -> State;
-                                _ -> Eng:handle_text(PrevPos, Text, State)
+                {NewIndex, StateText} = case string:trim(Text) of
+                                <<>> -> {Index, State};
+                                _ -> {Index + 1, Eng:handle_text(Index, PrevPos, Text, State)}
                             end,
-                StateExpr = Eng:handle_expr(Pos, MarkerId, Expr, StateText),
+                StateExpr = Eng:handle_expr(NewIndex, Pos, MarkerId, Expr, StateText),
                 NewPos = expr_position(Expr, Marker, Pos),
-                do_tokenize(BinRest, NewPos, NewPos, <<>>, Eng, StateExpr);
+                do_tokenize(BinRest, NewIndex + 1, NewPos, NewPos, <<>>, Eng, StateExpr);
             false ->
                 {BinRest, NewPos, TextAcc} = do_text_acc(Bin, PrevPos, Text),
-                do_tokenize(BinRest, PrevPos, NewPos, TextAcc, Eng, State);
+                do_tokenize(BinRest, Index, PrevPos, NewPos, TextAcc, Eng, State);
             {error, end_marker_not_found} ->
                 error({end_marker_not_found, {Pos, Text}})
         end
@@ -237,10 +238,10 @@ markers() ->
 init(#{}) ->
     [].
 
-handle_expr({Ln, Col}, var, Expr, Acc) ->
+handle_expr(_Index, {Ln, Col}, var, Expr, Acc) ->
     [{expr, {{Ln, Col}, var, Expr}} | Acc].
 
-handle_text({Ln, Col}, Text, Acc) ->
+handle_text(_Index, {Ln, Col}, Text, Acc) ->
     [{text, {{Ln, Col}, Text}} | Acc].
 
 handle_body(Tokens) ->
