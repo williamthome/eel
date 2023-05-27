@@ -20,20 +20,8 @@ A binary or a file can be compiled to a module, e.g.:
 ```erlang
 1> eel:compile_to_module(<<"Hello, <%= Who .%>!">>, foo).
 {ok,foo}
-2> foo:render(#{who => 'World'}).
-{<<"Hello, World!">>,
- #{ast =>
-       [{2,
-         {{1,8},
-          [{call,1,
-                 {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-                 [{'fun',1,
-                         {clauses,[{clause,1,[],[],[{var,1,'Who'}]}]}}]}]}}],
-   bindings => #{'Who' => world},
-   changes => [{2,<<"world">>}],
-   dynamic => [{2,{{1,8},<<"world">>}}],
-   static => [{1,{{1,1},<<"Hello, ">>}},{3,{{1,19},<<"!">>}}],
-   vars => [{2,['Who']}]}}
+2> foo:eval(#{'Who' => <<"World">>}).
+<<"Hello, World!">>
 ```
 
 ## Example
