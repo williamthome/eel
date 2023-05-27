@@ -28,12 +28,12 @@
         , eval_file/1
         , eval_file/2
         , eval_file/3
-        , eval_to_file/2
-        , eval_to_file/3
-        , eval_to_file/4
-        , eval_file_to_file/2
-        , eval_file_to_file/3
-        , eval_file_to_file/4
+        , to_file/2
+        , to_file/3
+        , to_file/4
+        , file_to_file/2
+        , file_to_file/3
+        , file_to_file/4
         , default_engine/0
         , default_engine_opts/0
         ]).
@@ -169,23 +169,23 @@ eval_file(Filename, Bindings, Opts) ->
     {ok, Snapshot} = render_file(Filename, Bindings, Opts),
     eel_evaluator:eval(Snapshot).
 
-eval_to_file(Bin, OutFilename) ->
-    eval_to_file(Bin, #{}, OutFilename).
+to_file(Bin, OutFilename) ->
+    to_file(Bin, #{}, OutFilename).
 
-eval_to_file(Bin, Bindings, OutFilename) ->
-    eval_to_file(Bin, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+to_file(Bin, Bindings, OutFilename) ->
+    to_file(Bin, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
 
-eval_to_file(Bin, Bindings, OutFilename, Opts) ->
+to_file(Bin, Bindings, OutFilename, Opts) ->
     Data = eval(Bin, Bindings, Opts),
     write_file(OutFilename, Data).
 
-eval_file_to_file(InFilename, OutFilename) ->
-    eval_file_to_file(InFilename, #{}, OutFilename).
+file_to_file(InFilename, OutFilename) ->
+    file_to_file(InFilename, #{}, OutFilename).
 
-eval_file_to_file(InFilename, Bindings, OutFilename) ->
-    eval_file_to_file(InFilename, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
+file_to_file(InFilename, Bindings, OutFilename) ->
+    file_to_file(InFilename, Bindings, OutFilename, ?DEFAULT_ENGINE_OPTS).
 
-eval_file_to_file(InFilename, Bindings, OutFilename, Opts) ->
+file_to_file(InFilename, Bindings, OutFilename, Opts) ->
     Data = eval_file(InFilename, Bindings, Opts),
     write_file(OutFilename, Data).
 
