@@ -22,27 +22,51 @@
 -type position()      :: {line(), column()}.
 -type marker_id()     :: atom().
 -type marker_symbol() :: nonempty_string().
--type marker()        :: {marker_id(), {Start :: marker_symbol(),
-                                        End   :: marker_symbol()}}.
+-type marker()        :: {marker_id(), { Start :: marker_symbol()
+                                       , End   :: marker_symbol() }}.
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
 -type options()       :: map().
 
--export_type([index/0, line/0, column/0, expression/0, state/0, token/0,
-              static/0, dynamic/0, ast/0, position/0, marker_id/0,
-              marker_symbol/0, marker/0, expressions/0, options/0]).
+-export_type([ index/0
+             , line/0
+             , column/0
+             , expression/0
+             , state/0
+             , token/0
+             , static/0
+             , dynamic/0
+             , ast/0
+             , position/0
+             , marker_id/0
+             , marker_symbol/0
+             , marker/0
+             , expressions/0
+             , options/0
+             ]).
 
 %%%=============================================================================
 %%% Callbacks
 %%%=============================================================================
 
 -callback markers() -> [marker()].
--callback init(options()) -> state().
+
+-callback init(options()) -> {ok, state()} | {error, term()}.
 
 %% tokenize
--callback handle_expr(index(), position(), marker_id(), expressions(), state()) -> state().
--callback handle_text(index(), position(), binary(), state()) -> state().
--callback handle_body(state()) -> {ok, {static(), dynamic()}} | {error, term()}.
+-callback handle_expr( index()
+                     , position()
+                     , marker_id()
+                     , expressions()
+                     , state() ) -> {ok, state()} | {error, term()}.
+
+-callback handle_text( index()
+                     , position()
+                     , binary()
+                     , state() ) -> {ok, state()} | {error, term()}.
+
+-callback handle_body( state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
 -callback handle_compile(token(), state()) -> {ok, state()} | {error, term()}.
--callback handle_ast(state()) -> {ok, ast()} | {error, term()}.
+
+-callback handle_ast( state() ) -> {ok, ast()} | {error, term()}.

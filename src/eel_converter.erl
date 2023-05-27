@@ -1,13 +1,15 @@
 %%%-----------------------------------------------------------------------------
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @copyright 2023 William Fank Thomé
-%%% @doc EEl converter utils module.
+%%% @doc EEl converter module.
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(eel_converter).
 
 %% API functions
--export([to_binary/1, to_binary/2]).
+-export([ to_binary/1
+        , to_binary/2
+        ]).
 
 %%%=============================================================================
 %%% API functions
