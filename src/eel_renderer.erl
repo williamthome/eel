@@ -7,29 +7,45 @@
 -module(eel_renderer).
 
 %% API functions
--export([render/1, render/2, render/3]).
--export([snapshot/2, snapshot/3, snapshot/4, snapshot/6]).
+-export([ render/1
+        , render/2
+        , render/3
+        , snapshot/2
+        , snapshot/3
+        , snapshot/4
+        , snapshot/6
+        ]).
 
 %% Types
--export_type([bindings/0, dynamic/0, changes/0, snapshot/0, result/0]).
+-export_type([ bindings/0
+             , dynamic/0
+             , changes/0
+             , snapshot/0
+             , result/0
+             ]).
 
 %% Includes
 -include("eel_core.hrl").
 -include_lib("kernel/include/logger.hrl").
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
 %% Type
 -type bindings() :: map().
+-type static()   :: eel_engine:static().
 -type dynamic()  :: undefined | [binary()].
+-type ast()      :: eel_engine:ast().
 -type changes()  :: [{non_neg_integer(), binary()}].
--type snapshot() :: #{static   => eel_engine:static(),
-                      dynamic  => dynamic(),
-                      ast      => eel_engine:ast(),
-                      bindings => bindings(),
-                      vars     => [atom()],
-                      changes  => changes()}.
+% TODO: Maybe change snapshot to a opaque record
+-type snapshot() :: #{ static   => static()
+                     , dynamic  => dynamic()
+                     , ast      => ast()
+                     , bindings => bindings()
+                     , vars     => [atom()]
+                     , changes  => changes()
+                     }.
 -type options()  :: map().
 -type result()   :: {ok, snapshot()}.
 
@@ -41,9 +57,10 @@
 %% @doc render/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Snapshot) -> Result when
-    Snapshot :: snapshot(),
-    Result   :: result().
+-spec render(Snapshot) -> Result
+    when Snapshot :: snapshot()
+       , Result   :: result()
+       .
 
 render(Snapshot) ->
     render(#{}, Snapshot, ?DEFAULT_ENGINE_OPTS).
@@ -52,10 +69,11 @@ render(Snapshot) ->
 %% @doc render/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot) -> Result when
-    Bindings :: bindings(),
-    Snapshot :: snapshot(),
-    Result   :: result().
+-spec render(Bindings, Snapshot) -> Result
+    when Bindings :: bindings()
+       , Snapshot :: snapshot()
+       , Result   :: result()
+       .
 
 render(Bindings, Snapshot) ->
     render(Bindings, Snapshot, ?DEFAULT_ENGINE_OPTS).
@@ -64,17 +82,21 @@ render(Bindings, Snapshot) ->
 %% @doc render/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot, Opts) -> Result when
-    Bindings :: bindings(),
-    Snapshot :: snapshot(),
-    Opts     :: options(),
-    Result   :: result().
+-spec render(Bindings, Snapshot, Opts) -> Result
+    when Bindings :: bindings()
+       , Snapshot :: snapshot()
+       , Opts     :: options()
+       , Result   :: result()
+       .
 
-render(Params0, #{static   := Static,
-                  dynamic  := DynamicSnap,
-                  ast      := AST,
-                  bindings := BindingsSnap,
-                  vars     := Vars}, Opts) ->
+render( Params0
+      , #{ static   := Static
+         , dynamic  := DynamicSnap
+         , ast      := AST
+         , bindings := BindingsSnap
+         , vars     := Vars
+         }
+      , Opts ) ->
     Params = normalize_bindings(Params0, Opts),
     Bindings = maps:merge(BindingsSnap, Params),
     EvalBindings = Bindings#{'Bindings' => Bindings},
@@ -89,13 +111,12 @@ render(Params0, #{static   := Static,
                             {[{Index, {Pos, Bin}} | DAcc], [{Index, Bin} | CAcc]}
                         catch
                             Class:Reason:Stacktrace ->
-                                ?LOG_ERROR(#{
-                                    class => Class,
-                                    reason => Reason,
-                                    stacktrace => Stacktrace,
-                                    ast => EvalAST,
-                                    position => Pos
-                                }),
+                                ?LOG_ERROR(#{ class => Class
+                                            , reason => Reason
+                                            , stacktrace => Stacktrace
+                                            , ast => EvalAST
+                                            , position => Pos
+                                            }),
                                 erlang:raise(Class, Reason, Stacktrace)
                         end;
                     false ->
@@ -123,10 +144,11 @@ contains_any_var(Map, Vars) ->
 %% @doc snapshot/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec snapshot(Static, AST) -> Result when
-    Static   :: eel_engine:static(),
-    AST      :: eel_engine:ast(),
-    Result   :: snapshot().
+-spec snapshot(Static, AST) -> Result
+    when Static :: static()
+       , AST    :: ast()
+       , Result :: snapshot()
+       .
 
 snapshot(Static, AST) ->
     snapshot(Static, undefined, AST).
@@ -135,11 +157,12 @@ snapshot(Static, AST) ->
 %% @doc snapshot/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST) -> Result when
-    Static   :: eel_engine:static(),
-    Dynamic  :: dynamic(),
-    AST      :: eel_engine:ast(),
-    Result   :: snapshot().
+-spec snapshot(Static, Dynamic, AST) -> Result
+    when Static  :: static()
+       , Dynamic :: dynamic()
+       , AST     :: ast()
+       , Result  :: snapshot()
+       .
 
 snapshot(Static, Dynamic, AST) ->
     snapshot(Static, Dynamic, AST, #{}).
@@ -148,12 +171,13 @@ snapshot(Static, Dynamic, AST) ->
 %% @doc snapshot/4.
 %% @end
 %% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings) -> Result when
-    Static   :: eel_engine:static(),
-    Dynamic  :: dynamic(),
-    AST      :: eel_engine:ast(),
-    Bindings :: bindings(),
-    Result   :: snapshot().
+-spec snapshot(Static, Dynamic, AST, Bindings) -> Result
+    when Static   :: static()
+       , Dynamic  :: dynamic()
+       , AST      :: ast()
+       , Bindings :: bindings()
+       , Result   :: snapshot()
+       .
 
 snapshot(Static, Dynamic, AST, Bindings) ->
     Vars = eel_compiler:ast_vars(AST),
@@ -163,22 +187,24 @@ snapshot(Static, Dynamic, AST, Bindings) ->
 %% @doc snapshot/5.
 %% @end
 %% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) -> Result when
-    Static   :: eel_engine:static(),
-    Dynamic  :: dynamic(),
-    AST      :: eel_engine:ast(),
-    Bindings :: bindings(),
-    Vars     :: [atom()],
-    Changes  :: changes(),
-    Result   :: snapshot().
+-spec snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) -> Result
+    when Static   :: static()
+       , Dynamic  :: dynamic()
+       , AST      :: ast()
+       , Bindings :: bindings()
+       , Vars     :: [atom()]
+       , Changes  :: changes()
+       , Result   :: snapshot()
+       .
 
 snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) ->
-    #{static => Static,
-      dynamic => Dynamic,
-      ast => AST,
-      bindings => Bindings,
-      vars => Vars,
-      changes => Changes}.
+    #{ static   => Static
+     , dynamic  => Dynamic
+     , ast      => AST
+     , bindings => Bindings
+     , vars     => Vars
+     , changes  => Changes
+     }.
 
 %%%=============================================================================
 %%% Internal functions
@@ -251,13 +277,15 @@ to_atom(Bin, #{}) ->
 -ifdef(TEST).
 
 capitalize_test() ->
-    [?assertEqual('FooBar', capitalize(<<"foo_bar">>, #{})),
-     ?assertEqual('FooBar', capitalize("foo_bar", #{})),
-     ?assertEqual('FooBar', capitalize(foo_bar, #{})),
-     ?assertEqual('FooBar', capitalize(fooBar, #{})),
-     ?assertEqual('FooBar', capitalize('FooBar', #{}))].
+    [ ?assertEqual('FooBar', capitalize(<<"foo_bar">>, #{}))
+    , ?assertEqual('FooBar', capitalize("foo_bar", #{}))
+    , ?assertEqual('FooBar', capitalize(foo_bar, #{}))
+    , ?assertEqual('FooBar', capitalize(fooBar, #{}))
+    , ?assertEqual('FooBar', capitalize('FooBar', #{}))
+    ].
 
 capitalize_keys_test() ->
-    ?assertEqual([{'FooBar', baz}], capitalize_keys([{<<"foo_bar">>, baz}], #{})).
+    ?assertEqual( [{'FooBar', baz}]
+                , capitalize_keys([{<<"foo_bar">>, baz}], #{}) ).
 
 -endif.
