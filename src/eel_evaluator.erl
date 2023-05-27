@@ -1,37 +1,49 @@
 %%%-----------------------------------------------------------------------------
 %%% @author William Fank Thomé [https://github.com/williamthome]
 %%% @copyright 2023 William Fank Thomé
-%%% @doc EEl compiler module.
+%%% @doc EEl evaluator module.
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(eel_evaluator).
 
 %% API functions
--export([eval/1, eval/2, zip/1, zip/2]).
+-export([ eval/1
+        , eval/2
+        , zip/1
+        , zip/2
+        ]).
+
+% Types
+-type snapshot() :: eel_renderer:snapshot().
+-type tokens()   :: eel_tokenizer:tokens().
+-type static()   :: eel_engine:static().
+-type dynamic()  :: eel_engine:dynamic().
 
 %%%=============================================================================
 %%% API functions
 %%%=============================================================================
 
 %% -----------------------------------------------------------------------------
-%% @evall/1.
+%% @doc eval/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec eval(Snapshot) -> Result when
-    Snapshot :: eel_renderer:snapshot(),
-    Result   :: binary().
+-spec eval(Snapshot) -> Result
+    when Snapshot :: snapshot()
+       , Result   :: binary()
+       .
 
 eval(#{static := Static, dynamic := Dynamic}) ->
     eval(Static, Dynamic).
 
 %% -----------------------------------------------------------------------------
-%% @evall/2.
+%% @doc eval/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec eval(Static, Dynamic) -> Result when
-    Static  :: eel_engine:static(),
-    Dynamic :: [binary()],
-    Result  :: binary().
+-spec eval(Static, Dynamic) -> Result
+    when Static  :: static()
+       , Dynamic :: [binary()]
+       , Result  :: binary()
+       .
 
 eval(Static, Dynamic) ->
     unicode:characters_to_binary(retrieve_bin(zip(Static, Dynamic))).
@@ -43,7 +55,7 @@ retrieve_bin(Tokens) ->
 %% @doc zip/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip(eel_tokenizer:tokens()) -> list().
+-spec zip(tokens()) -> list().
 
 zip({Static, Dynamic}) ->
     zip(Static, Dynamic).
@@ -52,7 +64,7 @@ zip({Static, Dynamic}) ->
 %% @doc zip/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip(eel_engine:static(), eel_engine:dynamic()) -> list().
+-spec zip(static(), dynamic()) -> list().
 
 zip(Static, Dynamic) ->
     do_zip(Static, Dynamic, []).

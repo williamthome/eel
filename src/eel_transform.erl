@@ -1,18 +1,21 @@
+%%%-----------------------------------------------------------------------------
+%%% @author William Fank Thomé [https://github.com/williamthome]
+%%% @copyright 2023 William Fank Thomé
+%%% @doc EEl parse transform module.
+%%% @end
+%%%-----------------------------------------------------------------------------
 -module(eel_transform).
 
--export([parse_transform/2]).
+-export([ parse_transform/2 ]).
 
 parse_transform(Forms, _Options) ->
-    deepmap(
-        fun
-            ({call, _, {remote, _, {atom, _, eel}, {atom, _, compile}}, _} = Form0) ->
-                {value, Form, []} = erl_eval:expr(Form0, []),
-                erl_syntax:revert(erl_syntax:abstract(Form));
-            (Form) ->
-                Form
-        end,
-        Forms
-    ).
+    deepmap(fun transform/1, Forms).
+
+transform({call, _, {remote, _, {atom, _, eel}, {atom, _, compile}}, _} = Form0) ->
+    {value, Form, []} = erl_eval:expr(Form0, []),
+    erl_syntax:revert(erl_syntax:abstract(Form));
+transform(Form) ->
+    Form.
 
 deepmap(Fun, Forms) when is_function(Fun, 1), is_list(Forms) ->
     do_deepmap(Forms, Fun).
