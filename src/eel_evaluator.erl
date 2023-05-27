@@ -15,7 +15,7 @@
 
 % Types
 -type snapshot() :: eel_renderer:snapshot().
--type tokens()   :: eel_tokenizer:tokens().
+-type token()    :: eel_tokenizer:token().
 -type static()   :: eel_engine:static().
 -type dynamic()  :: eel_engine:dynamic().
 
@@ -29,7 +29,7 @@
 %% -----------------------------------------------------------------------------
 -spec eval(Snapshot) -> Result
     when Snapshot :: snapshot()
-       , Result   :: binary()
+       , Result   :: iolist()
        .
 
 eval(#{static := Static, dynamic := Dynamic}) ->
@@ -41,12 +41,18 @@ eval(#{static := Static, dynamic := Dynamic}) ->
 %% -----------------------------------------------------------------------------
 -spec eval(Static, Dynamic) -> Result
     when Static  :: static()
-       , Dynamic :: [binary()]
-       , Result  :: binary()
+       , Dynamic :: dynamic()
+       , Result  :: iolist()
        .
 
 eval(Static, Dynamic) ->
-    unicode:characters_to_binary(retrieve_bin(zip(Static, Dynamic))).
+    retrieve_bin(zip(Static, Dynamic)).
+
+%% -----------------------------------------------------------------------------
+%% @doc retrieve_bin/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec retrieve_bin([token()]) -> iolist().
 
 retrieve_bin(Tokens) ->
     lists:map(fun({_, {_, Bin}}) -> Bin end, Tokens).
@@ -55,7 +61,11 @@ retrieve_bin(Tokens) ->
 %% @doc zip/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip(tokens()) -> list().
+-spec zip({Static, Dynamic}) -> Result
+    when Static  :: static()
+       , Dynamic :: dynamic()
+       , Result  :: [token()]
+       .
 
 zip({Static, Dynamic}) ->
     zip(Static, Dynamic).
@@ -64,7 +74,7 @@ zip({Static, Dynamic}) ->
 %% @doc zip/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip(static(), dynamic()) -> list().
+-spec zip(static(), dynamic()) -> [token()].
 
 zip(Static, Dynamic) ->
     do_zip(Static, Dynamic, []).

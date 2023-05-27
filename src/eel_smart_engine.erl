@@ -93,8 +93,8 @@ handle_body(#state{acc = Tokens}) ->
 
 %% compile callbacks
 
-handle_compile(Token, #state{opts = Opts} = State) ->
-    case eel_compiler:dynamic_to_ast(compile(Token, Opts)) of
+handle_compile(Tokens, #state{opts = Opts} = State) ->
+    case eel_compiler:dynamic_to_ast(compile(Tokens, Opts)) of
         {ok, AST} ->
             {ok, push(AST, State)};
         {error, Reason} ->
@@ -536,20 +536,12 @@ parse_tokens_to_sd_test() ->
     ?assertEqual(Expected, Result).
 
 handle_render_test() ->
-    Expected = <<
-        "<h1>EEl</h1>"
-        "<ul>"
-            "<li>foo</li>"
-            "<li>bar</li>"
-            "<li>baz</li>"
-        "</ul>"
-        "<div>Item count: 3</div>"
-        "<ul>"
-            "<li>1</li>"
-            "<li>2</li>"
-            "<li>3</li>"
-        "</ul>"
-    >>,
+    Expected =
+        [ <<"<h1>">>,<<"EEl">>,<<"</h1><ul>">>
+        , [<<"<li>foo</li>">>,<<"<li>bar</li>">>,<<"<li>baz</li>">>]
+        , <<"</ul>">>
+        , <<"<div>Item count: 3</div><ul><li>1</li><li>2</li><li>3</li></ul>">>
+        ],
     Bin = <<
         "<h1><%= maps:get('Title', Bindings, <<\"EEl\">>) .%></h1>"
         "<%% <h2><%= Foo .%></h2> %%>"
