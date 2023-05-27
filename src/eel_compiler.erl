@@ -224,9 +224,7 @@ do_compile_file_to_module(Filename, Snapshot, Module) ->
         false ->
             Forms = module_forms(Module, Filename, Snapshot),
             {ok, Module, Bin} = compile:forms(Forms),
-            ModuleBin = atom_to_binary(Module),
-            ModuleFileName = erlang:binary_to_list(<<ModuleBin/binary, ".erl">>),
-            case code:load_binary(Module, ModuleFileName, Bin) of
+            case code:load_binary(Module, Module, Bin) of
                 {module, Module} ->
                     {ok, Module};
                 {error, Reason} ->
