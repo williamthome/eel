@@ -13,13 +13,13 @@
 -type index()         :: pos_integer().
 -type line()          :: pos_integer().
 -type column()        :: pos_integer().
+-type position()      :: {line(), column()}.
 -type expression()    :: binary().
 -type state()         :: term().
--type token()         :: term().
--type static()        :: [binary()].
+-type token()         :: {index(), {position(), expression()}}.
+-type static()        :: [token()].
 -type dynamic()       :: [token()].
 -type ast()           :: erl_syntax:syntaxTree().
--type position()      :: {line(), column()}.
 -type marker_id()     :: atom().
 -type marker_symbol() :: nonempty_string().
 -type marker()        :: {marker_id(), { Start :: marker_symbol()
@@ -67,6 +67,6 @@
 -callback handle_body( state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
--callback handle_compile(token(), state()) -> {ok, state()} | {error, term()}.
+-callback handle_compile([token()], state()) -> {ok, state()} | {error, term()}.
 
 -callback handle_ast( state() ) -> {ok, ast()} | {error, term()}.

@@ -9,8 +9,8 @@ Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can em
 A binary or a file can be evaluated to a binary, e.g.:
 
 ```erlang
-1> eel:eval(<<"Hello, <%= Who .%>!">>, #{'Who' => <<"World">>}).
-<<"Hello, World!">>
+1> eel:eval(<<"Hello, <%= Name .%>!">>, #{'Name' => <<"World">>}).
+[<<"Hello, ">>,<<"World">>,<<"!">>]
 ```
 
 ### Module
@@ -18,10 +18,10 @@ A binary or a file can be evaluated to a binary, e.g.:
 A binary or a file can be compiled to a module, e.g.:
 
 ```erlang
-1> eel:compile_to_module(<<"Hello, <%= Who .%>!">>, foo).
+1> eel:compile_to_module(<<"Hello, <%= Name .%>!">>, foo).
 {ok,foo}
-2> foo:eval(#{'Who' => <<"World">>}).
-<<"Hello, World!">>
+2> foo:eval(#{'Name' => <<"World">>}).
+[<<"Hello, ">>,<<"World">>,<<"!">>]
 ```
 
 ## Example
@@ -40,7 +40,7 @@ render(Bindings) ->
             "<title><%= Title .%></title>"
         "</head>"
         "<body>"
-            "Hello, <%= Who .%>!"
+            "Hello, <%= Name .%>!"
         "</body>"
         "</html>"
     >>),
@@ -61,7 +61,9 @@ and type this in the Erlang shell
 
 ```erlang
 1> {_, Snapshot} = foo:render(#{title => <<"Hey!">>, who => <<"World">>}).
-{<<"<html><head><title>Hey!</title></head><body>Hello, World!</body></html>">>,
+{[<<"<html><head><title>">>,<<"Hey!">>,
+  <<"</title></head><body>Hello, ">>,<<"World">>,
+  <<"!</body></html>">>],
  #{ast =>
        [{2,
          {{1,20},
@@ -73,7 +75,8 @@ and type this in the Erlang shell
          {{1,61},
           [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
    changes => [{2,<<"Hey!">>},{4,<<"World">>}],
    dynamic =>
@@ -84,7 +87,9 @@ and type this in the Erlang shell
         {5,{{1,72},<<"!</body></html>">>}}],
    vars => [{2,['Title']},{4,['Who']}]}}
 2> {Bin, _} = foo:render(#{who => <<"Erlang">>}, Snapshot).
-{<<"<html><head><title>Hey!</title></head><body>Hello, Erlang!</body></html>">>,
+{[<<"<html><head><title>">>,<<"Hey!">>,
+  <<"</title></head><body>Hello, ">>,<<"Erlang">>,
+  <<"!</body></html>">>],
  #{ast =>
        [{2,
          {{1,20},
@@ -96,7 +101,8 @@ and type this in the Erlang shell
          {{1,61},
           [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
    changes => [{4,<<"Erlang">>}],
    dynamic =>
@@ -110,7 +116,9 @@ and type this in the Erlang shell
 
 Looking at the pattern matched results, the first tuple element contains the evaluated value
 ```erlang
-<<"<html><head><title>Hey!</title></head><body>Hello, World!</body></html>">>
+[<<"<html><head><title>">>,<<"Hey!">>,
+ <<"</title></head><body>Hello, ">>,<<"World">>,
+ <<"!</body></html>">>]
 ```
 and the second a metadata called `snapshot` (see next)
 ```erlang
@@ -125,7 +133,8 @@ and the second a metadata called `snapshot` (see next)
          {{1,61},
           [{call,1,
                {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
-               [{'fun',1,{clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
+               [{'fun',1,
+                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
    bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
    changes => [{2,<<"Hey!">>},{4,<<"World">>}],
    dynamic =>
