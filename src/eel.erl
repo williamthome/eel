@@ -11,11 +11,11 @@
         , compile/2
         , compile_file/1
         , compile_file/2
-        , compile_to_module/2
-        , compile_to_module/3
-        , compile_file_to_module/1
-        , compile_file_to_module/2
-        , compile_file_to_module/3
+        , to_module/2
+        , to_module/3
+        , file_to_module/1
+        , file_to_module/2
+        , file_to_module/3
         , render/1
         , render/2
         , render/3
@@ -81,10 +81,10 @@ compile_file(Filename, Opts) ->
             {error, Reason}
     end.
 
-compile_to_module(Bin, ModName) ->
-    compile_to_module(Bin, ModName, default_engine_opts()).
+to_module(Bin, ModName) ->
+    to_module(Bin, ModName, default_engine_opts()).
 
-compile_to_module(Bin, ModName, Opts) ->
+to_module(Bin, ModName, Opts) ->
     case compile(Bin, Opts) of
         {ok, Snapshot} ->
             eel_compiler:compile_to_module(Snapshot, ModName);
@@ -92,16 +92,16 @@ compile_to_module(Bin, ModName, Opts) ->
             {error, Reason}
     end.
 
-compile_file_to_module(Filename) ->
-    compile_file_to_module(Filename, default_engine_opts()).
+file_to_module(Filename) ->
+    file_to_module(Filename, default_engine_opts()).
 
-compile_file_to_module(Filename, Module) when is_atom(Module) ->
-    compile_file_to_module(Filename, Module, default_engine_opts());
-compile_file_to_module(Filename, Opts) when is_map(Opts) ->
+file_to_module(Filename, Module) when is_atom(Module) ->
+    file_to_module(Filename, Module, default_engine_opts());
+file_to_module(Filename, Opts) when is_map(Opts) ->
     Module = eel_compiler:file_module(Filename),
-    compile_file_to_module(Filename, Module, Opts).
+    file_to_module(Filename, Module, Opts).
 
-compile_file_to_module(Filename, Module, Opts) ->
+file_to_module(Filename, Module, Opts) ->
     case compile_file(Filename, Opts) of
         {ok, Snapshot} ->
             eel_compiler:compile_file_to_module(Filename, Snapshot, Module);
@@ -213,18 +213,18 @@ write_file(Filename, Data) ->
 
 -ifdef(TEST).
 
-compile_to_module_test() ->
+to_module_test() ->
     Bin = <<"Hello, World!">>,
-    [ ?assertMatch({ok, foo}, compile_to_module(Bin, foo))
-    , ?assertMatch({ok, foo}, compile_to_module(Bin, foo, #{}))
+    [ ?assertMatch({ok, foo}, to_module(Bin, foo))
+    , ?assertMatch({ok, foo}, to_module(Bin, foo, #{}))
     ].
 
 compile_file_to_module_test() ->
     Filename = "/tmp/foo.eel",
     ok = file:write_file(Filename, <<"Hello, World!">>),
-    [ ?assertMatch({ok, foo_eel}, compile_file_to_module(Filename))
-    , ?assertMatch({ok, foo}, compile_file_to_module(Filename, foo))
-    , ?assertMatch({ok, foo_eel}, compile_file_to_module(Filename, #{}))
+    [ ?assertMatch({ok, foo_eel}, file_to_module(Filename))
+    , ?assertMatch({ok, foo}, file_to_module(Filename, foo))
+    , ?assertMatch({ok, foo_eel}, file_to_module(Filename, #{}))
     ].
 
 -endif.
