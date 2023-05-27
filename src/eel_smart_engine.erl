@@ -9,13 +9,15 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([markers/0,
-         init/1,
-         handle_expr/5, handle_text/4, handle_body/1,
-         handle_compile/2, handle_ast/1]).
+-export([ markers/0
+        , init/1
+        , handle_expr/5
+        , handle_text/4
+        , handle_body/1
+        , handle_compile/2
+        , handle_ast/1
+        ]).
 
-%% Includes
--include("eel_engine.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -54,35 +56,37 @@
 %%% eel_engine callbacks
 %%%=============================================================================
 
-markers() -> [{expr,       {"<%=", ".%>"}},
-              {start_expr, {"<%=",  "%>"}},
-              {mid_expr,   {"<%",   "%>"}},
-              {end_expr,   {"<%",  ".%>"}},
-              {code,       {"<%:", ":%>"}},
-              {comment,    {"<%%", "%%>"}}].
+markers() ->
+    [ {expr,       {"<%=", ".%>"}}
+    , {start_expr, {"<%=",  "%>"}}
+    , {mid_expr,   {"<%",   "%>"}}
+    , {end_expr,   {"<%",  ".%>"}}
+    , {code,       {"<%:", ":%>"}}
+    , {comment,    {"<%%", "%%>"}}
+    ].
 
 init(Opts) ->
-    #state{opts = Opts}.
+    {ok, #state{opts = Opts}}.
 
 %% tokenize callbacks
 
 handle_expr(Index, Pos, expr, Expr, State) ->
-    push(?expr(Index, Pos, Expr), State);
+    {ok, push(?expr(Index, Pos, Expr), State)};
 handle_expr(Index, Pos, start_expr, Expr, State) ->
-    push(?start_expr(Index, Pos, Expr), State);
+    {ok, push(?start_expr(Index, Pos, Expr), State)};
 handle_expr(Index, Pos, mid_expr, Expr, State) ->
-    push(?mid_expr(Index, Pos, Expr), State);
+    {ok, push(?mid_expr(Index, Pos, Expr), State)};
 handle_expr(Index, Pos, end_expr, Expr, State) ->
-    push(?end_expr(Index, Pos, Expr), State);
+    {ok, push(?end_expr(Index, Pos, Expr), State)};
 handle_expr(Index, Pos, code, Expr, State) ->
-    push(?code(Index, Pos, Expr), State);
+    {ok, push(?code(Index, Pos, Expr), State)};
 handle_expr(Index, Pos, comment, Expr, State) ->
-    push(?comment(Index, Pos, Expr), State);
+    {ok, push(?comment(Index, Pos, Expr), State)};
 handle_expr(_Index, Pos, Marker, Expr, _State) ->
-    ?unknown_marker_error({Pos, Marker, Expr}).
+    {error, {unknown_marker, {Pos, Marker, Expr}}}.
 
 handle_text(Index, Pos, Text, State) ->
-    push(?text(Index, Pos, Text), State).
+    {ok, push(?text(Index, Pos, Text), State)}.
 
 handle_body(#state{acc = Tokens}) ->
     {ok, parse_tokens_to_sd(lists:reverse(Tokens))}.
@@ -112,9 +116,10 @@ push(Term, #state{acc = Acc} = State) ->
 %% @doc Parses tokens to statics and dynamics.
 %% @end
 %% -----------------------------------------------------------------------------
--spec parse_tokens_to_sd(Tokens) -> Result when
-    Tokens :: [token()],
-    Result :: {static(), dynamic()}.
+-spec parse_tokens_to_sd(Tokens) -> Result
+    when Tokens :: [token()]
+       , Result :: {static(), dynamic()}
+       .
 
 parse_tokens_to_sd(Tokens) ->
     {[], SD} = do_parse_tokens_to_sd(Tokens),
@@ -132,44 +137,83 @@ do_parse_tokens_to_sd(Tokens, In, Prev, SD) ->
     end.
 
 % Single line expression
-do_parse_tokens_to_sd_1([{_, {expr, _, _}} = H | T], in_text, Prev, {S, D}) ->
-    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {S, [H | D]});
-do_parse_tokens_to_sd_1([{_, {expr, _, _}} = H | T], in_expr, Prev, {S, [HD | D]}) ->
+do_parse_tokens_to_sd_1( [{_, {expr, _, _}} = H | T]
+                       , in_text
+                       , Prev
+                       , {S, D} ) ->
+    do_parse_tokens_to_sd_2( T, H, in_text, Prev, {S, [H | D]});
+do_parse_tokens_to_sd_1( [{_, {expr, _, _}} = H | T]
+                       , in_expr
+                       , Prev
+                       , {S, [HD | D]} ) ->
     do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
 % Multiline expression
-do_parse_tokens_to_sd_1([{_, {start_expr, _, _}} = H | T], in_text, Prev, {S, D}) ->
+do_parse_tokens_to_sd_1( [{_, {start_expr, _, _}} = H | T]
+                       , in_text
+                       , Prev
+                       , {S, D} ) ->
     do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H] | D]});
-do_parse_tokens_to_sd_1([{_, {start_expr, _, _}} | _] = T, in_expr, Prev, SD) ->
+do_parse_tokens_to_sd_1( [{_, {start_expr, _, _}} | _] = T
+                       , in_expr
+                       , Prev
+                       , SD ) ->
     parse_nested_sd(T, Prev, SD);
-do_parse_tokens_to_sd_1([{_, {mid_expr, _, _}} = H | T], in_expr, Prev, {S, [HD | D]}) ->
+do_parse_tokens_to_sd_1( [{_, {mid_expr, _, _}} = H | T]
+                       , in_expr
+                       , Prev
+                       , {S, [HD | D]} ) ->
     do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
-do_parse_tokens_to_sd_1([{_, {end_expr, _, _}} = H | T], in_expr, _, {S, [HD | D]}) ->
+do_parse_tokens_to_sd_1( [{_, {end_expr, _, _}} = H | T]
+                       , in_expr
+                       , _Prev
+                       , {S, [HD | D]} ) ->
     {T, H, {S, [lists:reverse([H | HD]) | D]}};
 % Text
-do_parse_tokens_to_sd_1([{Index, {text, Pos, Text}} | T], in_text, {PrevIndex, {text, PrevPos, PrevText}}, {[{PrevIndex, {PrevPos, PrevText}} | S], D}) ->
+do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} | T]
+                       , in_text
+                       , {PrevIndex, {text, PrevPos, PrevText}}
+                       , {[{PrevIndex, {PrevPos, PrevText}} | S], D} ) ->
     Concat = <<PrevText/binary, Text/binary>>,
     do_parse_tokens_to_sd_2(T, {Index, {text, Pos, Concat}}, in_text, {Index, {text, Pos, Concat}}, {[{Index, {Pos, Concat}} | S], D});
-do_parse_tokens_to_sd_1([{Index, {text, Pos, Text}} = H | T], in_text, Prev, {S, D}) ->
+do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} = H | T]
+                       , in_text
+                       , Prev
+                       , {S, D} ) ->
     do_parse_tokens_to_sd_2(T, H, in_text, Prev, {[{Index, {Pos, Text}} | S], D});
-do_parse_tokens_to_sd_1([{_, {text, _, _}} | _] = T, in_expr, Prev, SD) ->
+do_parse_tokens_to_sd_1( [{_, {text, _, _}} | _] = T
+                       , in_expr
+                       , Prev
+                       , SD ) ->
     parse_nested_sd(T, Prev, SD);
 % Comment
-do_parse_tokens_to_sd_1([{_, {comment, _, _}} | T], In, Prev, {S, D}) ->
+do_parse_tokens_to_sd_1( [{_, {comment, _, _}} | T]
+                       , In
+                       , Prev
+                       , {S, D} ) ->
     do_parse_tokens_to_sd_1(T, In, Prev, {S, D});
 % Debug
-do_parse_tokens_to_sd_1([{_, {code, _, _}} = H | T], in_text, Prev, {S, D}) ->
+do_parse_tokens_to_sd_1( [{_, {code, _, _}} = H | T]
+                       , in_text
+                       , Prev
+                       , {S, D} ) ->
     do_parse_tokens_to_sd_2(T, H, in_text, Prev, {S, [H | D]});
-do_parse_tokens_to_sd_1([{_, {code, _, _}} = H | T], in_expr, Prev, {S, [HD | D]}) ->
+do_parse_tokens_to_sd_1( [{_, {code, _, _}} = H | T]
+                       , in_expr
+                       , Prev
+                       , {S, [HD | D]} ) ->
     do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
 % Done
 do_parse_tokens_to_sd_1([], _, _, SD) ->
     {[], SD}.
 
 do_parse_tokens_to_sd_2(Tokens, Curr, In, Prev, {S, D}) ->
-    SD = case should_push_empty_static(Prev, Curr, {S, D}) of
-             true -> {[<<>> | S], D};
-             false -> {S, D}
-         end,
+    SD =
+        case should_push_empty_static(Prev, Curr, {S, D}) of
+            true ->
+                {[<<>> | S], D};
+            false ->
+                {S, D}
+        end,
     do_parse_tokens_to_sd_1(Tokens, In, Curr, SD).
 
 should_push_empty_static(_, Curr, {[], _}) ->
@@ -177,11 +221,11 @@ should_push_empty_static(_, Curr, {[], _}) ->
 should_push_empty_static(Prev, Curr, {_, _}) ->
     is_expr(Prev) andalso is_expr(Curr).
 
-is_expr({_, {Name, _, _}}) when Name =:= expr;
-                                Name =:= start_expr;
-                                Name =:= end_expr;
-                                Name =:= nested_expr;
-                                Name =:= code ->
+is_expr({_, {Name, _, _}}) when Name =:= expr
+                              ; Name =:= start_expr
+                              ; Name =:= end_expr
+                              ; Name =:= nested_expr
+                              ; Name =:= code ->
     true;
 is_expr(_) ->
     false.
@@ -275,49 +319,49 @@ handle_expr_test() ->
         {
             "Should return expr token",
             ?assertEqual(
-                #state{acc = [{1, {expr, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {expr, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return start_expr token",
             ?assertEqual(
-                #state{acc = [{1, {start_expr, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {start_expr, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, start_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return mid_expr token",
             ?assertEqual(
-                #state{acc = [{1, {mid_expr, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {mid_expr, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, mid_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return end_expr token",
             ?assertEqual(
-                #state{acc = [{1, {end_expr, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {end_expr, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, end_expr, <<"Foo">>, #state{})
             )
         },
         {
             "Should return code token",
             ?assertEqual(
-                #state{acc = [{1, {code, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {code, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, code, <<"Foo">>, #state{})
             )
         },
         {
             "Should ignore comment",
             ?assertEqual(
-                #state{acc = [{1, {comment, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {comment, {1, 1}, <<"Foo">>}}]}},
                 handle_expr(1, {1, 1}, comment, <<"Foo">>, #state{})
             )
         },
         {
             "Should raise unknown marker error",
-            ?assertError(
-                unknown_marker,
+            ?assertEqual(
+                {error, {unknown_marker, {{1,1}, unknown, <<"Foo">>}}},
                 handle_expr(1, {1, 1}, unknown, <<"Foo">>, #state{})
             )
         }
@@ -328,7 +372,7 @@ handle_text_test() ->
         {
             "Should return text token",
             ?assertEqual(
-                #state{acc = [{1, {text, {1, 1}, <<"Foo">>}}]},
+                {ok, #state{acc = [{1, {text, {1, 1}, <<"Foo">>}}]}},
                 handle_text(1, {1, 1}, <<"Foo">>, #state{})
             )
         }
@@ -525,10 +569,7 @@ handle_render_test() ->
         "<% ; false -> <<\"Empty list\">> end .%>"
         "<%  .%>"
     >>,
-    {ok, Snapshot0} = eel:compile(Bin),
-    Bindings = #{list => [foo, bar, baz]},
-    {ok, Snapshot} = eel_renderer:render(Bindings, Snapshot0),
-    Result = eel_evaluator:eval(Snapshot),
+    Result = eel:eval(Bin, #{list => [foo, bar, baz]}),
     ?assertEqual(Expected, Result).
 
 -endif.
