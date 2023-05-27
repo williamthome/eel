@@ -18,7 +18,7 @@ A binary or a file can be evaluated to a binary, e.g.:
 A binary or a file can be compiled to a module, e.g.:
 
 ```erlang
-1> eel:compile_to_module(<<"Hello, <%= Name .%>!">>, foo).
+1> eel:to_module(<<"Hello, <%= Name .%>!">>, foo).
 {ok,foo}
 2> foo:eval(#{'Name' => <<"World">>}).
 [<<"Hello, ">>,<<"World">>,<<"!">>]
