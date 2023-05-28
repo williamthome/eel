@@ -6,6 +6,13 @@
 %%%-----------------------------------------------------------------------------
 -module(eel_compiler).
 
+-compile(inline_list_funcs).
+-compile({inline, [ dynamic_to_ast/1
+                  , ast_vars/1
+                  , do_compile/4
+                  , do_compile_file_to_module/3
+                  ]}).
+
 %% API functions
 -export([ compile/1
         , compile/2
@@ -64,7 +71,7 @@ compile(Dynamic, Opts) when is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     case Eng:init(Opts) of
         {ok, State} ->
-            do_compile(Dynamic, Eng, State);
+            do_compile(Dynamic, Eng, State, []);
         {error, Reason} ->
             {error, Reason}
     end.
@@ -202,15 +209,20 @@ file_module(Filename) when is_binary(Filename); is_list(Filename) ->
 %%% Internal functions
 %%%=============================================================================
 
-do_compile([D | Dynamic], Eng, State) ->
-    case Eng:handle_compile(D, State) of
-        {ok, NewState} ->
-            do_compile(Dynamic, Eng, NewState);
+do_compile([H | T], Eng, State, Acc) ->
+    case Eng:handle_compile(H, State) of
+        {ok, {Dynamic, NewState}} ->
+            case eel_compiler:dynamic_to_ast(Dynamic) of
+                {ok, AST} ->
+                    do_compile(T, Eng, NewState, [AST | Acc]);
+                {error, Reason} ->
+                    {error, Reason}
+                end;
         {error, Reason} ->
             {error, Reason}
     end;
-do_compile([], Eng, State) ->
-    Eng:handle_ast(State).
+do_compile([], Eng, State, AST) ->
+    Eng:handle_ast(lists:reverse(AST), State).
 
 do_compile_to_module(Snapshot, Module) ->
     do_compile_file_to_module(undefined, Snapshot, Module).

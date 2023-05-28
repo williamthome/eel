@@ -6,6 +6,9 @@
 %%%-----------------------------------------------------------------------------
 -module(eel_evaluator).
 
+-compile(inline_list_funcs).
+-compile({inline, [ do_zip/3 ]}).
+
 %% API functions
 -export([ eval/1
         , eval/2

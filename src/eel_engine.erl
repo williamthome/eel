@@ -20,8 +20,9 @@
 -type static()        :: [token()].
 -type dynamic()       :: [token()].
 -type ast()           :: erl_syntax:syntaxTree().
--type marker_id()     :: atom().
--type marker_symbol() :: nonempty_string().
+-type marker_id()     :: term().
+-type marker_symbol() :: binary().
+-type marker_size()   :: non_neg_integer().
 -type marker()        :: {marker_id(), { Start :: marker_symbol()
                                        , End   :: marker_symbol() }}.
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
@@ -48,25 +49,25 @@
 %%% Callbacks
 %%%=============================================================================
 
--callback markers() -> [marker()].
-
 -callback init(options()) -> {ok, state()} | {error, term()}.
 
 %% tokenize
--callback handle_expr( index()
-                     , position()
-                     , marker_id()
-                     , expressions()
-                     , state() ) -> {ok, state()} | {error, term()}.
+-callback handle_expr_start( binary()
+                           , state() ) -> {ok, {StartMarker :: marker_symbol(), marker_size(), Rest :: binary(), state()}} | {error, term()}.
 
--callback handle_text( index()
-                     , position()
-                     , binary()
-                     , state() ) -> {ok, state()} | {error, term()}.
+-callback handle_expr_end( StartMarker :: marker_symbol()
+                         , binary()
+                         , state() ) -> {ok, state()} | {error, term()}.
 
--callback handle_body( state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
+-callback handle_text( iodata()
+                     , position()
+                     , state() ) -> {ok, {iodata(), position(), state()}} | {error, term()}.
+
+-callback handle_body( [token()]
+                     , state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
 
 %% compile
--callback handle_compile([token()], state()) -> {ok, state()} | {error, term()}.
+-callback handle_compile( [token()]
+                        , state()) -> {ok, state()} | {error, term()}.
 
--callback handle_ast( state() ) -> {ok, ast()} | {error, term()}.
+-callback handle_ast( ast(), state() ) -> {ok, ast()} | {error, term()}.

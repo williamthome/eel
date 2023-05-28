@@ -10,7 +10,7 @@ A binary or a file can be evaluated to a binary, e.g.:
 
 ```erlang
 1> eel:eval(<<"Hello, <%= Name .%>!">>, #{'Name' => <<"World">>}).
-[<<"Hello, ">>,<<"World">>,<<"!">>]
+["Hello, ",<<"World">>,"!"]
 ```
 
 ### Module
@@ -21,7 +21,7 @@ A binary or a file can be compiled to a module, e.g.:
 1> eel:to_module(<<"Hello, <%= Name .%>!">>, foo).
 {ok,foo}
 2> foo:eval(#{'Name' => <<"World">>}).
-[<<"Hello, ">>,<<"World">>,<<"!">>]
+["Hello, ",<<"World">>,"!"]
 ```
 
 ## Example
@@ -60,65 +60,65 @@ rebar3 shell
 and type this in the Erlang shell
 
 ```erlang
-1> {_, Snapshot} = foo:render(#{title => <<"Hey!">>, who => <<"World">>}).
-{[<<"<html><head><title>">>,<<"Hey!">>,
-  <<"</title></head><body>Hello, ">>,<<"World">>,
-  <<"!</body></html>">>],
+1> {_, Snapshot} = foo:render(#{'Title' => <<"Hey!">>, 'Name' => <<"World">>}).
+{["<html><head><title>",<<"Hey!">>,
+  "</title></head><body>Hello, ",<<"World">>,
+  "!</body></html>"],
  #{ast =>
        [{2,
          {{1,20},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
         {4,
          {{1,61},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings => #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
    changes => [{2,<<"Hey!">>},{4,<<"World">>}],
    dynamic =>
        [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
    static =>
-       [{1,{{1,1},<<"<html><head><title>">>}},
-        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
-        {5,{{1,72},<<"!</body></html>">>}}],
-   vars => [{2,['Title']},{4,['Who']}]}}
-2> {Bin, _} = foo:render(#{who => <<"Erlang">>}, Snapshot).
-{[<<"<html><head><title>">>,<<"Hey!">>,
-  <<"</title></head><body>Hello, ">>,<<"Erlang">>,
-  <<"!</body></html>">>],
+       [{1,{{1,1},"<html><head><title>"}},
+        {3,{{1,33},"</title></head><body>Hello, "}},
+        {5,{{1,73},"!</body></html>"}}],
+   vars => [{2,['Title']},{4,['Name']}]}}
+2> {Bin, _} = foo:render(#{'Name' => <<"Erlang">>}, Snapshot).
+{["<html><head><title>",<<"Hey!">>,
+  "</title></head><body>Hello, ",<<"Erlang">>,
+  "!</body></html>"],
  #{ast =>
        [{2,
          {{1,20},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
         {4,
          {{1,61},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"Erlang">>},
+   bindings => #{'Name' => <<"Erlang">>,'Title' => <<"Hey!">>},
    changes => [{4,<<"Erlang">>}],
    dynamic =>
        [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"Erlang">>}}],
    static =>
-       [{1,{{1,1},<<"<html><head><title>">>}},
-        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
-        {5,{{1,72},<<"!</body></html>">>}}],
-   vars => [{2,['Title']},{4,['Who']}]}}
+       [{1,{{1,1},"<html><head><title>"}},
+        {3,{{1,33},"</title></head><body>Hello, "}},
+        {5,{{1,73},"!</body></html>"}}],
+   vars => [{2,['Title']},{4,['Name']}]}}
 ```
 
 Looking at the pattern matched results, the first tuple element contains the evaluated value
 ```erlang
-[<<"<html><head><title>">>,<<"Hey!">>,
- <<"</title></head><body>Hello, ">>,<<"World">>,
- <<"!</body></html>">>]
+["<html><head><title>",<<"Hey!">>,
+ "</title></head><body>Hello, ",<<"World">>,
+ "!</body></html>"],
 ```
 and the second a metadata called `snapshot` (see next)
 ```erlang
@@ -126,39 +126,38 @@ and the second a metadata called `snapshot` (see next)
        [{2,
          {{1,20},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
         {4,
          {{1,61},
           [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_binary}},
+               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
                [{'fun',1,
                     {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Title' => <<"Hey!">>,'Who' => <<"World">>},
+   bindings => #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
    changes => [{2,<<"Hey!">>},{4,<<"World">>}],
    dynamic =>
        [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
    static =>
-       [{1,{{1,1},<<"<html><head><title>">>}},
-        {3,{{1,33},<<"</title></head><body>Hello, ">>}},
-        {5,{{1,72},<<"!</body></html>">>}}],
-   vars => [{2,['Title']},{4,['Who']}]}
+       [{1,{{1,1},"<html><head><title>"}},
+        {3,{{1,33},"</title></head><body>Hello, "}},
+        {5,{{1,73},"!</body></html>"}}],
+   vars => [{2,['Title']},{4,['Name']}]}
 ```
 
-The line `1` will evaluate the bindings `title` and `who`, but the line `2`
-will only eval the `who` variable, because it uses the snapshot of the previous
+The line `1` will evaluate the bindings `Title` and `Name`, but the line `2`
+will only eval the `Name` variable, because it uses the snapshot of the previous
 render. It only eval the changes and does not need to compile the binary again, unless the expression contains the global `Bindings` variable (see below),
 because the `snapshot` includes the required information.
 
 The global `Bindings` variable can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
 
 ```
-<%= maps:get(foo, Bindings, bar) .%>
+<%= maps:get('Foo', Bindings, bar) .%>
 ```
 
 Including `Bindings` to the expression makes it to be always evaluated by the render function.
-
 
 Including the header
 
@@ -184,7 +183,7 @@ The bindings are the unbound/required variables of the template. The syntax it's
 #{'Foo' => <<"foo">>, 'FooBar' => bar}
 ```
 
-or the same in lower case (note the snake case in foo_bar):
+or the same in lower case passing the option #{snake_case => true} to the compile function:
 
 ```erlang
 #{foo => <<"foo">>, foo_bar => bar}
