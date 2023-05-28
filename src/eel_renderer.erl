@@ -6,6 +6,11 @@
 %%%-----------------------------------------------------------------------------
 -module(eel_renderer).
 
+-compile(inline_list_funcs).
+-compile({inline, [ render/3
+                  , capitalize_keys/2
+                  ]}).
+
 %% API functions
 -export([ render/1
         , render/2
@@ -38,7 +43,7 @@
 -type dynamic()  :: undefined | [binary()].
 -type ast()      :: eel_engine:ast().
 -type changes()  :: [{non_neg_integer(), binary()}].
-% TODO: Maybe change snapshot to a opaque record
+% TODO: Maybe change snapshot to an opaque record
 -type snapshot() :: #{ static   => static()
                      , dynamic  => dynamic()
                      , ast      => ast()
@@ -220,8 +225,10 @@ snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) ->
 %% @end
 %% -----------------------------------------------------------------------------
 
-normalize_bindings(Bindings0, Opts) ->
-    capitalize_keys(Bindings0, Opts).
+normalize_bindings(Bindings, #{snake_case := true} = Opts) ->
+    capitalize_keys(Bindings, Opts);
+normalize_bindings(Bindings, #{}) ->
+    Bindings.
 
 eval(Exprs, Bindings) ->
     {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),

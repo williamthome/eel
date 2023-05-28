@@ -6,6 +6,12 @@
 %%%-----------------------------------------------------------------------------
 -module(eel).
 
+-compile({inline, [ compile/2
+                  , compile_file/2
+                  , render/3
+                  , render_file/3
+                  ]}).
+
 %% API functions
 -export([ compile/1
         , compile/2
