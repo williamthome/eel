@@ -11,12 +11,6 @@
 parse_transform(Forms, _Options) ->
     deepmap(fun transform/1, Forms).
 
-transform({call, _, {remote, _, {atom, _, eel}, {atom, _, compile}}, _} = Form0) ->
-    {value, Form, []} = erl_eval:expr(Form0, []),
-    erl_syntax:revert(erl_syntax:abstract(Form));
-transform(Form) ->
-    Form.
-
 deepmap(Fun, Forms) when is_function(Fun, 1), is_list(Forms) ->
     do_deepmap(Forms, Fun).
 
@@ -36,3 +30,14 @@ do_deepmap(Forms, F) when is_list(Forms) ->
     lists:map(fun(Form) -> do_deepmap(Form, F) end, Forms);
 do_deepmap(Form, F) ->
     F(Form).
+
+transform({call, _, {remote, _, {atom, _, eel}, {atom, _, compile}}, _} = Form0) ->
+    eval(Form0);
+transform({call, _, {remote, _, {atom, _, eel}, {atom, _, compile_file}}, _} = Form0) ->
+    eval(Form0);
+transform(Form) ->
+    Form.
+
+eval(Form0) ->
+    {value, Form, []} = erl_eval:expr(Form0, []),
+    erl_syntax:revert(erl_syntax:abstract(Form)).
