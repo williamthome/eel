@@ -50,32 +50,32 @@
 %% @doc tokenize/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary()) -> result().
+-spec tokenize(iodata()) -> result().
 
-tokenize(Bin) ->
-    tokenize(Bin, ?DEFAULT_ENGINE_OPTS).
+tokenize(IoData) ->
+    tokenize(IoData, ?DEFAULT_ENGINE_OPTS).
 
 %% -----------------------------------------------------------------------------
 %% @doc tokenize/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec tokenize(binary(), map()) -> result().
+-spec tokenize(iodata(), map()) -> result().
 
-% TODO: Maybe reduce verification to improve speed (let it crash!).
-
-tokenize(Bin, Opts) ->
+tokenize(Bin, Opts) when is_binary(Bin) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     case Eng:init(Opts) of
-        {ok, State} ->
-            case do_tokenize(Bin, Eng, State, 1, {1, 1}, {1, 1}, [], []) of
-                {ok, {Tokens, NewState}} ->
-                    Eng:handle_body(Tokens, NewState);
+        {ok, InitState} ->
+            case do_tokenize(Bin, Eng, InitState, 1, {1, 1}, {1, 1}, [], []) of
+                {ok, {Tokens, EndState}} ->
+                    Eng:handle_body(Tokens, EndState);
                 {error, Reason} ->
                     {error, Reason}
             end;
         {error, Reason} ->
             {error, Reason}
-    end.
+    end;
+tokenize(List, Opts) when is_list(List) ->
+    tokenize(erlang:iolist_to_binary(List), Opts).
 
 %% -----------------------------------------------------------------------------
 %% @doc tokenize_file/1.
