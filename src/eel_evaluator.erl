@@ -60,7 +60,15 @@ eval(Static, Dynamic) ->
 -spec retrieve_bin([token()]) -> iolist().
 
 retrieve_bin(Tokens) ->
-    lists:map(fun({_, {_, Bin}}) -> Bin end, Tokens).
+    lists:map(
+        fun
+            ({_, {_, IoData}}) when is_list(IoData); is_binary(IoData) ->
+                IoData;
+            (Term) ->
+                eel_converter:to_string(Term)
+        end,
+        Tokens
+    ).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/1.

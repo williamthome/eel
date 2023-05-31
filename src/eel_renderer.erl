@@ -88,17 +88,26 @@ render(Params0, Snapshot, Opts) ->
     BindingsSnap = eel_snapshot:get_bindings(Snapshot),
     Vars = eel_snapshot:get_vars(Snapshot),
     Params = normalize_bindings(Params0, Opts),
-    Bindings = maps:merge(BindingsSnap, Params),
-    EvalBindings = Bindings#{'Bindings' => Bindings},
-    {Dynamic0, Changes0} =
+    MergedBindings = maps:merge(BindingsSnap, Params),
+    EvalBindings = MergedBindings#{'Bindings' => MergedBindings},
+    LocalFunHandler = maps:get(local_function_handler, Opts, none),
+    NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
+    {Dynamic0, Changes0, Bindings0} =
         lists:foldl(
-            fun({Index, IndexVars}, {DAcc, CAcc}) ->
+            fun({Index, IndexVars}, {DAcc, CAcc, BAcc}) ->
                 case should_eval_exprs(DynamicSnap, Params, IndexVars) of
                     true ->
                         {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
                         try
-                            Bin = eval(EvalAST, EvalBindings),
-                            {[{Index, {Pos, Bin}} | DAcc], [{Index, Bin} | CAcc]}
+                            {Bin, NewBindings} = eval( EvalAST
+                                                     , BAcc
+                                                     , LocalFunHandler
+                                                     , NonLocalFunHandler
+                                                     ),
+                            { [{Index, {Pos, Bin}} | DAcc]
+                            , [{Index, Bin} | CAcc]
+                            , NewBindings
+                            }
                         catch
                             Class:Reason:Stacktrace ->
                                 ?LOG_ERROR(#{ class => Class
@@ -109,20 +118,22 @@ render(Params0, Snapshot, Opts) ->
                                             , arity => ?FUNCTION_ARITY
                                             , ast => EvalAST
                                             , position => Pos
-                                            , bindings => Bindings
+                                            , bindings => BAcc
+                                            , options => Opts
                                             }),
                                 erlang:raise(Class, Reason, Stacktrace)
                         end;
                     false ->
                         DCache = proplists:lookup(Index, DynamicSnap),
-                        {[DCache | DAcc], CAcc}
+                        {[DCache | DAcc], CAcc, BAcc}
                 end
             end,
-            {[], []},
+            {[], [], EvalBindings},
             Vars
         ),
     Dynamic = lists:reverse(Dynamic0),
     Changes = lists:reverse(Changes0),
+    Bindings = maps:remove('Bindings', Bindings0),
     {ok, eel_snapshot:new(Static, Dynamic, AST, Bindings, Vars, Changes)}.
 
 should_eval_exprs(undefined, _, _) ->
@@ -130,9 +141,13 @@ should_eval_exprs(undefined, _, _) ->
 should_eval_exprs(_, Params, Vars) ->
     lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
 
-eval(Exprs, Bindings) ->
-    {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
-    Binary.
+eval(Exprs, Bindings, LocalFunHandler, NonLocalFunHandler) ->
+    {value, Binary, NewBindings} = erl_eval:exprs( Exprs
+                                                 , Bindings
+                                                 , LocalFunHandler
+                                                 , NonLocalFunHandler
+                                                 ),
+    {Binary, NewBindings}.
 
 contains_any_var(Map, Vars) ->
     MapKeys = maps:keys(Map),
