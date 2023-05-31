@@ -102,7 +102,7 @@ file_to_module(Filename) ->
 file_to_module(Filename, Module) when is_atom(Module) ->
     file_to_module(Filename, Module, default_engine_opts());
 file_to_module(Filename, Opts) when is_map(Opts) ->
-    Module = eel_compiler:file_module(Filename),
+    Module = eel_converter:filename_to_module(Filename),
     file_to_module(Filename, Module, Opts).
 
 file_to_module(Filename, Module, Opts) ->

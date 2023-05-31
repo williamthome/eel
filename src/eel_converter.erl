@@ -11,6 +11,7 @@
 %% API functions
 -export([ to_string/1
         , to_string/2
+        , filename_to_module/1
         ]).
 
 %%%=============================================================================
@@ -58,3 +59,18 @@ to_string(PID, undefined) when is_pid(PID) ->
     erlang:pid_to_list(PID);
 to_string(Term, _) ->
     io_lib:format("~p", [Term]).
+
+%% -----------------------------------------------------------------------------
+%% @doc filename_to_module/1.
+%% @end
+%% -----------------------------------------------------------------------------
+-spec filename_to_module(file:filename_all()) -> module().
+
+filename_to_module(Filename) when is_binary(Filename); is_list(Filename) ->
+    Basename =
+        case filename:basename(Filename) of
+            N when is_binary(N) -> N;
+            N when is_list(N) -> list_to_binary(N)
+        end,
+    Name = binary:replace(Basename, <<".">>, <<"_">>, [global]),
+    erlang:binary_to_atom(Name).
