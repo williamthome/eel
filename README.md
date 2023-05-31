@@ -63,54 +63,46 @@ and type this in the Erlang shell
 {["<html><head><title>",<<"Hey!">>,
   "</title></head><body>Hello, ",<<"World">>,
   "!</body></html>"],
- #{ast =>
-       [{2,
-         {{1,20},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
-        {4,
-         {{1,61},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
-   changes => [{2,<<"Hey!">>},{4,<<"World">>}],
-   dynamic =>
-       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
-   static =>
-       [{1,{{1,1},"<html><head><title>"}},
-        {3,{{1,33},"</title></head><body>Hello, "}},
-        {5,{{1,73},"!</body></html>"}}],
-   vars => [{2,['Title']},{4,['Name']}]}}
-2> {Bin, _} = foo:render(#{'Name' => <<"Erlang">>}, Snapshot).
+ {snapshot,[{1,{{1,1},"<html><head><title>"}},
+            {3,{{1,33},"</title></head><body>Hello, "}},
+            {5,{{1,73},"!</body></html>"}}],
+           [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
+           [{2,
+             {{1,20},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[{...}]}]}}]}]}},
+            {4,
+             {{1,61},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[...]}]}}]}]}}],
+           #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
+           [{2,['Title']},{4,['Name']}],
+           [{2,<<"Hey!">>},{4,<<"World">>}]}}
+2> {IoData, _} = foo:render(#{'Name' => <<"Erlang">>}, Snapshot).
 {["<html><head><title>",<<"Hey!">>,
   "</title></head><body>Hello, ",<<"Erlang">>,
   "!</body></html>"],
- #{ast =>
-       [{2,
-         {{1,20},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
-        {4,
-         {{1,61},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Name' => <<"Erlang">>,'Title' => <<"Hey!">>},
-   changes => [{4,<<"Erlang">>}],
-   dynamic =>
-       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"Erlang">>}}],
-   static =>
-       [{1,{{1,1},"<html><head><title>"}},
-        {3,{{1,33},"</title></head><body>Hello, "}},
-        {5,{{1,73},"!</body></html>"}}],
-   vars => [{2,['Title']},{4,['Name']}]}}
+ {snapshot,[{1,{{1,1},"<html><head><title>"}},
+            {3,{{1,33},"</title></head><body>Hello, "}},
+            {5,{{1,73},"!</body></html>"}}],
+           [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"Erlang">>}}],
+           [{2,
+             {{1,20},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[{...}]}]}}]}]}},
+            {4,
+             {{1,61},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[...]}]}}]}]}}],
+           #{'Name' => <<"Erlang">>,'Title' => <<"Hey!">>},
+           [{2,['Title']},{4,['Name']}],
+           [{4,<<"Erlang">>}]}}
+3> erlang:iolist_to_binary(IoData).
+<<"<html><head><title>Hey!</title></head><body>Hello, Erlang!</body></html>">>
 ```
 
 Looking at the pattern matched results, the first tuple element contains the evaluated value
@@ -119,30 +111,25 @@ Looking at the pattern matched results, the first tuple element contains the eva
  "</title></head><body>Hello, ",<<"World">>,
  "!</body></html>"],
 ```
-and the second a metadata called `snapshot` (see next)
+and the second a metadata called `snapshot`
 ```erlang
-#{ast =>
-       [{2,
-         {{1,20},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,'Title'}]}]}}]}]}},
-        {4,
-         {{1,61},
-          [{call,1,
-               {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
-               [{'fun',1,
-                    {clauses,[{clause,1,[],[],[{var,1,...}]}]}}]}]}}],
-   bindings => #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
-   changes => [{2,<<"Hey!">>},{4,<<"World">>}],
-   dynamic =>
-       [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
-   static =>
-       [{1,{{1,1},"<html><head><title>"}},
-        {3,{{1,33},"</title></head><body>Hello, "}},
-        {5,{{1,73},"!</body></html>"}}],
-   vars => [{2,['Title']},{4,['Name']}]}
+{snapshot,[{1,{{1,1},"<html><head><title>"}},
+            {3,{{1,33},"</title></head><body>Hello, "}},
+            {5,{{1,73},"!</body></html>"}}],
+           [{2,{{1,20},<<"Hey!">>}},{4,{{1,61},<<"World">>}}],
+           [{2,
+             {{1,20},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[{...}]}]}}]}]}},
+            {4,
+             {{1,61},
+              [{call,1,
+                     {remote,1,{atom,1,eel_converter},{atom,1,to_string}},
+                     [{'fun',1,{clauses,[{clause,1,[],[],[...]}]}}]}]}}],
+           #{'Name' => <<"World">>,'Title' => <<"Hey!">>},
+           [{2,['Title']},{4,['Name']}],
+           [{2,<<"Hey!">>},{4,<<"World">>}]}
 ```
 
 The line `1` will evaluate the bindings `Title` and `Name`, but the line `2`
@@ -162,7 +149,13 @@ The `Bindings` should contains the unbound/required variables of the template. T
 #{'Foo' => <<"foo">>, 'FooBar' => bar}
 ```
 
-or the same in lower case when passing the option #{snake_case => true} to the compile function. Passing the snake_case option the bindings above you must write the keys as
+or the same in lower case when passing the option #{snake_case => true} to the render function, e.g.:
+
+```erlang
+eel_renderer:render(Bindings, Snapshot, #{snake_case => true})
+```
+
+Passing the snake_case option the `Bindings` above you must write the keys as
 
 ```erlang
 #{foo => <<"foo">>, foo_bar => bar}
