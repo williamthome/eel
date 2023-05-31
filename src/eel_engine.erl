@@ -23,8 +23,9 @@
 -type marker_id()     :: term().
 -type marker_symbol() :: binary().
 -type marker_size()   :: non_neg_integer().
--type marker()        :: {marker_id(), { Start :: marker_symbol()
-                                       , End   :: marker_symbol() }}.
+-type marker()        :: {marker_id(), { StartMarker :: marker_symbol()
+                                       , EndMarker   :: marker_symbol() }}
+                                       .
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
 -type options()       :: map().
 
@@ -49,25 +50,59 @@
 %%% Callbacks
 %%%=============================================================================
 
--callback init(options()) -> {ok, state()} | {error, term()}.
+-callback init(Opts) -> Result
+    when Opts   :: options()
+       , Result :: {ok, state()} | {error, term()}
+       .
 
 %% tokenize
--callback handle_expr_start( binary()
-                           , state() ) -> {ok, {StartMarker :: marker_symbol(), marker_size(), Rest :: binary(), state()}} | {error, term()}.
+-callback handle_expr_start(Bin, State) -> Result
+    when Bin             :: binary()
+       , State           :: state()
+       , Result          :: {ok, Data} | {error, term()}
+       , Data            :: {StartMarker, StartMarkerSize, Rest, NewState}
+       , StartMarker     :: marker_symbol()
+       , StartMarkerSize :: marker_size()
+       , Rest            :: binary()
+       , NewState        :: state()
+       .
 
--callback handle_expr_end( StartMarker :: marker_symbol()
-                         , binary()
-                         , state() ) -> {ok, state()} | {error, term()}.
+-callback handle_expr_end(StartMarker, Bin, State) -> Result
+    when StartMarker :: marker_symbol()
+       , Bin         :: binary()
+       , State       :: state()
+       , Result      :: {ok, NewState} | {error, term()}
+       , NewState    :: state()
+       .
 
--callback handle_text( iodata()
-                     , position()
-                     , state() ) -> {ok, {iodata(), position(), state()}} | {error, term()}.
+-callback handle_text(Text, Pos, State) -> Result
+    when Text     :: nonempty_string()
+       , Pos      :: position()
+       , State    :: state()
+       , Result   :: {ok, Data} | {error, term()}
+       , Data     :: {NewText, NewPos, NewState}
+       , NewText  :: nonempty_string()
+       , NewPos   :: position()
+       , NewState :: state()
+       .
 
--callback handle_body( [token()]
-                     , state() ) -> {ok, {static(), dynamic()}} | {error, term()}.
+-callback handle_body(Tokens, State) -> Result
+    when Tokens :: [token()]
+       , State  :: state()
+       , Result :: {ok, {static(), dynamic()}} | {error, term()}
+       .
 
 %% compile
--callback handle_compile( [token()]
-                        , state()) -> {ok, state()} | {error, term()}.
+-callback handle_compile(Tokens, State) -> Result
+    when Tokens   :: [token()]
+       , State    :: state()
+       , Result   :: {ok, NewState} | {error, term()}
+       , NewState :: state()
+       .
 
--callback handle_ast( ast(), state() ) -> {ok, ast()} | {error, term()}.
+-callback handle_ast(AST, State) -> Result
+    when AST    :: ast()
+       , State  :: state()
+       , Result :: {ok, NewAST} | {error, term()}
+       , NewAST :: ast()
+       .

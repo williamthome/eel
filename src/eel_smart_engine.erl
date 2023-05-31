@@ -169,8 +169,14 @@ do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} | T]
                        , in_text
                        , {PrevIndex, {text, PrevPos, PrevText}}
                        , {[{PrevIndex, {PrevPos, PrevText}} | S], D} ) ->
-    Concat = [PrevText, Text],
-    do_parse_tokens_to_sd_2(T, {Index, {text, Pos, Concat}}, in_text, {Index, {text, Pos, Concat}}, {[{Index, {Pos, Concat}} | S], D});
+    MergedText  = [PrevText, Text],
+    MergedToken = {Index, {text, Pos, MergedText}},
+    do_parse_tokens_to_sd_2( T
+                           , MergedToken
+                           , in_text
+                           , MergedToken
+                           , {[{Index, {Pos, MergedText}} | S], D}
+                           );
 do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} = H | T]
                        , in_text
                        , Prev
