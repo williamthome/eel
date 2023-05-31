@@ -164,36 +164,22 @@ capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
 
 %% -----------------------------------------------------------------------------
 %% @private
-%% @doc Transform binary, list or atom to capital case. Snake case or camel case
-%%      can be provided to be parsed, e.g.:
+%% @doc Transforms a snake_case atom() to CameCase, e.g.:
 %%
-%%          - snake_case: foo_bar, &lt;&lt;"foo_bar"&gt;&gt;, "foo_bar"
-%%          - camelCase: fooBar, &lt;&lt;"fooBar"&gt;&gt;, "fooBar"
-%%
-%%      The result will be an atom: 'FooBar'.
+%%          foo_bar: &lt;&lt;"FooBar"&gt;&gt
 %% @end
 %% -----------------------------------------------------------------------------
 
-capitalize(Key, Opts) ->
-    capitalize_1(Key, Key, Opts).
+capitalize(Atom, Opts) when is_atom(Atom) ->
+    <<H, T/binary>> = erlang:atom_to_binary(Atom),
+    to_atom(do_capitalize(T, <<(H - 32)>>), Opts).
 
-capitalize_1(<<H, T/binary>>, _, Opts) when H >= $a, H =< $z ->
-    capitalize_2(T, Opts, <<(H - 32)>>);
-capitalize_1(<<H, _/binary>>, Key, _) when H >= $A, H =< $Z, is_atom(Key) ->
-    Key;
-capitalize_1(<<H, _/binary>> = Key, _, Opts) when H >= $A, H =< $Z ->
-    to_atom(Key, Opts);
-capitalize_1(Atom, Key, Opts) when is_atom(Atom) ->
-    capitalize_1(erlang:atom_to_binary(Atom), Key, Opts);
-capitalize_1(List, Key, Opts) when is_list(List) ->
-    capitalize_1(erlang:list_to_binary(List), Key, Opts).
-
-capitalize_2(<<$_, H, T/binary>>, Opts, Acc) when H >= $a, H =< $z ->
-    capitalize_2(T, Opts, <<Acc/binary, (H - 32)>>);
-capitalize_2(<<H, T/binary>>, Opts, Acc) ->
-    capitalize_2(T, Opts, <<Acc/binary, H>>);
-capitalize_2(<<>>, Opts, Acc) ->
-    to_atom(Acc, Opts).
+do_capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
+    do_capitalize(T, <<Acc/binary, (H - 32)>>);
+do_capitalize(<<H, T/binary>>, Acc) ->
+    do_capitalize(T, <<Acc/binary, H>>);
+do_capitalize(<<>>, Acc) ->
+    Acc.
 
 to_atom(Bin, #{safe_atoms := true}) ->
     erlang:binary_to_existing_atom(Bin);
@@ -207,15 +193,11 @@ to_atom(Bin, #{}) ->
 -ifdef(TEST).
 
 capitalize_test() ->
-    [ ?assertEqual('FooBar', capitalize(<<"foo_bar">>, #{}))
-    , ?assertEqual('FooBar', capitalize("foo_bar", #{}))
-    , ?assertEqual('FooBar', capitalize(foo_bar, #{}))
-    , ?assertEqual('FooBar', capitalize(fooBar, #{}))
-    , ?assertEqual('FooBar', capitalize('FooBar', #{}))
-    ].
+    ?assertEqual('FooBar', capitalize(foo_bar, #{})).
 
 capitalize_keys_test() ->
-    ?assertEqual( [{'FooBar', baz}]
-                , capitalize_keys([{<<"foo_bar">>, baz}], #{}) ).
+    [ ?assertEqual([{'FooBar', baz}], capitalize_keys([{foo_bar, baz}], #{}))
+    , ?assertEqual(#{'FooBar' => baz}, capitalize_keys(#{foo_bar => baz}, #{}))
+    ].
 
 -endif.
