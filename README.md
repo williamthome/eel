@@ -1,21 +1,18 @@
 # EEl
 
-Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can embed and evaluate Erlang inside binaries.
+Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can embed and evaluate Erlang inside strings.
 
 ## API
 
-### Evaluation
-
-A binary or a file can be evaluated to a binary, e.g.:
+The Erlang code it's written between section punctuations called `markers`.
+In a nutshell, an IO data or a file can be evaluated
 
 ```erlang
 1> eel:eval(<<"Hello, <%= Name .%>!">>, #{'Name' => <<"World">>}).
 ["Hello, ",<<"World">>,"!"]
 ```
 
-### Module
-
-A binary or a file can be compiled to a module, e.g.:
+a file compiled to a module
 
 ```erlang
 1> eel:to_module(<<"Hello, <%= Name .%>!">>, foo).
@@ -24,14 +21,16 @@ A binary or a file can be compiled to a module, e.g.:
 ["Hello, ",<<"World">>,"!"]
 ```
 
-## Example
-
-Given this module
+or a set of functions used in a module, for example, given this module
 
 ```erlang
 -module(foo).
 
 -export([render/1, render/2]).
+
+% Including the header will transform the `eel:compile` to AST
+% by evaluating it in te compile time, boosting the performance.
+-include("eel.hrl").
 
 render(Bindings) ->
     {ok, Snapshot} = eel:compile(<<
@@ -151,50 +150,42 @@ will only eval the `Name` variable, because it uses the snapshot of the previous
 render. It only eval the changes and does not need to compile the binary again, unless the expression contains the global `Bindings` variable (see below),
 because the `snapshot` includes the required information.
 
-The global `Bindings` variable can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
+The var `Bindings` is a reserved one and can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
 
 ```
 <%= maps:get('Foo', Bindings, bar) .%>
 ```
 
-Including `Bindings` to the expression makes it to be always evaluated by the render function.
-
-Including the header
+The `Bindings` should contains the unbound/required variables of the template. The syntax it's a map with keys as atoms starting with upper case, e.g:
 
 ```erlang
--include("eel.hrl").
+#{'Foo' => <<"foo">>, 'FooBar' => bar}
 ```
 
-will transform the `eel:compile` to AST by evaluating it in te compile time, boosting the performance.
+or the same in lower case when passing the option #{snake_case => true} to the compile function. Passing the snake_case option the bindings above you must write the keys as
 
-## Syntax
+```erlang
+#{foo => <<"foo">>, foo_bar => bar}
+```
 
-The Erlang code it's written between section punctuations called `markers`:
+Including `Bindings` to the expression makes it to be always evaluated by the render function.
+
+## Engine
+
+The default engine is the `eel_smart_engine`.\
+You can implement your own engine using the behavior `eel_engine`.
+
+### eel_smart_engine
+
+#### Markers
+
+The `eel_smart_engine` markers are:
 - `<%=` starts an expression;
 - `.%>` indicates that the expression ends;
 - `%>`  indicates that the expression continues;
 - `<%`  continues the last expression if it ends with `%>`;
 - `<%%` starts a comment;
 - `%%>` ends a comment.
-
-The bindings are the unbound/required variables of the template. The syntax it's a map with keys as atoms starting with upper case, e.g:
-
-```erlang
-#{'Foo' => <<"foo">>, 'FooBar' => bar}
-```
-
-or the same in lower case passing the option #{snake_case => true} to the compile function:
-
-```erlang
-#{foo => <<"foo">>, foo_bar => bar}
-```
-
-Both lower and upper case are valid syntax for bindings.
-
-## Engine
-
-The default engine is the `eel_smart_engine`.\
-You can implement your own engine using the behavior `eel_engine`.
 
 ## Template
 
