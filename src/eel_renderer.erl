@@ -119,8 +119,12 @@ render( Params0
                                 ?LOG_ERROR(#{ class => Class
                                             , reason => Reason
                                             , stacktrace => Stacktrace
+                                            , module => ?MODULE
+                                            , function => ?FUNCTION_NAME
+                                            , arity => ?FUNCTION_ARITY
                                             , ast => EvalAST
                                             , position => Pos
+                                            , bindings => Bindings
                                             }),
                                 erlang:raise(Class, Reason, Stacktrace)
                         end;
@@ -140,6 +144,10 @@ should_eval_exprs(undefined, _, _) ->
     true;
 should_eval_exprs(_, Params, Vars) ->
     lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
+
+eval(Exprs, Bindings) ->
+    {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
+    Binary.
 
 contains_any_var(Map, Vars) ->
     MapKeys = maps:keys(Map),
@@ -229,10 +237,6 @@ normalize_bindings(Bindings, #{snake_case := true} = Opts) ->
     capitalize_keys(Bindings, Opts);
 normalize_bindings(Bindings, #{}) ->
     Bindings.
-
-eval(Exprs, Bindings) ->
-    {value, Binary, _} = erl_eval:exprs(Exprs, Bindings),
-    Binary.
 
 capitalize_keys(Bindings, Opts) when is_list(Bindings) ->
     lists:map(fun({K, V}) -> {capitalize(K, Opts), V} end, Bindings);

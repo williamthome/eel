@@ -25,8 +25,7 @@
 
 %% Includes
 -include("eel_core.hrl").
-% TODO: Logs
-% -include_lib("kernel/include/logger.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -113,81 +112,111 @@ do_tokenize( <<H, T/binary>> = Bin
            , Text
            , Acc
            ) ->
-    case Eng:handle_expr_start(Bin, State) of
-        {ok, {SMarker, SMarkerSize, StartExpr, NewState}} ->
-            SExprPos = {Ln, Col + SMarkerSize},
-            case find_end_marker(StartExpr, Eng, SMarker, SExprPos, [], NewState) of
-                {ok, {MarkerId, EndExprPos, Expr, Rest, ExprState}} ->
-                    case Text of
-                        [] ->
-                            ExprToken = {Index, {MarkerId, Pos, Expr}},
-                            do_tokenize( Rest
-                                       , Eng
-                                       , ExprState
-                                       , Index + 1
-                                       , EndExprPos
-                                       , EndExprPos
-                                       , []
-                                       , [ExprToken | Acc]
-                                       );
-                        [$\n] ->
-                            ExprToken = {Index, {MarkerId, {Ln, 1}, Expr}},
-                            do_tokenize( Rest
-                                       , Eng
-                                       , ExprState
-                                       , Index + 1
-                                       , EndExprPos
-                                       , EndExprPos
-                                       , []
-                                       , [ExprToken | Acc]
-                                       );
-                        Text ->
-                            % NOTE: handle_text is using the ExprState, this can
-                            %       be an issue because the text is placed before
-                            %       the expression and not after.
-                            case Eng:handle_text(lists:reverse(Text), PrevPos, ExprState) of
-                                {ok, {NewText, NewTextPos, TextState}} ->
-                                    TextToken = {Index, {text, NewTextPos, NewText}},
-                                    ExprToken = {Index + 1, {MarkerId, Pos, Expr}},
-                                    do_tokenize( Rest
-                                               , Eng
-                                               , TextState
-                                               , Index + 2
-                                               , EndExprPos
-                                               , EndExprPos
-                                               , []
-                                               , [ExprToken, TextToken | Acc]
-                                               );
-                                {error, Reason} ->
-                                    {error, Reason}
-                            end
-                    end;
-                {error, no_end_marker} ->
-                    {error, {no_end_marker, {Pos, SMarker, lists:reverse(Text)}}}
-            end;
-        {ok, NewState} ->
-            NextPos = char_pos(H, Pos),
-            do_tokenize( T
-                       , Eng
-                       , NewState
-                       , Index
-                       , PrevPos
-                       , NextPos
-                       , [H | Text]
-                       , Acc
-                       );
-        {error, Reason} ->
-            {error, Reason}
+    try
+        case Eng:handle_expr_start(Bin, State) of
+            {ok, {SMarker, SMarkerSize, StartExpr, NewState}} ->
+                SExprPos = {Ln, Col + SMarkerSize},
+                case find_end_marker(StartExpr, Eng, SMarker, SExprPos, [], NewState) of
+                    {ok, {MarkerId, EndExprPos, Expr, Rest, ExprState}} ->
+                        case Text of
+                            [] ->
+                                ExprToken = {Index, {MarkerId, Pos, Expr}},
+                                do_tokenize( Rest
+                                        , Eng
+                                        , ExprState
+                                        , Index + 1
+                                        , EndExprPos
+                                        , EndExprPos
+                                        , []
+                                        , [ExprToken | Acc]
+                                        );
+                            [$\n] ->
+                                ExprToken = {Index, {MarkerId, {Ln, 1}, Expr}},
+                                do_tokenize( Rest
+                                        , Eng
+                                        , ExprState
+                                        , Index + 1
+                                        , EndExprPos
+                                        , EndExprPos
+                                        , []
+                                        , [ExprToken | Acc]
+                                        );
+                            Text ->
+                                % NOTE: handle_text is using the ExprState, this can
+                                %       be an issue because the text is placed before
+                                %       the expression and not after.
+                                case Eng:handle_text(lists:reverse(Text), PrevPos, ExprState) of
+                                    {ok, {NewText, NewTextPos, TextState}} ->
+                                        TextToken = {Index, {text, NewTextPos, NewText}},
+                                        ExprToken = {Index + 1, {MarkerId, Pos, Expr}},
+                                        do_tokenize( Rest
+                                                , Eng
+                                                , TextState
+                                                , Index + 2
+                                                , EndExprPos
+                                                , EndExprPos
+                                                , []
+                                                , [ExprToken, TextToken | Acc]
+                                                );
+                                    {error, Reason} ->
+                                        {error, Reason}
+                                end
+                        end;
+                    {error, no_end_marker} ->
+                        {error, {no_end_marker, {Pos, SMarker, Bin}}}
+                end;
+            {ok, NewState} ->
+                NextPos = char_pos(H, Pos),
+                do_tokenize( T
+                        , Eng
+                        , NewState
+                        , Index
+                        , PrevPos
+                        , NextPos
+                        , [H | Text]
+                        , Acc
+                        );
+            {error, Reason} ->
+                {error, Reason}
+        end
+    catch
+        Class:ErrReason:Stacktrace ->
+            ?LOG_ERROR(#{ class => Class
+                        , reason => ErrReason
+                        , stacktrace => Stacktrace
+                        , module => ?MODULE
+                        , function => tokenize
+                        , arity => 2
+                        , position => Pos
+                        , rest => Bin
+                        , eof => false
+                        }),
+            erlang:raise(Class, ErrReason, Stacktrace)
     end;
 do_tokenize(<<>>, _, State, _, _, _, [], Acc) ->
     {ok, {lists:reverse(Acc), State}};
 do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc) ->
-    case Eng:handle_text(lists:reverse(Text), Pos, State) of
-        {ok, {NewText, NewTextPost, TextState}} ->
-            TextToken = {Index, {text, NewTextPost, NewText}},
-            {ok, {lists:reverse([TextToken | Acc]), TextState}};
-        {error, Reason} ->
-            {error, Reason}
+    try
+        case Eng:handle_text(lists:reverse(Text), Pos, State) of
+            {ok, {NewText, NewTextPost, TextState}} ->
+                TextToken = {Index, {text, NewTextPost, NewText}},
+                {ok, {lists:reverse([TextToken | Acc]), TextState}};
+            {error, Reason} ->
+                {error, Reason}
+        end
+    catch
+        Class:ErrReason:Stacktrace ->
+            ?LOG_ERROR(#{ class => Class
+                        , reason => ErrReason
+                        , stacktrace => Stacktrace
+                        , module => ?MODULE
+                        , function => tokenize
+                        , arity => 2
+                        , position => Pos
+                        , rest => <<>>
+                        , eof => true
+                        }),
+            erlang:raise(Class, ErrReason, Stacktrace)
     end.
 
 find_end_marker( <<H, T/binary>> = Bin
