@@ -40,7 +40,7 @@
 
 %% Types
 -type tokens() :: {eel_engine:static(), eel_engine:dynamic()}.
--type result() :: {ok, tokens()} | {error, no_end_marker}.
+-type result() :: {ok, tokens()} | {error, term()}.
 
 %%%=============================================================================
 %%% API functions
