@@ -15,10 +15,6 @@
 -export([ render/1
         , render/2
         , render/3
-        , snapshot/2
-        , snapshot/3
-        , snapshot/4
-        , snapshot/6
         ]).
 
 %% Types
@@ -37,20 +33,11 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-%% Type
--type bindings() :: map().
--type static()   :: eel_engine:static().
--type dynamic()  :: undefined | [binary()].
--type ast()      :: eel_engine:ast().
--type changes()  :: [{non_neg_integer(), binary()}].
-% TODO: Maybe change snapshot to an opaque record
--type snapshot() :: #{ static   => static()
-                     , dynamic  => dynamic()
-                     , ast      => ast()
-                     , bindings => bindings()
-                     , vars     => [atom()]
-                     , changes  => changes()
-                     }.
+%% Types
+-type snapshot() :: eel_snapshot:snapshot().
+-type bindings() :: eel_snapshot:bindings().
+-type dynamic()  :: eel_snapshot:dynamice().
+-type changes()  :: eel_snapshot:changes().
 -type options()  :: map().
 -type result()   :: {ok, snapshot()}.
 
@@ -94,14 +81,12 @@ render(Bindings, Snapshot) ->
        , Result   :: result()
        .
 
-render( Params0
-      , #{ static   := Static
-         , dynamic  := DynamicSnap
-         , ast      := AST
-         , bindings := BindingsSnap
-         , vars     := Vars
-         }
-      , Opts ) ->
+render(Params0, Snapshot, Opts) ->
+    Static = eel_snapshot:get_static(Snapshot),
+    DynamicSnap = eel_snapshot:get_dynamic(Snapshot),
+    AST = eel_snapshot:get_ast(Snapshot),
+    BindingsSnap = eel_snapshot:get_bindings(Snapshot),
+    Vars = eel_snapshot:get_vars(Snapshot),
     Params = normalize_bindings(Params0, Opts),
     Bindings = maps:merge(BindingsSnap, Params),
     EvalBindings = Bindings#{'Bindings' => Bindings},
@@ -138,7 +123,7 @@ render( Params0
         ),
     Dynamic = lists:reverse(Dynamic0),
     Changes = lists:reverse(Changes0),
-    {ok, snapshot(Static, Dynamic, AST, Bindings, Vars, Changes)}.
+    {ok, eel_snapshot:new(Static, Dynamic, AST, Bindings, Vars, Changes)}.
 
 should_eval_exprs(undefined, _, _) ->
     true;
@@ -152,72 +137,6 @@ eval(Exprs, Bindings) ->
 contains_any_var(Map, Vars) ->
     MapKeys = maps:keys(Map),
     lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, AST) -> Result
-    when Static :: static()
-       , AST    :: ast()
-       , Result :: snapshot()
-       .
-
-snapshot(Static, AST) ->
-    snapshot(Static, undefined, AST).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/3.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST) -> Result
-    when Static  :: static()
-       , Dynamic :: dynamic()
-       , AST     :: ast()
-       , Result  :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST) ->
-    snapshot(Static, Dynamic, AST, #{}).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/4.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings) -> Result
-    when Static   :: static()
-       , Dynamic  :: dynamic()
-       , AST      :: ast()
-       , Bindings :: bindings()
-       , Result   :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST, Bindings) ->
-    Vars = eel_compiler:ast_vars(AST),
-    snapshot(Static, Dynamic, AST, Bindings, Vars, []).
-
-%% -----------------------------------------------------------------------------
-%% @doc snapshot/5.
-%% @end
-%% -----------------------------------------------------------------------------
--spec snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) -> Result
-    when Static   :: static()
-       , Dynamic  :: dynamic()
-       , AST      :: ast()
-       , Bindings :: bindings()
-       , Vars     :: [atom()]
-       , Changes  :: changes()
-       , Result   :: snapshot()
-       .
-
-snapshot(Static, Dynamic, AST, Bindings, Vars, Changes) ->
-    #{ static   => Static
-     , dynamic  => Dynamic
-     , ast      => AST
-     , bindings => Bindings
-     , vars     => Vars
-     , changes  => Changes
-     }.
 
 %%%=============================================================================
 %%% Internal functions

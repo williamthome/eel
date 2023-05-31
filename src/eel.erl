@@ -61,7 +61,7 @@ compile(Bin, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, AST)};
+                    {ok, eel_snapshot:new(Static, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -77,7 +77,7 @@ compile_file(Filename, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    {ok, eel_renderer:snapshot(Static, AST)};
+                    {ok, eel_snapshot:new(Static, AST)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -124,7 +124,7 @@ render(Bin, Bindings, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    Snapshot = eel_snapshot:new(Static, Dynamic, AST),
                     eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}
@@ -144,7 +144,7 @@ render_file(Filename, Bindings, Opts) ->
         {ok, {Static, Dynamic}} ->
             case eel_compiler:compile(Dynamic, Opts) of
                 {ok, AST} ->
-                    Snapshot = eel_renderer:snapshot(Static, Dynamic, AST),
+                    Snapshot = eel_snapshot:new(Static, Dynamic, AST),
                     eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}

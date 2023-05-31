@@ -37,7 +37,7 @@
 -type dynamic()  :: eel_engine:dynamic().
 -type ast()      :: eel_engine:ast().
 -type index()    :: eel_engine:index().
--type snapshot() :: eel_renderer:snapshot().
+-type snapshot() :: eel_snapshot:snapshot().
 -type position() :: eel_engine:position().
 
 %%%=============================================================================
