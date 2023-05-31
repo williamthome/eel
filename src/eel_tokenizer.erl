@@ -104,21 +104,43 @@ tokenize_file(Filename, Opts) ->
 %%% Internal functions
 %%%=============================================================================
 
-do_tokenize(<<H, BinRest/binary>> = Bin, Eng, State, Index, PrevPos, {ELn, ECol} = Pos, Text, Acc) ->
+do_tokenize( <<H, T/binary>> = Bin
+           , Eng
+           , State
+           , Index
+           , PrevPos
+           , {Ln, Col} = Pos
+           , Text
+           , Acc
+           ) ->
     case Eng:handle_expr_start(Bin, State) of
-        {ok, {StartMarker, StartMarkerSize, StartExpr, NewState}} ->
-            StartExprPos = {ELn, ECol + StartMarkerSize},
-            case find_end_marker(StartExpr, Eng, StartMarker, StartExprPos, [], NewState) of
-                {ok, {MarkerId, {EELn, EECol} = EndExprPos, Expr, Rest, ExprState}} ->
+        {ok, {SMarker, SMarkerSize, StartExpr, NewState}} ->
+            SExprPos = {Ln, Col + SMarkerSize},
+            case find_end_marker(StartExpr, Eng, SMarker, SExprPos, [], NewState) of
+                {ok, {MarkerId, EndExprPos, Expr, Rest, ExprState}} ->
                     case Text of
                         [] ->
                             ExprToken = {Index, {MarkerId, Pos, Expr}},
-                            do_tokenize(Rest, Eng, ExprState, Index + 1, EndExprPos, EndExprPos, [], [ExprToken | Acc]);
+                            do_tokenize( Rest
+                                       , Eng
+                                       , ExprState
+                                       , Index + 1
+                                       , EndExprPos
+                                       , EndExprPos
+                                       , []
+                                       , [ExprToken | Acc]
+                                       );
                         [$\n] ->
-                            NewLineExprPos = {ELn, 1},
-                            ExprToken = {Index, {MarkerId, NewLineExprPos, Expr}},
-                            NextPos = {EELn, EECol},
-                            do_tokenize(Rest, Eng, ExprState, Index + 1, NextPos, NextPos, [], [ExprToken | Acc]);
+                            ExprToken = {Index, {MarkerId, {Ln, 1}, Expr}},
+                            do_tokenize( Rest
+                                       , Eng
+                                       , ExprState
+                                       , Index + 1
+                                       , EndExprPos
+                                       , EndExprPos
+                                       , []
+                                       , [ExprToken | Acc]
+                                       );
                         Text ->
                             % NOTE: handle_text is using the ExprState, this can
                             %       be an issue because the text is placed before
@@ -127,18 +149,33 @@ do_tokenize(<<H, BinRest/binary>> = Bin, Eng, State, Index, PrevPos, {ELn, ECol}
                                 {ok, {NewText, NewTextPos, TextState}} ->
                                     TextToken = {Index, {text, NewTextPos, NewText}},
                                     ExprToken = {Index + 1, {MarkerId, Pos, Expr}},
-                                    do_tokenize(Rest, Eng, TextState, Index + 2, EndExprPos, EndExprPos, [], [ExprToken, TextToken | Acc]);
+                                    do_tokenize( Rest
+                                               , Eng
+                                               , TextState
+                                               , Index + 2
+                                               , EndExprPos
+                                               , EndExprPos
+                                               , []
+                                               , [ExprToken, TextToken | Acc]
+                                               );
                                 {error, Reason} ->
                                     {error, Reason}
                             end
                     end;
                 {error, no_end_marker} ->
-                    {error, {no_end_marker, {Pos, StartMarker, lists:reverse(Text)}}}
+                    {error, {no_end_marker, {Pos, SMarker, lists:reverse(Text)}}}
             end;
         {ok, NewState} ->
-            NewText = [H | Text],
-            NewTextPos = char_pos(H, Pos),
-            do_tokenize(BinRest, Eng, NewState, Index, PrevPos, NewTextPos, NewText, Acc);
+            NextPos = char_pos(H, Pos),
+            do_tokenize( T
+                       , Eng
+                       , NewState
+                       , Index
+                       , PrevPos
+                       , NextPos
+                       , [H | Text]
+                       , Acc
+                       );
         {error, Reason} ->
             {error, Reason}
     end;
@@ -153,15 +190,21 @@ do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc) ->
             {error, Reason}
     end.
 
-find_end_marker(<<H, BinRest/binary>> = Bin, Eng, StartMarker, {Ln, Col} = PrevPos, Expr, State) ->
-    case Eng:handle_expr_end(StartMarker, Bin, State) of
+find_end_marker( <<H, T/binary>> = Bin
+               , Eng
+               , SMarker
+               , {Ln, Col} = PrevPos
+               , Expr
+               , State
+               ) ->
+    case Eng:handle_expr_end(SMarker, Bin, State) of
         {ok, {MarkerId, EndMarkerSize, Rest, NewState}} ->
             NewPrevPos = {Ln, Col + EndMarkerSize},
             {ok, {MarkerId, NewPrevPos, lists:reverse(Expr), Rest, NewState}};
         {ok, NewState} ->
             Acc = [H | Expr],
             NewPrevPos = char_pos(H, PrevPos),
-            find_end_marker(BinRest, Eng, StartMarker, NewPrevPos, Acc, NewState);
+            find_end_marker(T, Eng, SMarker, NewPrevPos, Acc, NewState);
         {error, Reason} ->
             {error, Reason}
     end;
