@@ -7,7 +7,7 @@
 -module(eel_tokenizer).
 
 -compile(inline_list_funcs).
--compile({inline, [ do_tokenize/8
+-compile({inline, [ do_tokenize/9
                   , find_end_marker/6
                   ]}).
 
@@ -64,7 +64,7 @@ tokenize(Bin, Opts) when is_binary(Bin) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     case Eng:init(Opts) of
         {ok, InitState} ->
-            case do_tokenize(Bin, Eng, InitState, 1, {1, 1}, {1, 1}, [], []) of
+            case do_tokenize(Bin, Eng, InitState, 1, {1, 1}, {1, 1}, [], [], Opts) of
                 {ok, {Tokens, EndState}} ->
                     Eng:handle_body(Tokens, EndState);
                 {error, Reason} ->
@@ -111,6 +111,7 @@ do_tokenize( <<H, T/binary>> = Bin
            , {Ln, Col} = Pos
            , Text
            , Acc
+           , Opts
            ) ->
     try
         case Eng:handle_expr_start(Bin, State) of
@@ -129,6 +130,7 @@ do_tokenize( <<H, T/binary>> = Bin
                                         , EndExprPos
                                         , []
                                         , [ExprToken | Acc]
+                                        , Opts
                                         );
                             [$\n] ->
                                 ExprToken = {Index, {MarkerId, {Ln, 1}, Expr}},
@@ -140,6 +142,7 @@ do_tokenize( <<H, T/binary>> = Bin
                                         , EndExprPos
                                         , []
                                         , [ExprToken | Acc]
+                                        , Opts
                                         );
                             Text ->
                                 % NOTE: handle_text is using the ExprState, this can
@@ -157,6 +160,7 @@ do_tokenize( <<H, T/binary>> = Bin
                                                 , EndExprPos
                                                 , []
                                                 , [ExprToken, TextToken | Acc]
+                                                , Opts
                                                 );
                                     {error, Reason} ->
                                         {error, Reason}
@@ -175,6 +179,7 @@ do_tokenize( <<H, T/binary>> = Bin
                         , NextPos
                         , [H | Text]
                         , Acc
+                        , Opts
                         );
             {error, Reason} ->
                 {error, Reason}
@@ -190,12 +195,13 @@ do_tokenize( <<H, T/binary>> = Bin
                         , position => Pos
                         , rest => Bin
                         , eof => false
+                        , options => Opts
                         }),
             erlang:raise(Class, ErrReason, Stacktrace)
     end;
-do_tokenize(<<>>, _, State, _, _, _, [], Acc) ->
+do_tokenize(<<>>, _, State, _, _, _, [], Acc, _) ->
     {ok, {lists:reverse(Acc), State}};
-do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc) ->
+do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc, Opts) ->
     try
         case Eng:handle_text(lists:reverse(Text), Pos, State) of
             {ok, {NewText, NewTextPost, TextState}} ->
@@ -215,6 +221,7 @@ do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc) ->
                         , position => Pos
                         , rest => <<>>
                         , eof => true
+                        , options => Opts
                         }),
             erlang:raise(Class, ErrReason, Stacktrace)
     end.
