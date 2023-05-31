@@ -17,10 +17,10 @@
         ]).
 
 % Types
--type snapshot() :: eel_renderer:snapshot().
--type token()    :: eel_tokenizer:token().
--type static()   :: eel_engine:static().
+-type snapshot() :: eel_snapshot:snapshot().
+-type static()   :: eel_snapshot:static().
 -type dynamic()  :: eel_engine:dynamic().
+-type token()    :: eel_tokenizer:token().
 
 %%%=============================================================================
 %%% API functions
@@ -35,7 +35,9 @@
        , Result   :: iolist()
        .
 
-eval(#{static := Static, dynamic := Dynamic}) ->
+eval(Snapshot) ->
+    Static = eel_snapshot:get_static(Snapshot),
+    Dynamic = eel_snapshot:get_dynamic(Snapshot),
     eval(Static, Dynamic).
 
 %% -----------------------------------------------------------------------------
