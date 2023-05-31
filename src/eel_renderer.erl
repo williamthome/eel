@@ -171,14 +171,18 @@ capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
 %% -----------------------------------------------------------------------------
 
 capitalize(Atom, Opts) when is_atom(Atom) ->
-    <<H, T/binary>> = erlang:atom_to_binary(Atom),
-    to_atom(do_capitalize(T, <<(H - 32)>>), Opts).
+    to_atom(do_capitalize(erlang:atom_to_binary(Atom)), Opts).
 
-do_capitalize(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
-    do_capitalize(T, <<Acc/binary, (H - 32)>>);
-do_capitalize(<<H, T/binary>>, Acc) ->
-    do_capitalize(T, <<Acc/binary, H>>);
-do_capitalize(<<>>, Acc) ->
+do_capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
+    do_capitalize_1(T, <<(H - 32)>>);
+do_capitalize(Bin) when is_binary(Bin) ->
+    do_capitalize_1(Bin, <<>>).
+
+do_capitalize_1(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
+    do_capitalize_1(T, <<Acc/binary, (H - 32)>>);
+do_capitalize_1(<<H, T/binary>>, Acc) ->
+    do_capitalize_1(T, <<Acc/binary, H>>);
+do_capitalize_1(<<>>, Acc) ->
     Acc.
 
 to_atom(Bin, #{safe_atoms := true}) ->
