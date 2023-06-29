@@ -20,7 +20,7 @@
 -type snapshot() :: eel_snapshot:snapshot().
 -type static()   :: eel_snapshot:static().
 -type dynamic()  :: eel_engine:dynamic().
--type token()    :: eel_tokenizer:token().
+-type token()    :: eel_engine:token().
 
 %%%=============================================================================
 %%% API functions

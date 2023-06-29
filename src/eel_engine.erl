@@ -26,6 +26,7 @@
 -type marker()        :: {marker_id(), { StartMarker :: marker_symbol()
                                        , EndMarker   :: marker_symbol() }}
                                        .
+-type marker_token()  :: {index(), {marker_id(), position(), expression()}}.
 -type expressions()   :: {Outer :: expression(), Inner :: expression()}.
 -type options()       :: map().
 
@@ -61,6 +62,7 @@
        , State           :: state()
        , Result          :: {ok, Data} | {error, term()}
        , Data            :: {StartMarker, StartMarkerSize, Rest, NewState}
+                          | {ok, NewState}
        , StartMarker     :: marker_symbol()
        , StartMarkerSize :: marker_size()
        , Rest            :: binary()
@@ -68,11 +70,16 @@
        .
 
 -callback handle_expr_end(StartMarker, Bin, State) -> Result
-    when StartMarker :: marker_symbol()
-       , Bin         :: binary()
-       , State       :: state()
-       , Result      :: {ok, NewState} | {error, term()}
-       , NewState    :: state()
+    when StartMarker   :: marker_symbol()
+       , Bin           :: binary()
+       , State         :: state()
+       , Result        :: {ok, Data} | {error, term()}
+       , Data          :: {MarkerId, EndMarkerSize, Rest, NewState}
+                        | {ok, NewState}
+       , MarkerId      :: marker_id()
+       , EndMarkerSize :: marker_size()
+       , Rest          :: binary()
+       , NewState      :: state()
        .
 
 -callback handle_text(Text, Pos, State) -> Result
@@ -93,11 +100,12 @@
        .
 
 %% compile
--callback handle_compile(Tokens, State) -> Result
-    when Tokens   :: [token()]
-       , State    :: state()
-       , Result   :: {ok, NewState} | {error, term()}
-       , NewState :: state()
+-callback handle_compile(MarkerToken, State) -> Result
+    when MarkerToken :: marker_token()
+       , State       :: state()
+       , Result      :: {ok, {Token, NewState}} | {error, term()}
+       , Token       :: token()
+       , NewState    :: state()
        .
 
 -callback handle_ast(AST, State) -> Result

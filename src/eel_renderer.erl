@@ -36,7 +36,7 @@
 %% Types
 -type snapshot() :: eel_snapshot:snapshot().
 -type bindings() :: eel_snapshot:bindings().
--type dynamic()  :: eel_snapshot:dynamice().
+-type dynamic()  :: eel_snapshot:dynamic().
 -type changes()  :: eel_snapshot:changes().
 -type options()  :: map().
 -type result()   :: {ok, snapshot()}.
