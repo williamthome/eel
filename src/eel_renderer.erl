@@ -124,8 +124,13 @@ render(Params0, Snapshot, Opts) ->
                                 erlang:raise(Class, Reason, Stacktrace)
                         end;
                     false ->
-                        DCache = proplists:lookup(Index, DynamicSnap),
-                        {[DCache | DAcc], CAcc, BAcc}
+                        case proplists:lookup(Index, DynamicSnap) of
+                            {Index, DCache} ->
+                                {[DCache | DAcc], CAcc, BAcc};
+                            none ->
+                                error( {unbound_snapshot_var, {Index, IndexVars}}
+                                     , [Params0, Snapshot, Opts] )
+                        end
                 end
             end,
             {[], [], EvalBindings},
