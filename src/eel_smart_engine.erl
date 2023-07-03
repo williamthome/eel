@@ -291,7 +291,7 @@ zip_compile(Tokens, Opts) ->
     lists:map(
         fun
             ({_, {_, Bin}}) ->
-                ["<<\"", Bin, "\">>"];
+                ["<<\"", Bin, "\"/utf8>>"];
             (Token) ->
                 {_, {_, Bin}} = compile(Token, Opts),
                 Bin
