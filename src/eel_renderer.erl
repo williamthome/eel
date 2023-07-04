@@ -81,32 +81,37 @@ render(Bindings, Snapshot) ->
        , Result   :: result()
        .
 
+% TODO: Put Eng in the Snapshot when tokenizing
+%       and get it from the Snapshot.
 render(Params0, Snapshot, Opts) ->
+    Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     Static = eel_snapshot:get_static(Snapshot),
     DynamicSnap = eel_snapshot:get_dynamic(Snapshot),
     AST = eel_snapshot:get_ast(Snapshot),
     BindingsSnap = eel_snapshot:get_bindings(Snapshot),
     Vars = eel_snapshot:get_vars(Snapshot),
+    State = eel_snapshot:get_state(Snapshot),
     Params = normalize_bindings(Params0, Opts),
     MergedBindings = maps:merge(BindingsSnap, Params),
     EvalBindings = MergedBindings#{'Bindings' => MergedBindings},
-    LocalFunHandler = maps:get(local_function_handler, Opts, none),
-    NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
-    {Dynamic0, Changes0, Bindings0} =
+    {Dynamic0, Changes0, Bindings0, NewState} =
         lists:foldl(
-            fun({Index, IndexVars}, {DAcc, CAcc, BAcc}) ->
+            fun({Index, IndexVars}, {DAcc, CAcc, BAcc, SAcc}) ->
                 case should_eval_exprs(DynamicSnap, Params, IndexVars) of
                     true ->
                         {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
                         try
-                            {Bin, NewBindings} = eval( EvalAST
-                                                     , BAcc
-                                                     , LocalFunHandler
-                                                     , NonLocalFunHandler
-                                                     ),
+                            {ok, EvalResult} = Eng:handle_eval( Index
+                                                              , EvalAST
+                                                              , BAcc
+                                                              , Opts
+                                                              , SAcc
+                                                              ),
+                            {Bin, EvalBindings, EvalState} = EvalResult,
                             { [{Index, {Pos, Bin}} | DAcc]
                             , [{Index, Bin} | CAcc]
-                            , NewBindings
+                            , EvalBindings
+                            , EvalState
                             }
                         catch
                             Class:Reason:Stacktrace ->
@@ -126,33 +131,32 @@ render(Params0, Snapshot, Opts) ->
                     false ->
                         case proplists:lookup(Index, DynamicSnap) of
                             {Index, DCache} ->
-                                {[DCache | DAcc], CAcc, BAcc};
+                                {[DCache | DAcc], CAcc, BAcc, SAcc};
                             none ->
                                 error( {unbound_snapshot_var, {Index, IndexVars}}
                                      , [Params0, Snapshot, Opts] )
                         end
                 end
             end,
-            {[], [], EvalBindings},
+            {[], [], EvalBindings, State},
             Vars
         ),
     Dynamic = lists:reverse(Dynamic0),
     Changes = lists:reverse(Changes0),
     Bindings = maps:remove('Bindings', Bindings0),
-    {ok, eel_snapshot:new(Static, Dynamic, AST, Bindings, Vars, Changes)}.
+    {ok, eel_snapshot:new( Static
+                         , Dynamic
+                         , AST
+                         , Bindings
+                         , Vars
+                         , Changes
+                         , NewState
+                         )}.
 
 should_eval_exprs(undefined, _, _) ->
     true;
 should_eval_exprs(_, Params, Vars) ->
     lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
-
-eval(Exprs, Bindings, LocalFunHandler, NonLocalFunHandler) ->
-    {value, Binary, NewBindings} = erl_eval:exprs( Exprs
-                                                 , Bindings
-                                                 , LocalFunHandler
-                                                 , NonLocalFunHandler
-                                                 ),
-    {Binary, NewBindings}.
 
 contains_any_var(Map, Vars) ->
     MapKeys = maps:keys(Map),

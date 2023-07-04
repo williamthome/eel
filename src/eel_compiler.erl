@@ -14,8 +14,8 @@
                   ]}).
 
 %% API functions
--export([ compile/1
-        , compile/2
+-export([ compile/2
+        , compile/3
         , compile_to_module/2
         , compile_file_to_module/3
         , dynamic_to_ast/1
@@ -36,6 +36,7 @@
 -type options()  :: map().
 -type dynamic()  :: eel_engine:dynamic().
 -type ast()      :: eel_engine:ast().
+-type state()    :: eel_engine:state().
 -type index()    :: eel_engine:index().
 -type snapshot() :: eel_snapshot:snapshot().
 -type position() :: eel_engine:position().
@@ -48,32 +49,29 @@
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(Dynamic) -> Result
+-spec compile(Dynamic, State) -> Result
     when Dynamic :: dynamic()
-       , Result  :: {ok, ast()} | {error, term()}
+       , State   :: state()
+       , Result  :: {ok, {ast(), state()}} | {error, term()}
        .
 
-compile(Dynamic) ->
-    compile(Dynamic, ?DEFAULT_ENGINE_OPTS).
+compile(Dynamic, State) ->
+    compile(Dynamic, ?DEFAULT_ENGINE_OPTS, State).
 
 %% -----------------------------------------------------------------------------
-%% @doc compile/2.
+%% @doc compile/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(Dynamic, Opts) -> Result
+-spec compile(Dynamic, Opts, State) -> Result
     when Dynamic :: dynamic()
        , Opts    :: options()
-       , Result  :: {ok, ast()} | {error, term()}
+       , State   :: state()
+       , Result  :: {ok, {ast(), state()}} | {error, term()}
        .
 
-compile(Dynamic, Opts) when is_list(Dynamic) ->
+compile(Dynamic, Opts, State) when is_list(Dynamic) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
-    case Eng:init(Opts) of
-        {ok, State} ->
-            do_compile(Dynamic, Eng, State, []);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    do_compile(Dynamic, Eng, State, []).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_to_module/2.
@@ -288,12 +286,12 @@ is_unbound_var_err(_) ->
 -ifdef(TEST).
 
 ast_vars_test() ->
-    {ok, {_, Dynamic}} = eel_tokenizer:tokenize(<<
+    {ok, {{_, Dynamic}, State}} = eel_tokenizer:tokenize(<<
         "<%= Foo .%>"
         "<%= Foo = Bar, Foo .%>"
         "<%= [Foo, Bar] .%>"
     >>),
-    {ok, AST} = compile(Dynamic),
+    {ok, {AST, _}} = compile(Dynamic, State),
     Expected = [{1, ['Foo']}, {2, ['Bar']}, {3, ['Foo', 'Bar']}],
     ?assertEqual(Expected, ast_vars(AST)).
 

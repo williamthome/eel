@@ -14,8 +14,8 @@
                   , do_parse_tokens_to_sd/4
                   , do_parse_tokens_to_sd_1/4
                   , do_parse_tokens_to_sd_2/5
-                  , compile/2
-                  , zip_compile/2
+                  , compile/1
+                  , zip_compile/1
                   ]}).
 
 %% eel_engine callbacks
@@ -26,6 +26,7 @@
         , handle_body/2
         , handle_compile/2
         , handle_ast/2
+        , handle_eval/5
         ]).
 
 -ifdef(TEST).
@@ -35,9 +36,7 @@
 %% Defines
 -define(nested_expr(Index, Pos, Expr), {Index, {nested_expr, Pos, Expr}}).
 
--record(state, {
-    opts = #{} :: map()
-}).
+-record(state, {}).
 % -opaque state() :: #state{}.
 
 %% Types
@@ -48,18 +47,19 @@
                     | end_expr
                     | nested_expr
                     | comment
-                    | code.
+                    | code
+                    .
 -type token()      :: {token_name(), binary()}.
 -type static()     :: eel_engine:static().
 -type dynamic()    :: list().
-
+-type index()      :: eel_engine:index().
 
 %%%=============================================================================
 %%% eel_engine callbacks
 %%%=============================================================================
 
-init(Opts) ->
-    {ok, #state{opts = Opts}}.
+init(_Opts) ->
+    {ok, #state{}}.
 
 %% tokenize callbacks
 
@@ -92,16 +92,28 @@ handle_expr_end(_, _, #state{} = State) ->
 handle_text(Text, Pos, State) ->
     {ok, {Text, Pos, State}}.
 
-handle_body(Tokens, #state{}) ->
-    {ok, parse_tokens_to_sd(Tokens)}.
+handle_body(Tokens, #state{} = State) ->
+    {ok, {parse_tokens_to_sd(Tokens), State}}.
 
 %% compile callbacks
 
-handle_compile(Token, #state{opts = Opts} = State) ->
-    {ok, {compile(Token, Opts), State}}.
+handle_compile(Token, #state{} = State) ->
+    {ok, {compile(Token), State}}.
 
-handle_ast(AST, #state{}) ->
-    {ok, AST}.
+handle_ast(AST, #state{} = State) ->
+    {ok, {AST, State}}.
+
+%% runtime callbacks
+
+handle_eval(_Index, AST, Bindings, Opts, State) ->
+    LocalFunHandler = maps:get(local_function_handler, Opts, none),
+    NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
+    {value, Binary, NewBindings} = erl_eval:exprs( AST
+                                                 , Bindings
+                                                 , LocalFunHandler
+                                                 , NonLocalFunHandler
+                                                 ),
+    {ok, {Binary, NewBindings, State}}.
 
 %%%=============================================================================
 %%% Internal functions
@@ -223,11 +235,11 @@ should_push_empty_static(_, Curr, {[], _}) ->
 should_push_empty_static(Prev, Curr, {_, _}) ->
     is_expr(Prev) andalso is_expr(Curr).
 
-is_expr({_, {Name, _, _}}) when Name =:= expr
-                              ; Name =:= start_expr
-                              ; Name =:= end_expr
-                              ; Name =:= nested_expr
-                              ; Name =:= code ->
+is_expr({_, {MarkerId, _, _}}) when MarkerId =:= expr
+                                  ; MarkerId =:= start_expr
+                                  ; MarkerId =:= end_expr
+                                  ; MarkerId =:= nested_expr
+                                  ; MarkerId =:= code ->
     true;
 is_expr(_) ->
     false.
@@ -260,40 +272,40 @@ parse_nested_sd_1([{_, {comment, _, _}} | T], Prev, {S, D}) ->
 %% @end
 %% -----------------------------------------------------------------------------
 
-compile({Index, {expr, Pos, Expr}}, _) ->
+compile({Index, {expr, Pos, Expr}}) ->
     {Index, {Pos, wrap_expr(Expr)}};
-compile({Index, {start_expr, Pos, Expr}}, _) ->
+compile({Index, {start_expr, Pos, Expr}}) ->
     {Index, {Pos, wrap_expr_begin(Expr)}};
-compile({Index, {mid_expr, Pos, Expr}}, _) ->
+compile({Index, {mid_expr, Pos, Expr}}) ->
     {Index, {Pos, [32, Expr, 32]}};
-compile({Index, {end_expr, Pos, Expr}}, _) ->
+compile({Index, {end_expr, Pos, Expr}}) ->
     {Index, {Pos, wrap_expr_end(Expr)}};
-compile(Tokens, Opts) when is_list(Tokens) ->
+compile(Tokens) when is_list(Tokens) ->
     [{Index, {_, Pos, _}} | _] = Tokens,
     Expr =
         lists:map(
             fun(Token) ->
-                {_, {_, Bin}} = compile(Token, Opts),
+                {_, {_, Bin}} = compile(Token),
                 Bin
             end,
             Tokens
         ),
     {Index, {Pos, Expr}};
-compile({Index, {nested_expr, Pos, Tokens}}, Opts) ->
-    Expr0 = zip_compile(Tokens, Opts),
+compile({Index, {nested_expr, Pos, Tokens}}) ->
+    Expr0 = zip_compile(Tokens),
     Expr1 = lists:join(",", Expr0),
     Expr = ["[", Expr1, "]"],
     {Index, {Pos, wrap_expr(Expr)}};
-compile({Index, {code, Pos, Expr}}, _) ->
+compile({Index, {code, Pos, Expr}}) ->
     {Index, {Pos, wrap_expr([Expr, ",<<>>"])}}.
 
-zip_compile(Tokens, Opts) ->
+zip_compile(Tokens) ->
     lists:map(
         fun
             ({_, {_, Bin}}) ->
                 ["<<\"", Bin, "\"/utf8>>"];
             (Token) ->
-                {_, {_, Bin}} = compile(Token, Opts),
+                {_, {_, Bin}} = compile(Token),
                 Bin
         end,
         eel_evaluator:zip(Tokens)
@@ -381,7 +393,7 @@ handle_body_test() ->
                          {23,{end_expr,{1,326},"end"}}]]}}},
                     {25,{end_expr,{1,340},"end"}}],
                    {26,{expr,{1,350},"Foo = foo, Foo"}}]},
-    {ok, Result} = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
+    {ok, {Result, _}} = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
     ?assertEqual(Expected, Result).
 
 parse_tokens_to_sd_test() ->

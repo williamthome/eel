@@ -39,7 +39,8 @@
 
 %% Types
 -type tokens() :: {eel_engine:static(), eel_engine:dynamic()}.
--type result() :: {ok, tokens()} | {error, term()}.
+-type state()  :: eel_engine:state().
+-type result() :: {ok, {tokens(), state()}} | {error, term()}.
 
 %%%=============================================================================
 %%% API functions

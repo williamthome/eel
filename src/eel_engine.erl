@@ -20,6 +20,7 @@
 -type static()        :: [token()].
 -type dynamic()       :: [token()].
 -type ast()           :: erl_syntax:syntaxTree().
+-type bindings()      :: map().
 -type marker_id()     :: term().
 -type marker_symbol() :: binary().
 -type marker_size()   :: non_neg_integer().
@@ -39,6 +40,7 @@
              , static/0
              , dynamic/0
              , ast/0
+             , bindings/0
              , position/0
              , marker_id/0
              , marker_symbol/0
@@ -109,8 +111,21 @@
        .
 
 -callback handle_ast(AST, State) -> Result
-    when AST    :: ast()
-       , State  :: state()
-       , Result :: {ok, NewAST} | {error, term()}
-       , NewAST :: ast()
+    when AST      :: ast()
+       , State    :: state()
+       , Result   :: {ok, {NewAST, NewState}} | {error, term()}
+       , NewAST   :: ast()
+       , NewState :: state()
+       .
+
+-callback handle_eval(Index, AST, Bindings, Opts, State) -> Result
+    when Index       :: index()
+       , AST         :: ast()
+       , Bindings    :: bindings()
+       , Opts        :: map()
+       , State       :: state()
+       , Result      :: {ok, {Expr, NewBindings, NewState}} | {error, term()}
+       , Expr        :: expression()
+       , NewBindings :: bindings()
+       , NewState    :: state()
        .
