@@ -108,12 +108,12 @@ handle_ast(AST, #state{} = State) ->
 handle_eval(_Index, AST, Bindings, Opts, State) ->
     LocalFunHandler = maps:get(local_function_handler, Opts, none),
     NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
-    {value, Binary, NewBindings} = erl_eval:exprs( AST
+    {value, String, NewBindings} = erl_eval:exprs( AST
                                                  , Bindings
                                                  , LocalFunHandler
                                                  , NonLocalFunHandler
                                                  ),
-    {ok, {Binary, NewBindings, State}}.
+    {ok, {String, NewBindings, State}}.
 
 %%%=============================================================================
 %%% Internal functions
