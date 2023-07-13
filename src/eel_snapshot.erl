@@ -5,11 +5,17 @@
         , new/5
         , new/7
         , get_static/1
+        , set_static/2
         , get_dynamic/1
+        , set_dynamic/2
         , get_ast/1
+        , set_ast/2
         , get_bindings/1
+        , set_bindings/2
         , get_vars/1
+        , set_vars/2
         , get_changes/1
+        , set_changes/2
         , get_state/1
         , set_state/2
         ]).
@@ -121,20 +127,38 @@ new(Static, Dynamic, AST, Bindings, Vars, Changes, State) ->
 get_static(#snapshot{static = Static}) ->
     Static.
 
+set_static(Static, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{static = Static}.
+
 get_dynamic(#snapshot{dynamic = Dynamic}) ->
     Dynamic.
+
+set_dynamic(Dynamic, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{dynamic = Dynamic}.
 
 get_ast(#snapshot{ast = AST}) ->
     AST.
 
+set_ast(AST, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{ast = AST}.
+
 get_bindings(#snapshot{bindings = Bindings}) ->
     Bindings.
+
+set_bindings(Bindings, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{bindings = Bindings}.
 
 get_vars(#snapshot{vars = Vars}) ->
     Vars.
 
+set_vars(Vars, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{vars = Vars}.
+
 get_changes(#snapshot{changes = Changes}) ->
     Changes.
+
+set_changes(Changes, #snapshot{} = Snapshot) ->
+    Snapshot#snapshot{changes = Changes}.
 
 get_state(#snapshot{state = State}) ->
     State.
