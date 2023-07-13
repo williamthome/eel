@@ -7,7 +7,7 @@
 -module(eel_compiler).
 
 -compile(inline_list_funcs).
--compile({inline, [ dynamic_to_ast/1
+-compile({inline, [ expr_to_ast/1
                   , ast_vars/1
                   , do_compile/4
                   , do_compile_file_to_module/3
@@ -18,7 +18,7 @@
         , compile/3
         , compile_to_module/2
         , compile_file_to_module/3
-        , dynamic_to_ast/1
+        , expr_to_ast/1
         , ast_vars/1
         ]).
 
@@ -101,23 +101,18 @@ compile_file_to_module(Filename, Snapshot, Module) when is_atom(Module) ->
     do_compile_file_to_module(Filename, Snapshot, Module).
 
 %% -----------------------------------------------------------------------------
-%% @doc dynamic_to_ast/1.
+%% @doc expr_to_ast/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec dynamic_to_ast(Expr) -> Result
-    when Expr   :: {index(), {position(), binary() | string()}}
+-spec expr_to_ast(Expr) -> Result
+    when Expr   :: binary() | string()
        , Result :: {ok, ast()} | {error, term()}
        .
 
-dynamic_to_ast({Index, {Pos, Expr}}) ->
+expr_to_ast(Expr) ->
     case erl_scan:string(normalize_expr(Expr)) of
         {ok, Tokens, _} ->
-            case erl_parse:parse_exprs(Tokens) of
-                {ok, AST} ->
-                    {ok, {Index, {Pos, AST}}};
-                {error, Reason} ->
-                    {error, Reason}
-            end;
+            erl_parse:parse_exprs(Tokens);
         {error, ErrorInfo, ErrorLocation} ->
             {error, {ErrorInfo, ErrorLocation}}
     end.
@@ -153,7 +148,7 @@ ast_vars(AST) when is_list(AST) ->
            ],
     lists:reverse(
         lists:foldl(
-            fun({Index, {_Pos, Forms}}, Acc) ->
+            fun({Index, {_, _, Forms}}, Acc) ->
                 Vars =
                     lists:foldl(
                         fun({"nofile", Errs}, Acc1) ->
@@ -188,10 +183,11 @@ ast_vars(AST) when is_tuple(AST) ->
 
 do_compile([H | T], Eng, State, Acc) ->
     case Eng:handle_compile(H, State) of
-        {ok, {Dynamic, NewState}} ->
-            case eel_compiler:dynamic_to_ast(Dynamic) of
+        {ok, {{Index, {MarkerId, Pos, Expr}}, NewState}} ->
+            case expr_to_ast(Expr) of
                 {ok, AST} ->
-                    do_compile(T, Eng, NewState, [AST | Acc]);
+                    Token = {Index, {MarkerId, Pos, AST}},
+                    do_compile(T, Eng, NewState, [Token | Acc]);
                 {error, Reason} ->
                     {error, Reason}
                 end;

@@ -83,7 +83,7 @@ render(Bindings, Snapshot) ->
 
 % TODO: Put Eng in the Snapshot when tokenizing
 %       and get it from the Snapshot.
-render(Params0, Snapshot, Opts) ->
+render(Bindings0, Snapshot, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
     Static = eel_snapshot:get_static(Snapshot),
     DynamicSnap = eel_snapshot:get_dynamic(Snapshot),
@@ -91,15 +91,15 @@ render(Params0, Snapshot, Opts) ->
     BindingsSnap = eel_snapshot:get_bindings(Snapshot),
     Vars = eel_snapshot:get_vars(Snapshot),
     State = eel_snapshot:get_state(Snapshot),
-    Params = normalize_bindings(Params0, Opts),
-    MergedBindings = maps:merge(BindingsSnap, Params),
-    EvalBindings = MergedBindings#{'Bindings' => MergedBindings},
-    {Dynamic0, Changes0, Bindings0, NewState} =
+    NormBindings = normalize_bindings(Bindings0, Opts),
+    MergedBindings = maps:merge(BindingsSnap, NormBindings),
+    AllBindings = MergedBindings#{'Bindings' => MergedBindings},
+    {RevDynamic, RevChanges, NewBindings, NewState} =
         lists:foldl(
             fun({Index, IndexVars}, {DAcc, CAcc, BAcc, SAcc}) ->
-                case should_eval_exprs(DynamicSnap, Params, IndexVars) of
+                case should_eval_exprs(DynamicSnap, Opts, NormBindings, IndexVars) of
                     true ->
-                        {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
+                        {Index, {MarkerId, Pos, EvalAST}} = proplists:lookup(Index, AST),
                         try
                             {ok, EvalResult} = Eng:handle_eval( Index
                                                               , EvalAST
@@ -108,7 +108,7 @@ render(Params0, Snapshot, Opts) ->
                                                               , SAcc
                                                               ),
                             {Bin, EvalBindings, EvalState} = EvalResult,
-                            { [{Index, {Pos, Bin}} | DAcc]
+                            { [{Index, {MarkerId, Pos, Bin}} | DAcc]
                             , [{Index, Bin} | CAcc]
                             , EvalBindings
                             , EvalState
@@ -131,19 +131,21 @@ render(Params0, Snapshot, Opts) ->
                     false ->
                         case proplists:lookup(Index, DynamicSnap) of
                             {Index, DCache} ->
-                                {[DCache | DAcc], CAcc, BAcc, SAcc};
+                                {[{Index, DCache} | DAcc], CAcc, BAcc, SAcc};
                             none ->
                                 error( {unbound_snapshot_var, {Index, IndexVars}}
-                                     , [Params0, Snapshot, Opts] )
-                        end
+                                     , [Bindings0, Snapshot, Opts] )
+                        end;
+                    skip ->
+                        {DAcc, CAcc, BAcc, SAcc}
                 end
             end,
-            {[], [], EvalBindings, State},
+            {[], [], AllBindings, State},
             Vars
         ),
-    Dynamic = lists:reverse(Dynamic0),
-    Changes = lists:reverse(Changes0),
-    Bindings = maps:remove('Bindings', Bindings0),
+    Dynamic = lists:reverse(RevDynamic),
+    Changes = lists:reverse(RevChanges),
+    Bindings = maps:remove('Bindings', NewBindings),
     {ok, eel_snapshot:new( Static
                          , Dynamic
                          , AST
@@ -152,15 +154,6 @@ render(Params0, Snapshot, Opts) ->
                          , Changes
                          , NewState
                          )}.
-
-should_eval_exprs(undefined, _, _) ->
-    true;
-should_eval_exprs(_, Params, Vars) ->
-    lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
-
-contains_any_var(Map, Vars) ->
-    MapKeys = maps:keys(Map),
-    lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
 
 %%%=============================================================================
 %%% Internal functions
@@ -213,6 +206,23 @@ to_atom(Bin, #{safe_atoms := true}) ->
     erlang:binary_to_existing_atom(Bin);
 to_atom(Bin, #{}) ->
     erlang:binary_to_atom(Bin).
+
+should_eval_exprs(undefined, #{skip_unbounded := true}, Params, Vars) ->
+    case should_eval_exprs_1(Params, Vars) of
+        true -> true;
+        false -> skip
+    end;
+should_eval_exprs(undefined, _, _, _) ->
+    true;
+should_eval_exprs(_, _, Params, Vars) ->
+    should_eval_exprs_1(Params, Vars).
+
+should_eval_exprs_1(Params, Vars) ->
+    lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
+
+contains_any_var(Map, Vars) ->
+    MapKeys = maps:keys(Map),
+    lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
 
 %%%=============================================================================
 %%% Tests

@@ -180,20 +180,20 @@ do_parse_tokens_to_sd_1( [{_, {end_expr, _, _}} = H | T]
 do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} | T]
                        , in_text
                        , {PrevIndex, {text, PrevPos, PrevText}}
-                       , {[{PrevIndex, {PrevPos, PrevText}} | S], D} ) ->
+                       , {[{PrevIndex, {text, PrevPos, PrevText}} | S], D} ) ->
     MergedText  = [PrevText, Text],
     MergedToken = {Index, {text, Pos, MergedText}},
     do_parse_tokens_to_sd_2( T
                            , MergedToken
                            , in_text
                            , MergedToken
-                           , {[{Index, {Pos, MergedText}} | S], D}
+                           , {[{Index, {text, Pos, MergedText}} | S], D}
                            );
 do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} = H | T]
                        , in_text
                        , Prev
                        , {S, D} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {[{Index, {Pos, Text}} | S], D});
+    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {[{Index, {text, Pos, Text}} | S], D});
 do_parse_tokens_to_sd_1( [{_, {text, _, _}} | _] = T
                        , in_expr
                        , Prev
@@ -258,7 +258,7 @@ parse_nested_sd_1([{_, {mid_expr, _, _}} | _] = T, _, {S, D}) ->
 parse_nested_sd_1([{_, {end_expr, _, _}} | _] = T, _, {S, D}) ->
     {T, {lists:reverse(S), lists:reverse(D)}};
 parse_nested_sd_1([{Index, {text, Pos, Text}} = H | T], _, {S, D}) ->
-    parse_nested_sd_1(T, H, {[{Index, {Pos, Text}} | S], D});
+    parse_nested_sd_1(T, H, {[{Index, {text, Pos, Text}} | S], D});
 parse_nested_sd_1([{_, {expr, _, _}} = H | T], _, {S, D}) ->
     parse_nested_sd_1(T, H, {S, [H | D]});
 parse_nested_sd_1([{_, {code, _, _}} = H | T], _, {S, D}) ->
@@ -273,40 +273,39 @@ parse_nested_sd_1([{_, {comment, _, _}} | T], Prev, {S, D}) ->
 %% -----------------------------------------------------------------------------
 
 compile({Index, {expr, Pos, Expr}}) ->
-    {Index, {Pos, wrap_expr(Expr)}};
+    {Index, {expr, Pos, wrap_expr(Expr)}};
 compile({Index, {start_expr, Pos, Expr}}) ->
-    {Index, {Pos, wrap_expr_begin(Expr)}};
+    {Index, {start_expr, Pos, wrap_expr_begin(Expr)}};
 compile({Index, {mid_expr, Pos, Expr}}) ->
-    {Index, {Pos, [32, Expr, 32]}};
+    {Index, {mid_expr, Pos, [32, Expr, 32]}};
 compile({Index, {end_expr, Pos, Expr}}) ->
-    {Index, {Pos, wrap_expr_end(Expr)}};
-compile(Tokens) when is_list(Tokens) ->
-    [{Index, {_, Pos, _}} | _] = Tokens,
+    {Index, {end_expr, Pos, wrap_expr_end(Expr)}};
+compile([{Index, {_, Pos, _}} | _] = Tokens) ->
     Expr =
         lists:map(
             fun(Token) ->
-                {_, {_, Bin}} = compile(Token),
-                Bin
+                {_, {_, _, Expr0}} = compile(Token),
+                Expr0
             end,
             Tokens
         ),
-    {Index, {Pos, Expr}};
+    {Index, {expr, Pos, Expr}};
 compile({Index, {nested_expr, Pos, Tokens}}) ->
     Expr0 = zip_compile(Tokens),
     Expr1 = lists:join(",", Expr0),
     Expr = ["[", Expr1, "]"],
-    {Index, {Pos, wrap_expr(Expr)}};
+    {Index, {nested_expr, Pos, wrap_expr(Expr)}};
 compile({Index, {code, Pos, Expr}}) ->
-    {Index, {Pos, wrap_expr([Expr, ",<<>>"])}}.
+    {Index, {code, Pos, wrap_expr([Expr, ",<<>>"])}}.
 
 zip_compile(Tokens) ->
     lists:map(
         fun
-            ({_, {_, Bin}}) ->
-                ["<<\"", Bin, "\"/utf8>>"];
+            ({_, {text, _, Text}}) ->
+                ["<<\"", Text, "\"/utf8>>"];
             (Token) ->
-                {_, {_, Bin}} = compile(Token),
-                Bin
+                {_, {_, _, Expr}} = compile(Token),
+                Expr
         end,
         eel_evaluator:zip(Tokens)
     ).

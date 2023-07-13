@@ -62,7 +62,7 @@ eval(Static, Dynamic) ->
 retrieve_bin(Tokens) ->
     lists:map(
         fun
-            ({_, {_, IoData}}) when is_list(IoData); is_binary(IoData) ->
+            ({_, {_, _, IoData}}) when is_list(IoData); is_binary(IoData) ->
                 IoData;
             (Term) ->
                 eel_converter:to_string(Term)
