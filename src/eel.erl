@@ -61,7 +61,7 @@ compile(Bin, Opts) ->
         {ok, {{Static, Dynamic}, State}} ->
             case eel_compiler:compile(Dynamic, Opts, State) of
                 {ok, {AST, NewState}} ->
-                    {ok, eel_snapshot:new(Static, AST, NewState)};
+                    {ok, eel_snapshot:new(binary, Static, AST, NewState)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -77,7 +77,11 @@ compile_file(Filename, Opts) ->
         {ok, {{Static, Dynamic}, State}} ->
             case eel_compiler:compile(Dynamic, Opts, State) of
                 {ok, {AST, NewState}} ->
-                    {ok, eel_snapshot:new(Static, AST, NewState)};
+                    {ok, eel_snapshot:new( {file, Filename}
+                                         , Static
+                                         , AST
+                                         , NewState
+                                         )};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -124,7 +128,12 @@ render(Bin, Bindings, Opts) ->
         {ok, {{Static, Dynamic}, State}} ->
             case eel_compiler:compile(Dynamic, Opts, State) of
                 {ok, {AST, NewState}} ->
-                    Snapshot = eel_snapshot:new(Static, Dynamic, AST, NewState),
+                    Snapshot = eel_snapshot:new( binary
+                                               , Static
+                                               , Dynamic
+                                               , AST
+                                               , NewState
+                                               ),
                     eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}
@@ -144,7 +153,12 @@ render_file(Filename, Bindings, Opts) ->
         {ok, {{Static, Dynamic}, State}} ->
             case eel_compiler:compile(Dynamic, Opts, State) of
                 {ok, {AST, NewState}} ->
-                    Snapshot = eel_snapshot:new(Static, Dynamic, AST, NewState),
+                    Snapshot = eel_snapshot:new( {file, Filename}
+                                               , Static
+                                               , Dynamic
+                                               , AST
+                                               , NewState
+                                               ),
                     eel_renderer:render(Bindings, Snapshot, Opts);
                 {error, Reason} ->
                     {error, Reason}

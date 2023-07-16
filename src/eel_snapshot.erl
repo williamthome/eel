@@ -1,9 +1,10 @@
 -module(eel_snapshot).
 
--export([ new/3
-        , new/4
+-export([ new/4
         , new/5
-        , new/7
+        , new/6
+        , new/8
+        , get_root/1
         , get_static/1
         , set_static/2
         , get_dynamic/1
@@ -20,7 +21,8 @@
         , set_state/2
         ]).
 
--export_type([ snapshot/0
+-export_type([ root/0
+             , snapshot/0
              , bindings/0
              , static/0
              , dynamic/0
@@ -30,7 +32,8 @@
              , state/0
              ]).
 
--record(snapshot, { static   :: static()
+-record(snapshot, { root     :: root()
+                  , static   :: static()
                   , dynamic  :: dynamic()
                   , ast      :: ast()
                   , bindings :: bindings()
@@ -40,6 +43,7 @@
                   }).
 
 %% Types
+-type root()     :: binary | {file, file:filename_all()}.
 -type snapshot() :: #snapshot{}.
 -type bindings() :: eel_engine:bindings().
 -type static()   :: eel_engine:static().
@@ -54,40 +58,43 @@
 %%%=============================================================================
 
 %% -----------------------------------------------------------------------------
-%% @doc new/3.
+%% @doc new/4.
 %% @end
 %% -----------------------------------------------------------------------------
--spec new(Static, AST, State) -> Result
-    when Static :: static()
+-spec new(Root, Static, AST, State) -> Result
+    when Root   :: root()
+       , Static :: static()
        , AST    :: ast()
        , State  :: state()
        , Result :: snapshot()
        .
 
-new(Static, AST, State) ->
-    new(Static, undefined, AST, State).
+new(Root, Static, AST, State) ->
+    new(Root, Static, undefined, AST, State).
 
 %% -----------------------------------------------------------------------------
-%% @doc new/4.
+%% @doc new/5.
 %% @end
 %% -----------------------------------------------------------------------------
--spec new(Static, Dynamic, AST, State) -> Result
-    when Static  :: static()
+-spec new(Root, Static, Dynamic, AST, State) -> Result
+    when Root    :: root()
+       , Static  :: static()
        , Dynamic :: dynamic()
        , AST     :: ast()
        , State   :: state()
        , Result  :: snapshot()
        .
 
-new(Static, Dynamic, AST, State) ->
-    new(Static, Dynamic, AST, #{}, State).
+new(Root, Static, Dynamic, AST, State) ->
+    new(Root, Static, Dynamic, AST, #{}, State).
 
 %% -----------------------------------------------------------------------------
-%% @doc new/5.
+%% @doc new/6.
 %% @end
 %% -----------------------------------------------------------------------------
--spec new(Static, Dynamic, AST, Bindings, State) -> Result
-    when Static   :: static()
+-spec new(Root, Static, Dynamic, AST, Bindings, State) -> Result
+    when Root     :: root()
+       , Static   :: static()
        , Dynamic  :: dynamic()
        , AST      :: ast()
        , Bindings :: bindings()
@@ -95,16 +102,17 @@ new(Static, Dynamic, AST, State) ->
        , Result   :: snapshot()
        .
 
-new(Static, Dynamic, AST, Bindings, State) ->
+new(Root, Static, Dynamic, AST, Bindings, State) ->
     Vars = eel_compiler:ast_vars(AST),
-    new(Static, Dynamic, AST, Bindings, Vars, [], State).
+    new(Root, Static, Dynamic, AST, Bindings, Vars, [], State).
 
 %% -----------------------------------------------------------------------------
-%% @doc new/7.
+%% @doc new/8.
 %% @end
 %% -----------------------------------------------------------------------------
--spec new(Static, Dynamic, AST, Bindings, Vars, Changes, State) -> Result
-    when Static   :: static()
+-spec new(Root, Static, Dynamic, AST, Bindings, Vars, Changes, State) -> Result
+    when Root     :: root()
+       , Static   :: static()
        , Dynamic  :: dynamic()
        , AST      :: ast()
        , Bindings :: bindings()
@@ -114,8 +122,9 @@ new(Static, Dynamic, AST, Bindings, State) ->
        , State    :: state()
        .
 
-new(Static, Dynamic, AST, Bindings, Vars, Changes, State) ->
-    #snapshot{ static   = Static
+new(Root, Static, Dynamic, AST, Bindings, Vars, Changes, State) ->
+    #snapshot{ root     = Root
+             , static   = Static
              , dynamic  = Dynamic
              , ast      = AST
              , bindings = Bindings
@@ -123,6 +132,9 @@ new(Static, Dynamic, AST, Bindings, Vars, Changes, State) ->
              , changes  = Changes
              , state    = State
              }.
+
+get_root(#snapshot{root = Root}) ->
+    Root.
 
 get_static(#snapshot{static = Static}) ->
     Static.

@@ -146,7 +146,8 @@ render(Bindings0, Snapshot, Opts) ->
     Dynamic = lists:reverse(RevDynamic),
     Changes = lists:reverse(RevChanges),
     Bindings = maps:remove('Bindings', NewBindings),
-    {ok, eel_snapshot:new( Static
+    {ok, eel_snapshot:new( eel_snapshot:get_root(Snapshot)
+                         , Static
                          , Dynamic
                          , AST
                          , Bindings
