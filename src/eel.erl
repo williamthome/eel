@@ -58,10 +58,10 @@ compile(Bin) ->
 
 compile(Bin, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
-        {ok, {{Static, Dynamic}, State}} ->
-            case eel_compiler:compile(Dynamic, Opts, State) of
+        {ok, {{Statics, Dynamics}, State}} ->
+            case eel_compiler:compile(Dynamics, Opts, State) of
                 {ok, {AST, NewState}} ->
-                    {ok, eel_snapshot:new(binary, Static, AST, NewState)};
+                    {ok, eel_snapshot:new(binary, Statics, AST, NewState)};
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -74,11 +74,11 @@ compile_file(Filename) ->
 
 compile_file(Filename, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
-        {ok, {{Static, Dynamic}, State}} ->
-            case eel_compiler:compile(Dynamic, Opts, State) of
+        {ok, {{Statics, Dynamics}, State}} ->
+            case eel_compiler:compile(Dynamics, Opts, State) of
                 {ok, {AST, NewState}} ->
                     {ok, eel_snapshot:new( {file, Filename}
-                                         , Static
+                                         , Statics
                                          , AST
                                          , NewState
                                          )};
@@ -125,12 +125,12 @@ render(Bin, Bindings) ->
 
 render(Bin, Bindings, Opts) ->
     case eel_tokenizer:tokenize(Bin, Opts) of
-        {ok, {{Static, Dynamic}, State}} ->
-            case eel_compiler:compile(Dynamic, Opts, State) of
+        {ok, {{Statics, Dynamics}, State}} ->
+            case eel_compiler:compile(Dynamics, Opts, State) of
                 {ok, {AST, NewState}} ->
                     Snapshot = eel_snapshot:new( binary
-                                               , Static
-                                               , Dynamic
+                                               , Statics
+                                               , Dynamics
                                                , AST
                                                , NewState
                                                ),
@@ -150,12 +150,12 @@ render_file(Filename, Bindings) ->
 
 render_file(Filename, Bindings, Opts) ->
     case eel_tokenizer:tokenize_file(Filename, Opts) of
-        {ok, {{Static, Dynamic}, State}} ->
-            case eel_compiler:compile(Dynamic, Opts, State) of
+        {ok, {{Statics, Dynamics}, State}} ->
+            case eel_compiler:compile(Dynamics, Opts, State) of
                 {ok, {AST, NewState}} ->
                     Snapshot = eel_snapshot:new( {file, Filename}
-                                               , Static
-                                               , Dynamic
+                                               , Statics
+                                               , Dynamics
                                                , AST
                                                , NewState
                                                ),

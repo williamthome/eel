@@ -34,7 +34,7 @@
 
 %% Types
 -type options()  :: map().
--type dynamic()  :: eel_engine:dynamic().
+-type dynamics() :: eel_engine:dynamics().
 -type ast()      :: eel_engine:ast().
 -type state()    :: eel_engine:state().
 -type index()    :: eel_engine:index().
@@ -49,29 +49,29 @@
 %% @doc compile/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(Dynamic, State) -> Result
-    when Dynamic :: dynamic()
-       , State   :: state()
-       , Result  :: {ok, {ast(), state()}} | {error, term()}
+-spec compile(Dynamics, State) -> Result
+    when Dynamics :: dynamics()
+       , State    :: state()
+       , Result   :: {ok, {ast(), state()}} | {error, term()}
        .
 
-compile(Dynamic, State) ->
-    compile(Dynamic, ?DEFAULT_ENGINE_OPTS, State).
+compile(Dynamics, State) ->
+    compile(Dynamics, ?DEFAULT_ENGINE_OPTS, State).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile/3.
 %% @end
 %% -----------------------------------------------------------------------------
--spec compile(Dynamic, Opts, State) -> Result
-    when Dynamic :: dynamic()
-       , Opts    :: options()
-       , State   :: state()
-       , Result  :: {ok, {ast(), state()}} | {error, term()}
+-spec compile(Dynamics, Opts, State) -> Result
+    when Dynamics :: dynamics()
+       , Opts     :: options()
+       , State    :: state()
+       , Result   :: {ok, {ast(), state()}} | {error, term()}
        .
 
-compile(Dynamic, Opts, State) when is_list(Dynamic) ->
+compile(Dynamics, Opts, State) when is_list(Dynamics) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
-    do_compile(Dynamic, Eng, State, []).
+    do_compile(Dynamics, Eng, State, []).
 
 %% -----------------------------------------------------------------------------
 %% @doc compile_to_module/2.
@@ -282,12 +282,12 @@ is_unbound_var_err(_) ->
 -ifdef(TEST).
 
 ast_vars_test() ->
-    {ok, {{_, Dynamic}, State}} = eel_tokenizer:tokenize(<<
+    {ok, {{_, Dynamics}, State}} = eel_tokenizer:tokenize(<<
         "<%= Foo .%>"
         "<%= Foo = Bar, Foo .%>"
         "<%= [Foo, Bar] .%>"
     >>),
-    {ok, {AST, _}} = compile(Dynamic, State),
+    {ok, {AST, _}} = compile(Dynamics, State),
     Expected = [{1, ['Foo']}, {2, ['Bar']}, {3, ['Foo', 'Bar']}],
     ?assertEqual(Expected, ast_vars(AST)).
 

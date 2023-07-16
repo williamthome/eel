@@ -50,8 +50,8 @@
                     | code
                     .
 -type token()      :: {token_name(), binary()}.
--type static()     :: eel_engine:static().
--type dynamic()    :: list().
+-type statics()    :: eel_engine:statics().
+-type dynamics()   :: list().
 -type index()      :: eel_engine:index().
 
 %%%=============================================================================
@@ -126,7 +126,7 @@ handle_eval(_Index, AST, Bindings, Opts, State) ->
 %% -----------------------------------------------------------------------------
 -spec parse_tokens_to_sd(Tokens) -> Result
     when Tokens :: [token()]
-       , Result :: {static(), dynamic()}
+       , Result :: {statics(), dynamics()}
        .
 
 parse_tokens_to_sd(Tokens) ->

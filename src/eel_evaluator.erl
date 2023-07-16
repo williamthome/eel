@@ -18,8 +18,8 @@
 
 % Types
 -type snapshot() :: eel_snapshot:snapshot().
--type static()   :: eel_snapshot:static().
--type dynamic()  :: eel_engine:dynamic().
+-type statics()  :: eel_snapshot:statics().
+-type dynamics() :: eel_engine:dynamics().
 -type token()    :: eel_engine:token().
 
 %%%=============================================================================
@@ -36,22 +36,22 @@
        .
 
 eval(Snapshot) ->
-    Static = eel_snapshot:get_static(Snapshot),
-    Dynamic = eel_snapshot:get_dynamic(Snapshot),
-    eval(Static, Dynamic).
+    Statics = eel_snapshot:get_statics(Snapshot),
+    Dynamics = eel_snapshot:get_dynamics(Snapshot),
+    eval(Statics, Dynamics).
 
 %% -----------------------------------------------------------------------------
 %% @doc eval/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec eval(Static, Dynamic) -> Result
-    when Static  :: static()
-       , Dynamic :: dynamic()
-       , Result  :: iolist()
+-spec eval(Statics, Dynamics) -> Result
+    when Statics  :: statics()
+       , Dynamics :: dynamics()
+       , Result   :: iolist()
        .
 
-eval(Static, Dynamic) ->
-    retrieve_bin(zip(Static, Dynamic)).
+eval(Statics, Dynamics) ->
+    retrieve_bin(zip(Statics, Dynamics)).
 
 %% -----------------------------------------------------------------------------
 %% @doc retrieve_bin/1.
@@ -74,33 +74,33 @@ retrieve_bin(Tokens) ->
 %% @doc zip/1.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip({Static, Dynamic}) -> Result
-    when Static  :: static()
-       , Dynamic :: dynamic()
-       , Result  :: [token()]
+-spec zip({Statics, Dynamics}) -> Result
+    when Statics  :: statics()
+       , Dynamics :: dynamics()
+       , Result   :: [token()]
        .
 
-zip({Static, Dynamic}) ->
-    zip(Static, Dynamic).
+zip({Statics, Dynamics}) ->
+    zip(Statics, Dynamics).
 
 %% -----------------------------------------------------------------------------
 %% @doc zip/2.
 %% @end
 %% -----------------------------------------------------------------------------
--spec zip(static(), dynamic()) -> [token()].
+-spec zip(statics(), dynamics()) -> [token()].
 
-zip(Static, Dynamic) ->
-    do_zip(Static, Dynamic, []).
+zip(Statics, Dynamics) ->
+    do_zip(Statics, Dynamics, []).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
-do_zip([S | Static], [D | Dynamic], Acc) ->
-    do_zip(Static, Dynamic, [D, S | Acc]);
-do_zip([S | Static], [], Acc) ->
-    do_zip(Static, [], [S | Acc]);
+do_zip([S | Statics], [D | Dynamics], Acc) ->
+    do_zip(Statics, Dynamics, [D, S | Acc]);
+do_zip([S | Statics], [], Acc) ->
+    do_zip(Statics, [], [S | Acc]);
 do_zip([], [], Acc) ->
     lists:reverse(Acc);
-do_zip([], Dynamic, Acc) ->
-    lists:reverse(Dynamic, Acc).
+do_zip([], Dynamics, Acc) ->
+    lists:reverse(Dynamics, Acc).

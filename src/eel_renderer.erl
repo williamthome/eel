@@ -19,7 +19,7 @@
 
 %% Types
 -export_type([ bindings/0
-             , dynamic/0
+             , dynamics/0
              , changes/0
              , snapshot/0
              , result/0
@@ -36,7 +36,7 @@
 %% Types
 -type snapshot() :: eel_snapshot:snapshot().
 -type bindings() :: eel_snapshot:bindings().
--type dynamic()  :: eel_snapshot:dynamic().
+-type dynamics() :: eel_snapshot:dynamics().
 -type changes()  :: eel_snapshot:changes().
 -type options()  :: map().
 -type result()   :: {ok, snapshot()}.
@@ -85,8 +85,8 @@ render(Bindings, Snapshot) ->
 %       and get it from the Snapshot.
 render(Bindings0, Snapshot, Opts) ->
     Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
-    Static = eel_snapshot:get_static(Snapshot),
-    DynamicSnap = eel_snapshot:get_dynamic(Snapshot),
+    Statics = eel_snapshot:get_statics(Snapshot),
+    DynamicsSnap = eel_snapshot:get_dynamics(Snapshot),
     AST = eel_snapshot:get_ast(Snapshot),
     BindingsSnap = eel_snapshot:get_bindings(Snapshot),
     Vars = eel_snapshot:get_vars(Snapshot),
@@ -94,10 +94,10 @@ render(Bindings0, Snapshot, Opts) ->
     NormBindings = normalize_bindings(Bindings0, Opts),
     MergedBindings = maps:merge(BindingsSnap, NormBindings),
     AllBindings = MergedBindings#{'Bindings' => MergedBindings},
-    {RevDynamic, RevChanges, NewBindings, NewState} =
+    {RevDynamics, RevChanges, NewBindings, NewState} =
         lists:foldl(
             fun({Index, IndexVars}, {DAcc, CAcc, BAcc, SAcc}) ->
-                case should_eval_exprs(DynamicSnap, Opts, NormBindings, IndexVars) of
+                case should_eval_exprs(DynamicsSnap, Opts, NormBindings, IndexVars) of
                     true ->
                         {Index, {MarkerId, Pos, EvalAST}} = proplists:lookup(Index, AST),
                         try
@@ -129,7 +129,7 @@ render(Bindings0, Snapshot, Opts) ->
                                 erlang:raise(Class, Reason, Stacktrace)
                         end;
                     false ->
-                        case proplists:lookup(Index, DynamicSnap) of
+                        case proplists:lookup(Index, DynamicsSnap) of
                             {Index, DCache} ->
                                 {[{Index, DCache} | DAcc], CAcc, BAcc, SAcc};
                             none ->
@@ -143,12 +143,12 @@ render(Bindings0, Snapshot, Opts) ->
             {[], [], AllBindings, State},
             Vars
         ),
-    Dynamic = lists:reverse(RevDynamic),
+    Dynamics = lists:reverse(RevDynamics),
     Changes = lists:reverse(RevChanges),
     Bindings = maps:remove('Bindings', NewBindings),
     {ok, eel_snapshot:new( eel_snapshot:get_root(Snapshot)
-                         , Static
-                         , Dynamic
+                         , Statics
+                         , Dynamics
                          , AST
                          , Bindings
                          , Vars

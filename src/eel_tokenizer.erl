@@ -38,7 +38,7 @@
 -endif.
 
 %% Types
--type tokens() :: {eel_engine:static(), eel_engine:dynamic()}.
+-type tokens() :: {eel_engine:statics(), eel_engine:dynamics()}.
 -type state()  :: eel_engine:state().
 -type result() :: {ok, {tokens(), state()}} | {error, term()}.
 

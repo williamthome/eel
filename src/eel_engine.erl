@@ -17,8 +17,8 @@
 -type expression()    :: binary().
 -type state()         :: term().
 -type token()         :: {index(), {position(), expression()}}.
--type static()        :: [token()].
--type dynamic()       :: [token()].
+-type statics()       :: [token()].
+-type dynamics()      :: [token()].
 -type ast()           :: erl_syntax:syntaxTree().
 -type bindings()      :: map().
 -type marker_id()     :: term().
@@ -37,8 +37,8 @@
              , expression/0
              , state/0
              , token/0
-             , static/0
-             , dynamic/0
+             , statics/0
+             , dynamics/0
              , ast/0
              , bindings/0
              , position/0
@@ -98,7 +98,7 @@
 -callback handle_body(Tokens, State) -> Result
     when Tokens :: [token()]
        , State  :: state()
-       , Result :: {ok, {static(), dynamic()}} | {error, term()}
+       , Result :: {ok, {statics(), dynamics()}} | {error, term()}
        .
 
 %% compile
