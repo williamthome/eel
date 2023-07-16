@@ -37,9 +37,7 @@
 -type dynamics() :: eel_engine:dynamics().
 -type ast()      :: eel_engine:ast().
 -type state()    :: eel_engine:state().
--type index()    :: eel_engine:index().
 -type snapshot() :: eel_snapshot:snapshot().
--type position() :: eel_engine:position().
 
 %%%=============================================================================
 %%% API functions
