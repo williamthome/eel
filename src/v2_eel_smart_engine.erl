@@ -10,33 +10,36 @@ markers() ->
             id = snapshot,
             start = <<"<%.">>,
             'end' = <<".%>">>,
-            kind = snapshot
+            tree_behavior = push
         },
         #marker{
             id = expr,
             start = <<"<%=">>,
-            'end' = <<".%>">>
+            'end' = <<".%>">>,
+            tree_behavior = push
         },
         #marker{
             id = expr_start,
             start = <<"<%=">>,
             'end' = <<"%>">>,
-            kind = multiplex
+            tree_behavior = open
         },
         #marker{
             id = expr_continue,
             start = <<"<%">>,
             'end' = <<"%>">>,
-            kind = multiplex
+            tree_behavior = push
         },
         #marker{
             id = expr_end,
             start = <<"<%">>,
-            'end' = <<".%>">>
+            'end' = <<".%>">>,
+            tree_behavior = close
         },
         #marker{
             id = comment,
             start = <<"<%%">>,
-            'end' = <<"%%>">>
+            'end' = <<"%%>">>,
+            tree_behavior = ignore
         }
     ].

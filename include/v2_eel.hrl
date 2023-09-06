@@ -2,5 +2,5 @@
     id :: atom(),
     start :: binary(),
     'end' :: binary(),
-    kind = singleton :: singleton | multiplex | snapshot
+    tree_behavior :: open | push | close | ignore
 }).
