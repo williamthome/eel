@@ -8,18 +8,37 @@
 
 -include("v2_eel.hrl").
 
--record(state, { engines  :: [engine()]
-               , buffer   :: binary()
-               , text_acc :: binary()
-               , tokens   :: [token()]
+-record(state, { engines   :: [engine()]
+               , buffer    :: binary()
+               , text_acc  :: binary()
+               , tokens    :: [token()]
+               , converter :: module()
                }).
 
+-record(text_token, { text :: binary()
+                    , handled_text :: binary()
+                    }).
+
+-record(expr_token, { expr :: binary()
+                    , handled_expr :: binary()
+                    , engine :: engine()
+                    , marker :: #marker{} | none
+                    , vars :: [atom()]
+                    }).
+
 -type engine()     :: module().
--type text_token() :: {text, binary()}.
--type expr_token() :: {expr, {engine(), marker_id(), binary()}}.
+% -type text_token() :: {text, binary()}.
+% -type expr_token() :: {expr, {engine(), marker_id(), binary()}}.
+% -type token() :: text_token() | expr_token().
+
+% -type token() :: {text | expr, binary()}.
+
+-type text_token() :: #text_token{}.
+-type expr_token() :: #expr_token{}.
 -type token() :: text_token() | expr_token().
 
 -define(SMART_ENGINE, v2_eel_smart_engine).
+-define(CONVERTER, v2_eel_converter).
 
 %%%=============================================================================
 %%% API functions
@@ -33,7 +52,8 @@ tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
         engines = maps:get(engines, Opts, default_engines()),
         buffer = <<>>,
         text_acc = <<>>,
-        tokens = []
+        tokens = [],
+        converter = atom_to_binary(maps:get(converter, Opts, default_converter()))
     },
     do_tokenize(Bin, State).
 
@@ -44,6 +64,9 @@ tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
 default_engines() ->
     [?SMART_ENGINE].
 
+default_converter() ->
+    ?CONVERTER.
+
 do_tokenize(<<H, T/binary>>, State0) ->
     State = State0#state{
         buffer = <<(State0#state.buffer)/binary, H>>,
@@ -53,15 +76,21 @@ do_tokenize(<<H, T/binary>>, State0) ->
         {ok, {Engine, Markers}} ->
             case handle_expr_end(T, Markers, <<>>) of
                 {ok, {Marker, Text, Expr, Rest}} ->
-                    do_tokenize(Rest, State#state{
-                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
-                        tokens = [
-                            {expr, {Engine, Marker#marker.id, Expr}},
-                            {text, Text}
-                            | State#state.tokens
-                        ],
-                        text_acc = <<>>
-                    });
+                    case handle_text(State#state.engines, Text, State#state.converter) of
+                        {ok, FirstToken} ->
+                            case handle_expr(Engine, Marker, Expr, State#state.converter) of
+                                {ok, SecondToken} ->
+                                    do_tokenize(Rest, State#state{
+                                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
+                                        tokens = [SecondToken, FirstToken | State#state.tokens],
+                                        text_acc = <<>>
+                                    });
+                                {error, Reason} ->
+                                    {error, Reason}
+                            end;
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
                 none ->
                     % TODO: Check if should just skip when no end marker found.
                     %       e.g: do_tokenize(T, State)
@@ -134,6 +163,49 @@ end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
 end_marker_match([], _) ->
     none.
 
+handle_text(Engines, Bin, Converter) ->
+    handle_text(Engines, Bin, Bin, Converter).
+
+handle_text([Engine | Engines], Bin, RawBin, Converter) ->
+    case Engine:handle_text(Bin, Converter) of
+        {ok, {text, Text}} when is_binary(Text) ->
+            handle_text(Engines, Text, RawBin, Converter);
+        {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
+            {ok, #expr_token{
+                expr = RawBin,
+                handled_expr = Expr,
+                engine = Engine,
+                marker = none,
+                vars = Vars
+            }};
+        {error, Reason} ->
+            {error, Reason}
+    end;
+handle_text([], Text, RawBin, _) ->
+    {ok, #text_token{
+        text = RawBin,
+        handled_text = Text
+    }}.
+
+handle_expr(Engine, Marker, Bin, Converter) ->
+    case Engine:handle_expr(Marker, Bin, Converter) of
+        {ok, {text, Text}} when is_binary(Text) ->
+            {ok, #text_token{
+                text = Bin,
+                handled_text = Text
+            }};
+        {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
+            {ok, #expr_token{
+                expr = Bin,
+                handled_expr = Expr,
+                engine = Engine,
+                marker = Marker,
+                vars = Vars
+            }};
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
 %%%=============================================================================
 %%% Tests
 %%%=============================================================================
@@ -163,17 +235,17 @@ tokenize_test() ->
         {text,<<"</p>">>}
     ],
     Bin = <<
-        "Hello, <%= World .%>!"
+        "Hello, <%= @world .%>!"
         "<p>"
-            "<%= case Bool of %>"
+            "<%= case @bool of %>"
             "<% true -> %>"
                 "True"
             "<% ; false -> %>"
-                "<%= case Foo of -> %>"
+                "<%= case @foo of -> %>"
                 "<% foo -> %>"
                     "Foo"
-                "<% Bar -> %>"
-                    "Bar"
+                "<% ; _ -> %>"
+                    "<p><%= @bar .%></p>"
                 "<% end .%>"
             "<% end .%>"
         "</p>"
