@@ -5,6 +5,20 @@
         , add_vertex/2
         , add_vertex/3
         , add_edge/3
+
+        , get_vertex_count/1
+        , get_vertices/1
+        , get_root/1
+
+        , get_vertex_parent/1
+        , get_vertex_label/1
+        , get_vertex_children/1
+        , get_vertex_is_root/1
+        , get_vertex_metadata/1
+
+        , fetch_vertex/2
+        , fetch_vertex_parent/2
+        , fetch_vertex_children/2
         ]).
 
 -export_type([ tree/0
@@ -17,13 +31,14 @@
 
 -record(tree, { vertex_count :: non_neg_integer()
               , vertices     :: #{label := [vertex()]}
-              , root      :: label()
+              , root         :: label()
               }).
 
 -record(vertex, { parent   :: label()
                 , label    :: label()
                 , children :: [vertex()]
                 , is_root  :: boolean()
+                , metadata :: term()
                 }).
 
 -opaque tree()   :: #tree{}.
@@ -43,16 +58,18 @@ new() ->
     }.
 
 add_vertex(Tree) ->
-    Label = get_curr_index(Tree),
-    add_vertex(Tree, Label).
+    add_vertex(Tree, #{}).
 
-add_vertex(#vertex{} = Vertex, Tree0) ->
+add_vertex(#vertex{} = Vertex, #tree{} = Tree0) ->
     Tree1 = put_vertex(Vertex, Tree0),
     Tree2 = incr_vertex_count(Tree1),
     Tree = maybe_set_vertex_as_root(Vertex, Tree2),
     {Vertex, Tree};
-add_vertex(Label, Tree) ->
-    add_vertex(Label, Tree, #{}).
+add_vertex(Label, #tree{} = Tree) ->
+    add_vertex(Label, Tree, #{});
+add_vertex(#tree{} = Tree, Opts) ->
+    Label = get_curr_index(Tree),
+    add_vertex(Label, Tree, Opts).
 
 add_vertex(Label, Tree, Opts) ->
     add_vertex(new_vertex(Label, Tree, Opts), Tree).
@@ -62,13 +79,35 @@ add_edge(#vertex{label = From}, To, Tree) ->
 add_edge(From, #vertex{label = To}, Tree) ->
     add_edge(From, To, Tree);
 add_edge(FromLabel, ToLabel, Tree) ->
-    From0 = get_vertex(FromLabel, Tree),
-    To0 = get_vertex(ToLabel, Tree),
+    From0 = fetch_vertex(FromLabel, Tree),
+    To0 = fetch_vertex(ToLabel, Tree),
     From = From0#vertex{
         children = [To0#vertex.label | From0#vertex.children]
     },
     To = To0#vertex{parent = From0#vertex.label},
     put_vertices([From, To], Tree).
+
+fetch_vertex(#vertex{label = Label}, Tree) ->
+    fetch_vertex(Label, Tree);
+fetch_vertex(Label, Tree) ->
+    maps:get(Label, get_vertices(Tree)).
+
+fetch_vertex_parent(Vertex, Tree) ->
+    get_vertex_parent(fetch_vertex(Vertex, Tree)).
+
+fetch_vertex_children(Vertex, Tree) ->
+    lists:map( fun(Child) -> fetch_vertex(Child, Tree) end
+             , get_vertex_children(Vertex) ).
+
+get_vertex_count(#tree{vertex_count = VertexCount}) -> VertexCount.
+get_vertices(#tree{vertices = Vertices}) -> Vertices.
+get_root(#tree{root = Root}) -> Root.
+
+get_vertex_parent(#vertex{parent = Parent}) -> Parent.
+get_vertex_label(#vertex{label = Label}) -> Label.
+get_vertex_children(#vertex{children = Children}) -> Children.
+get_vertex_is_root(#vertex{is_root = IsRoot}) -> IsRoot.
+get_vertex_metadata(#vertex{metadata = Metadata}) -> Metadata.
 
 %%%=============================================================================
 %%% Internal functions
@@ -87,14 +126,16 @@ new_vertex(Label, Tree, Opts) ->
     Parent = maps:get(parent, Opts, undefined),
     Children = maps:get(children, Opts, []),
     IsRoot = maps:get(is_root, Opts, map_size(get_vertices(Tree)) =:= 0),
-    new_vertex(Parent, Label, Children, IsRoot).
+    Metadata = maps:get(metadata, Opts, undefined),
+    new_vertex(Parent, Label, Children, IsRoot, Metadata).
 
-new_vertex(Parent, Label, Children, IsRoot) ->
+new_vertex(Parent, Label, Children, IsRoot, Metadata) ->
     #vertex{
         parent = Parent,
         label = Label,
         children = Children,
-        is_root = IsRoot
+        is_root = IsRoot,
+        metadata = Metadata
     }.
 
 set_root(#vertex{label = Label}, Tree) ->
@@ -104,12 +145,6 @@ maybe_set_vertex_as_root(#vertex{is_root = true} = Vertex, Tree) ->
     set_root(Vertex, Tree);
 maybe_set_vertex_as_root(#vertex{is_root = false}, Tree) ->
     Tree.
-
-get_vertex(Label, Tree) ->
-    maps:get(Label, get_vertices(Tree)).
-
-get_vertices(#tree{vertices = Vertices}) ->
-    Vertices.
 
 put_vertex(#vertex{label = Label} = Vertex, Tree) ->
     Vertices = get_vertices(Tree),

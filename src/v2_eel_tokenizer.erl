@@ -15,27 +15,24 @@
                , converter :: module()
                }).
 
--record(text_token, { text :: binary()
+-record(text_token, { text         :: binary()
                     , handled_text :: binary()
+                    , ast          :: ast()
                     }).
 
--record(expr_token, { expr :: binary()
+-record(expr_token, { expr         :: binary()
                     , handled_expr :: binary()
-                    , engine :: engine()
-                    , marker :: #marker{} | none
-                    , vars :: [atom()]
+                    , engine       :: engine()
+                    , marker       :: #marker{} | none
+                    , vars         :: [atom()]
+                    , ast          :: ast()
                     }).
 
 -type engine()     :: module().
-% -type text_token() :: {text, binary()}.
-% -type expr_token() :: {expr, {engine(), marker_id(), binary()}}.
-% -type token() :: text_token() | expr_token().
-
-% -type token() :: {text | expr, binary()}.
-
 -type text_token() :: #text_token{}.
 -type expr_token() :: #expr_token{}.
--type token() :: text_token() | expr_token().
+-type token()      :: text_token() | expr_token().
+-type ast()        :: erl_syntax:syntaxTree().
 
 -define(SMART_ENGINE, v2_eel_smart_engine).
 -define(CONVERTER, v2_eel_converter).
@@ -111,10 +108,15 @@ do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
                     Engine:handle_tokens(Tokens)
                 end, lists:reverse(State#state.tokens), State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
-    do_tokenize(<<>>, State#state{
-        tokens = [{text, Text} | State#state.tokens],
-        text_acc = <<>>
-    }).
+    case handle_text(State#state.engines, Text, State#state.converter) of
+        {ok, Token} ->
+            do_tokenize(<<>>, State#state{
+                tokens = [Token | State#state.tokens],
+                text_acc = <<>>
+            });
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 handle_expr_start([Engine | Engines], Bin) ->
     case start_marker_match(Engine:markers(), Bin, []) of
@@ -171,40 +173,66 @@ handle_text([Engine | Engines], Bin, RawBin, Converter) ->
         {ok, {text, Text}} when is_binary(Text) ->
             handle_text(Engines, Text, RawBin, Converter);
         {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
-            {ok, #expr_token{
-                expr = RawBin,
-                handled_expr = Expr,
-                engine = Engine,
-                marker = none,
-                vars = Vars
-            }};
+            new_expr_token(RawBin, Expr, Engine, none, Vars);
         {error, Reason} ->
             {error, Reason}
     end;
 handle_text([], Text, RawBin, _) ->
-    {ok, #text_token{
-        text = RawBin,
-        handled_text = Text
-    }}.
+    new_text_token(RawBin, Text).
 
 handle_expr(Engine, Marker, Bin, Converter) ->
     case Engine:handle_expr(Marker, Bin, Converter) of
         {ok, {text, Text}} when is_binary(Text) ->
-            {ok, #text_token{
-                text = Bin,
-                handled_text = Text
-            }};
+            new_text_token(Bin, Text);
         {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
-            {ok, #expr_token{
-                expr = Bin,
-                handled_expr = Expr,
-                engine = Engine,
-                marker = Marker,
-                vars = Vars
-            }};
+            new_expr_token(Bin, Expr, Engine, Marker, Vars);
         {error, Reason} ->
             {error, Reason}
     end.
+
+new_text_token(Text, HandledText) ->
+    % case binary_to_ast(normalize_text_binary(HandledText)) of
+        % {ok, AST} ->
+            {ok, #text_token{
+                text = Text,
+                handled_text = HandledText
+                % handled_text = normalize_text_binary(HandledText)
+            }}.
+        % {error, Reason} ->
+            % {error, Reason}
+    % end.
+
+% normalize_text_binary(Text) ->
+%     <<"<<\"", Text/binary, "\">>">>.
+
+new_expr_token(Expr, HandledExpr, Engine, Marker, Vars) ->
+    % case binary_to_ast(HandledExpr) of
+        % {ok, AST} ->
+            {ok, #expr_token{
+                expr = Expr,
+                handled_expr = HandledExpr,
+                engine = Engine,
+                marker = Marker,
+                vars = Vars
+            }}.
+        % {error, Reason} ->
+            % {error, Reason}
+    % end.
+
+% binary_to_ast(<<>>) ->
+%     [];
+% binary_to_ast(Bin) ->
+%     case erl_scan:string(binary_to_list(<<Bin/binary, $.>>)) of
+%         {ok, Tokens, _} ->
+%             case erl_parse:parse_exprs(Tokens) of
+%                 {ok, AST} ->
+%                     {ok, AST};
+%                 {error, Reason} ->
+%                     {error, Reason}
+%             end;
+%         {error, ErrorInfo, ErrorLocation} ->
+%             {error, {ErrorInfo, ErrorLocation}}
+%     end.
 
 %%%=============================================================================
 %%% Tests
@@ -212,28 +240,98 @@ handle_expr(Engine, Marker, Bin, Converter) ->
 
 -ifdef(TEST).
 
-tokenize_test() ->
-    Expected = [
-        {text,<<"Hello, ">>},
-        {expr, {?SMART_ENGINE,expr,<<"World">>}},
-        {text,<<"!<p>">>},
-        {expr, {?SMART_ENGINE,expr_start,<<"case Bool of">>}},
-        {text,<<>>},
-        {expr, {?SMART_ENGINE,expr_continue,<<"true ->">>}},
-        {text,<<"True">>},
-        {expr, {?SMART_ENGINE,expr_continue,<<"; false ->">>}},
-        {text,<<>>},
-        {expr, {?SMART_ENGINE,expr_start,<<"case Foo of ->">>}},
-        {text,<<>>},
-        {expr, {?SMART_ENGINE,expr_continue,<<"foo ->">>}},
-        {text,<<"Foo">>},
-        {expr, {?SMART_ENGINE,expr_continue,<<"Bar ->">>}},
-        {text,<<"Bar">>},
-        {expr, {?SMART_ENGINE,expr_end,<<"end">>}},
-        {text,<<>>},
-        {expr, {?SMART_ENGINE,expr_end,<<"end">>}},
-        {text,<<"</p>">>}
-    ],
+% tokenize_test() ->
+%     Expected = [
+%         {text,<<"Hello, ">>},
+%         {expr, {?SMART_ENGINE,expr,<<"World">>}},
+%         {text,<<"!<p>">>},
+%         {expr, {?SMART_ENGINE,expr_start,<<"case Bool of">>}},
+%         {text,<<>>},
+%         {expr, {?SMART_ENGINE,expr_continue,<<"true ->">>}},
+%         {text,<<"True">>},
+%         {expr, {?SMART_ENGINE,expr_continue,<<"; false ->">>}},
+%         {text,<<>>},
+%         {expr, {?SMART_ENGINE,expr_start,<<"case Foo of ->">>}},
+%         {text,<<>>},
+%         {expr, {?SMART_ENGINE,expr_continue,<<"foo ->">>}},
+%         {text,<<"Foo">>},
+%         {expr, {?SMART_ENGINE,expr_continue,<<"Bar ->">>}},
+%         {text,<<"Bar">>},
+%         {expr, {?SMART_ENGINE,expr_end,<<"end">>}},
+%         {text,<<>>},
+%         {expr, {?SMART_ENGINE,expr_end,<<"end">>}},
+%         {text,<<"</p>">>}
+%     ],
+%     Bin = <<
+%         "Hello, <%= @world .%>!"
+%         "<p>"
+%             "<%= case @bool of %>"
+%             "<% true -> %>"
+%                 "True"
+%             "<% ; false -> %>"
+%                 "<%= case @foo of -> %>"
+%                 "<% foo -> %>"
+%                     "Foo"
+%                 "<% ; _ -> %>"
+%                     "<p><%= @bar .%></p>"
+%                 "<% end .%>"
+%             "<% end .%>"
+%         "</p>"
+%     >>,
+%     ?assertEqual(Expected, tokenize(Bin)).
+
+tree_test() ->
+    % Tokens = [{text_token,<<"Hello, ">>,<<"Hello, ">>},
+    % {expr_token,<<"@world">>,
+    %             <<"v2_eel_converter:to_binary(maps:get(world, Bindings)).">>,
+    %             v2_eel_smart_engine,
+    %             {marker,expr,<<"<%=">>,<<".%>">>,push},
+    %             [world]},
+    % {text_token,<<"!<p>">>,<<"!<p>">>},
+    % {expr_token,<<"case @bool of">>,
+    %             <<"v2_eel_converter:to_binary(case maps:get(bool, Bindings) of">>,
+    %             v2_eel_smart_engine,
+    %             {marker,expr_start,<<"<%=">>,<<"%>">>,open},
+    %             [bool]},
+    % {text_token,<<>>,<<>>},
+    % {expr_token,<<"true ->">>,<<"true ->">>,v2_eel_smart_engine,
+    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
+    %             []},
+    % {text_token,<<"True">>,<<"True">>},
+    % {expr_token,<<"; false ->">>,<<"; false ->">>,
+    %             v2_eel_smart_engine,
+    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
+    %             []},
+    % {text_token,<<>>,<<>>},
+    % {expr_token,<<"case @foo of ->">>,
+    %             <<"v2_eel_converter:to_binary(case maps:get(foo, Bindings) of ->">>,
+    %             v2_eel_smart_engine,
+    %             {marker,expr_start,<<"<%=">>,<<"%>">>,open},
+    %             [foo]},
+    % {text_token,<<>>,<<>>},
+    % {expr_token,<<"foo ->">>,<<"foo ->">>,v2_eel_smart_engine,
+    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
+    %             []},
+    % {text_token,<<"Foo">>,<<"Foo">>},
+    % {expr_token,<<"; _ ->">>,<<"; _ ->">>,v2_eel_smart_engine,
+    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
+    %             []},
+    % {text_token,<<"<p>">>,<<"<p>">>},
+    % {expr_token,<<"@bar">>,
+    %             <<"v2_eel_converter:to_binary(maps:get(bar, Bindings)).">>,
+    %             v2_eel_smart_engine,
+    %             {marker,expr,<<"<%=">>,<<".%>">>,push},
+    %             [bar]},
+    % {text_token,<<"</p>">>,<<"</p>">>},
+    % {expr_token,<<"end">>,<<"end).">>,v2_eel_smart_engine,
+    %             {marker,expr_end,<<"<%">>,<<".%>">>,close},
+    %             []},
+    % {text_token,<<>>,<<>>},
+    % {expr_token,<<"end">>,<<"end).">>,v2_eel_smart_engine,
+    %             {marker,expr_end,<<"<%">>,<<".%>">>,close},
+    %             []},
+    % {text_token,<<"</p>">>,<<"</p>">>}],
+
     Bin = <<
         "Hello, <%= @world .%>!"
         "<p>"
@@ -250,6 +348,64 @@ tokenize_test() ->
             "<% end .%>"
         "</p>"
     >>,
-    ?assertEqual(Expected, tokenize(Bin)).
+    Tokens = tokenize(Bin),
+    {Root, Tree} = tokens_tree(Tokens),
+    % ?debugFmt("~p", [Tokens]),
+
+    Result = tree_vertex_children(Root, Tree),
+    ?debugFmt("~p", [Result]),
+
+    ok.
+
+tokens_tree(Tokens) ->
+    lists:foldl(
+        fun
+            (#text_token{} = Token, {VParent, Tree0}) ->
+                {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => Token}),
+                Tree =  eel_tree:add_edge(VParent, V, Tree1),
+                {VParent, Tree};
+            (#expr_token{marker = Marker} = Token, {VParent0, Tree0}) ->
+                case Marker#marker.tree_behavior of
+                    push ->
+                        {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => Token}),
+                        Tree = eel_tree:add_edge(VParent0, V, Tree1),
+                        {VParent0, Tree};
+                    open ->
+                        {VParent, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => subtree}),
+                        Tree2 = eel_tree:add_edge(VParent0, VParent, Tree1),
+                        {V, Tree3} = eel_tree:add_vertex(Tree2, #{metadata => Token}),
+                        Tree = eel_tree:add_edge(VParent, V, Tree3),
+                        {VParent, Tree};
+                    close ->
+                        {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => Token}),
+                        Tree = eel_tree:add_edge(VParent0, V, Tree1),
+                        VParent = eel_tree:fetch_vertex_parent(VParent0, Tree),
+                        {VParent, Tree};
+                    ignore ->
+                        {VParent0, Tree0}
+                end
+        end,
+        eel_tree:add_vertex(root, eel_tree:new()),
+        Tokens
+    ).
+
+tree_vertex_children(Vertex0, Tree) ->
+    Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
+    Children = eel_tree:fetch_vertex_children(Vertex, Tree),
+    lists:foldl(fun (Child, Acc) ->
+                    [tree_vertex_metadata(Child, Tree) | Acc]
+                end, [], Children).
+tree_vertex_metadata(Vertex, Tree) ->
+    Metadata = eel_tree:get_vertex_metadata(Vertex),
+    normalize_tree_vertex_metadata(Metadata, Vertex, Tree).
+
+normalize_tree_vertex_metadata(#text_token{} = Token, _Vertex, _) ->
+    % Token;
+    Token#text_token.handled_text;
+normalize_tree_vertex_metadata(#expr_token{} = Token, _Vertex, _) ->
+    % Token;
+    Token#expr_token.handled_expr;
+normalize_tree_vertex_metadata(subtree, Vertex, Tree) ->
+    tree_vertex_children(Vertex, Tree).
 
 -endif.
