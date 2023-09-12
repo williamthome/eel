@@ -15,10 +15,14 @@
         , get_vertex_children/1
         , get_vertex_is_root/1
         , get_vertex_metadata/1
+        , set_vertex_metadata/2
 
         , fetch_vertex/2
         , fetch_vertex_parent/2
         , fetch_vertex_children/2
+
+        , map_vertices/2
+        , put_vertex/2
         ]).
 
 -export_type([ tree/0
@@ -109,6 +113,20 @@ get_vertex_children(#vertex{children = Children}) -> Children.
 get_vertex_is_root(#vertex{is_root = IsRoot}) -> IsRoot.
 get_vertex_metadata(#vertex{metadata = Metadata}) -> Metadata.
 
+set_vertex_metadata(Metadata, Vertex) ->
+    Vertex#vertex{metadata = Metadata}.
+
+map_vertices(Fun, Tree) when is_function(Fun, 2) ->
+    Tree#tree{vertices = maps:map(Fun, get_vertices(Tree))}.
+
+put_vertex(#vertex{label = Label} = Vertex, Tree) ->
+    Vertices = get_vertices(Tree),
+    Tree#tree{
+        vertices = Vertices#{
+            Label => Vertex
+        }
+    }.
+
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
@@ -145,14 +163,6 @@ maybe_set_vertex_as_root(#vertex{is_root = true} = Vertex, Tree) ->
     set_root(Vertex, Tree);
 maybe_set_vertex_as_root(#vertex{is_root = false}, Tree) ->
     Tree.
-
-put_vertex(#vertex{label = Label} = Vertex, Tree) ->
-    Vertices = get_vertices(Tree),
-    Tree#tree{
-        vertices = Vertices#{
-            Label => Vertex
-        }
-    }.
 
 put_vertices(Vertices, Tree0) ->
     lists:foldl(fun put_vertex/2, Tree0, Vertices).
