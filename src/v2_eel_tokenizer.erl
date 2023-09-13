@@ -465,7 +465,20 @@ normalize_tree_vertex_metadata(subtree, Vertex, Tree) ->
 
 handle_compile(Tree) ->
     Root = eel_tree:get_root(Tree),
-    compile_vertex_children(Root, Tree, {[], []}).
+    % compile_vertex_children(Root, Tree, {[], []}).
+    S =
+        binary_to_list(
+            iolist_to_binary([compile_vertex_children(Root, Tree, []), $.])
+        ),
+
+    {ok, T, _} = erl_scan:string(S),
+    {ok, E} = erl_parse:parse_exprs(T),
+    {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>}}),
+    iolist_to_binary(IOList).
+
+    % iolist_to_binary(IO).
+
+    % [compile_vertex_children(Root, Tree, []), $.].
     % eel_tree:map_vertices(
     %     fun(_Id, Vertex) ->
     %         compile_vertex_children(Vertex, Tree)
@@ -473,28 +486,62 @@ handle_compile(Tree) ->
     %     Tree
     % ).
 
-compile_vertex_children(Vertex0, Tree, {TAcc, EAcc} = Acc) ->
+compile_vertex_children(
+    Vertex0,
+    Tree,
+    % {TAcc, EAcc} = Acc
+    Acc
+) ->
     Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
     case eel_tree:get_vertex_metadata(Vertex) of
         subtree ->
             Children = eel_tree:fetch_vertex_children(Vertex, Tree),
 
-            ?debugFmt("~p~n", [Children]),
+            First = lists:last(Children),
+            FirstMeta = eel_tree:get_vertex_metadata(First),
 
-            {T, Expr} =
-                    lists:foldl(
+            % {T, Expr} =
+            Expr =
+            lists:reverse(
+                    lists:map(
                         fun
-                            (Child, Acc0) ->
-                                compile_vertex_children(Child, Tree, Acc0)
+                            (Child) ->
+
+                                compile_vertex_children(Child, Tree, [])
+                                % compile_vertex_children(Child, Tree, Acc0)
                         end,
-                        Acc,
                         Children
-                    );
+                    )),
+
+            case FirstMeta of
+                #expr_token{marker = #marker{id = expr_start}} ->
+                    Expr;
+                _ ->
+                    [ $[, lists:join(<<$,>>, Expr), $] ]
+            end;
+
+                    % ?debugFmt("[EXPR] ~p~n", [Expr]),
+                    % Expr;
+
+            % First = hd(Children),
+            % FirstMeta = eel_tree:get_vertex_metadata(First),
+
+            % case FirstMeta of
+            %     #expr_token{marker = #marker{id = expr_start}} ->
+            %         {T, Expr};
+            %     _ ->
+            %         {T, lists:join(<<",">>, Expr)}
+            % end;
+
+
+
             % {lists:reverse(T), lists:reverse(Expr)};
             % lists:flatten(io_lib:format("~s", [Expr]));
             % lists:join(<<",">>, Expr);
         #text_token{} = Token ->
-            {[Token | TAcc], [<<"<<\"", (Token#text_token.handled_text)/binary, "\">>">> | EAcc]};
+            <<"<<\"", (Token#text_token.handled_text)/binary, "\"/utf8>>">>;
+            % {[Token | TAcc], [<<"<<\"", (Token#text_token.handled_text)/binary, "\">>">> | EAcc]};
+
         % #expr_token{marker = #marker{id = expr_start}} = Token ->
         %     <<(Token#expr_token.handled_expr)/binary, " [">>;
         % #expr_token{marker = #marker{id = expr_continue}} = Token ->
@@ -503,7 +550,8 @@ compile_vertex_children(Vertex0, Tree, {TAcc, EAcc} = Acc) ->
         %     <<"] ", (Token#expr_token.handled_expr)/binary>>;
         #expr_token{} = Token ->
             % ?debugFmt("~p~n", [{TAcc, Token#expr_token.handled_expr}]),
-            {[Token | TAcc], [Token#expr_token.handled_expr | EAcc]}
+            Token#expr_token.handled_expr
+            % {[Token | TAcc], [Token#expr_token.handled_expr | EAcc]}
     end.
 
 % map_child() ->
@@ -583,5 +631,5 @@ a() ->
     S = "[<<\"Hello, \">>,maps:get(world, Bindings),<<\"!<p>\">>,case maps:get(bool, Bindings) of true -> [<<\"True\">>] ; false -> [<<\"False\">>] end].",
     {ok, T, _} = erl_scan:string(S),
     {ok, E} = erl_parse:parse_exprs(T),
-    {value, Bin, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => true}}),
-    Bin.
+    {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => true}}),
+    IOList.
