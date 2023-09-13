@@ -176,8 +176,8 @@ handle_text([Engine | Engines], Bin, RawBin, Converter) ->
     case Engine:handle_text(Bin, Converter) of
         {ok, {text, Text}} when is_binary(Text) ->
             handle_text(Engines, Text, RawBin, Converter);
-        {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
-            new_expr_token(RawBin, Expr, Engine, none, Vars);
+        {ok, {expr, {Expr, #marker{} = Marker, Vars}}} when is_binary(Expr), is_list(Vars) ->
+            new_expr_token(RawBin, Expr, Engine, Marker, Vars);
         ignore ->
             ignore;
         {error, Reason} ->
@@ -293,57 +293,6 @@ binary_to_ast(Bin) ->
 %     ?assertEqual(Expected, tokenize(Bin)).
 
 tree_test() ->
-    % Tokens = [{text_token,<<"Hello, ">>,<<"Hello, ">>},
-    % {expr_token,<<"@world">>,
-    %             <<"v2_eel_converter:to_binary(maps:get(world, Bindings)).">>,
-    %             v2_eel_smart_engine,
-    %             {marker,expr,<<"<%=">>,<<".%>">>,push},
-    %             [world]},
-    % {text_token,<<"!<p>">>,<<"!<p>">>},
-    % {expr_token,<<"case @bool of">>,
-    %             <<"v2_eel_converter:to_binary(case maps:get(bool, Bindings) of">>,
-    %             v2_eel_smart_engine,
-    %             {marker,expr_start,<<"<%=">>,<<"%>">>,open},
-    %             [bool]},
-    % {text_token,<<>>,<<>>},
-    % {expr_token,<<"true ->">>,<<"true ->">>,v2_eel_smart_engine,
-    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
-    %             []},
-    % {text_token,<<"True">>,<<"True">>},
-    % {expr_token,<<"; false ->">>,<<"; false ->">>,
-    %             v2_eel_smart_engine,
-    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
-    %             []},
-    % {text_token,<<>>,<<>>},
-    % {expr_token,<<"case @foo of ->">>,
-    %             <<"v2_eel_converter:to_binary(case maps:get(foo, Bindings) of ->">>,
-    %             v2_eel_smart_engine,
-    %             {marker,expr_start,<<"<%=">>,<<"%>">>,open},
-    %             [foo]},
-    % {text_token,<<>>,<<>>},
-    % {expr_token,<<"foo ->">>,<<"foo ->">>,v2_eel_smart_engine,
-    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
-    %             []},
-    % {text_token,<<"Foo">>,<<"Foo">>},
-    % {expr_token,<<"; _ ->">>,<<"; _ ->">>,v2_eel_smart_engine,
-    %             {marker,expr_continue,<<"<%">>,<<"%>">>,push},
-    %             []},
-    % {text_token,<<"<p>">>,<<"<p>">>},
-    % {expr_token,<<"@bar">>,
-    %             <<"v2_eel_converter:to_binary(maps:get(bar, Bindings)).">>,
-    %             v2_eel_smart_engine,
-    %             {marker,expr,<<"<%=">>,<<".%>">>,push},
-    %             [bar]},
-    % {text_token,<<"</p>">>,<<"</p>">>},
-    % {expr_token,<<"end">>,<<"end).">>,v2_eel_smart_engine,
-    %             {marker,expr_end,<<"<%">>,<<".%>">>,close},
-    %             []},
-    % {text_token,<<>>,<<>>},
-    % {expr_token,<<"end">>,<<"end).">>,v2_eel_smart_engine,
-    %             {marker,expr_end,<<"<%">>,<<".%>">>,close},
-    %             []},
-    % {text_token,<<"</p>">>,<<"</p>">>}],
-
     Bin = <<
         "Hello, <%= @world .%>!"
         "<p>"
@@ -361,8 +310,6 @@ tree_test() ->
         "</p>"
     >>,
     Tokens = tokenize(Bin),
-    % ?debugFmt("~p", [Tokens]),
-
     {Root, Tree} = tokens_tree(Tokens),
     % ?debugFmt("~n~p", [Tree]),
 
@@ -372,23 +319,33 @@ tree_test() ->
     % Result = v2_eel_smart_engine:handle_tree(Normalized),
     % ?debugFmt("~n~p", [Result]),
 
-    ?debugFmt("~n~p", [handle_compile(Tree)]),
+    CTree = handle_compile(Tree),
+    % ?debugFmt("~n~p", [CTree]),
+
+    Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>},
+    RenderState = handle_render(Root, CTree, Bindings),
+    ?debugFmt("~n~p", [iolist_to_binary(RenderState)]),
 
     ok.
 
 -endif.
 
 tokens_tree(Tokens) ->
-    {VRoot, Tree} = eel_tree:add_vertex(eel_tree:new(), #{metadata => subtree}),
+    Tree0 = eel_tree:new(),
+    {VRoot, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => #master_vertex{}}),
+    MVertices = [eel_tree:get_vertex_label(VRoot)],
+    State = #tree_state{master_vertices = MVertices},
+    Tree = eel_tree:set_metadata(State, Tree1),
     tokens_tree(Tokens, VRoot, Tree).
 
 tokens_tree(Tokens, VParent, Tree) ->
     lists:foldl(
         fun
             (#text_token{} = Token, {VParent0, Tree0}) ->
-                {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => Token}),
-                Tree2 = eel_tree:add_edge(VParent0, V, Tree1),
-                {VParent0, Tree2};
+                {_SVertex, Tree1} = add_slave_vertex(Token, VParent0, Tree0),
+                % {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => #slave_vertex{token = Token}}),
+                % Tree2 = eel_tree:add_edge(VParent0, V, Tree1),
+                {VParent0, Tree1};
             (#expr_token{marker = Marker} = Token, {VParent0, Tree0}) ->
                 resolve_marker_tree_behaviors(
                     Marker#marker.tree_behavior,
@@ -413,13 +370,19 @@ resolve_marker_tree_behaviors(Behaviors, Token, VParent0, Tree0) ->
     ).
 
 resolve_tree_behavior(push_token, Token, VParent0, Tree0) ->
-    {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => Token}),
-    Tree = eel_tree:add_edge(VParent0, V, Tree1),
+    {_SVertex, Tree} = add_slave_vertex(Token, VParent0, Tree0),
+
+    % {V, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => #slave_vertex{token = Token}}),
+    % Tree = eel_tree:add_edge(VParent0, V, Tree1),
+
     {VParent0, Tree};
 resolve_tree_behavior(add_vertex, _Token, VParent0, Tree0) ->
-    {VParent, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => subtree}),
-    Tree = eel_tree:add_edge(VParent0, VParent, Tree1),
-    {VParent, Tree};
+    {MVertex, Tree} = add_master_vertex(VParent0, Tree0),
+
+    % {VParent, Tree1} = eel_tree:add_vertex(Tree0, #{metadata => #master_vertex{}}),
+    % Tree = eel_tree:add_edge(VParent0, VParent, Tree1),
+
+    {MVertex, Tree};
 % resolve_tree_behavior(push_token, Token, VParent0, Tree0) ->
 %     resolve_tree_behavior({push_token, #{metadata => Token}}, Token, VParent0, Tree0);
 % resolve_tree_behavior({push_token, Opts}, _Token, VParent0, Tree0) ->
@@ -444,192 +407,119 @@ resolve_tree_behavior(ignore_token, _Token, VParent, Tree) ->
 %     Tree = eel_tree:add_edge(VParent, V, Tree1),
 %     {VParent, Tree}.
 
-tree_vertex_children(Vertex0, Tree) ->
-    Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
-    Children = eel_tree:fetch_vertex_children(Vertex, Tree),
-    lists:foldl(fun (Child, Acc) ->
-                    [tree_vertex_metadata(Child, Tree) | Acc]
-                end, [], Children).
-tree_vertex_metadata(Vertex, Tree) ->
-    Metadata = eel_tree:get_vertex_metadata(Vertex),
-    normalize_tree_vertex_metadata(Metadata, Vertex, Tree).
+add_slave_vertex(Token, MVertex, Tree0) ->
+    Opts = #{metadata => #slave_vertex{token = Token}},
+    {SVertex, Tree1} = eel_tree:add_vertex(Tree0, Opts),
+    Tree = eel_tree:add_edge(MVertex, SVertex, Tree1),
+    {SVertex, Tree}.
 
-normalize_tree_vertex_metadata(#text_token{} = Token, _Vertex, _) ->
-    Token;
-    % Token#text_token.handled_text;
-normalize_tree_vertex_metadata(#expr_token{} = Token, _Vertex, _) ->
-    Token;
-    % Token#expr_token.handled_expr;
-normalize_tree_vertex_metadata(subtree, Vertex, Tree) ->
-    tree_vertex_children(Vertex, Tree).
+add_master_vertex(PVertex, Tree0) ->
+    Opts = #{metadata => #master_vertex{}},
+    {MVertex, Tree1} = eel_tree:add_vertex(Tree0, Opts),
+    Tree2 = eel_tree:add_edge(PVertex, MVertex, Tree1),
+    State = eel_tree:get_metadata(Tree2),
+    MVertices = [eel_tree:get_vertex_label(MVertex) | State#tree_state.master_vertices],
+    Tree = eel_tree:set_metadata(
+        State#tree_state{master_vertices = MVertices},
+        Tree2
+    ),
+    {MVertex, Tree}.
+
+% tree_vertex_children(Vertex0, Tree) ->
+%     Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
+%     Children = eel_tree:fetch_vertex_children(Vertex, Tree),
+%     lists:foldl(fun (Child, Acc) ->
+%                     [tree_vertex_metadata(Child, Tree) | Acc]
+%                 end, [], Children).
+% tree_vertex_metadata(Vertex, Tree) ->
+%     Metadata = eel_tree:get_vertex_metadata(Vertex),
+%     normalize_tree_vertex_metadata(Metadata, Vertex, Tree).
+
+% normalize_tree_vertex_metadata(#text_token{} = Token, _Vertex, _) ->
+%     Token;
+%     % Token#text_token.handled_text;
+% normalize_tree_vertex_metadata(#expr_token{} = Token, _Vertex, _) ->
+%     Token;
+%     % Token#expr_token.handled_expr;
+% normalize_tree_vertex_metadata(subtree, Vertex, Tree) ->
+%     tree_vertex_children(Vertex, Tree).
 
 handle_compile(Tree) ->
-    Root = eel_tree:get_root(Tree),
-    % compile_vertex_children(Root, Tree, {[], []}).
-    S =
-        binary_to_list(
-            iolist_to_binary([compile_vertex_children(Root, Tree, []), $.])
-        ),
+    % Subtrees: 0,4,6,9,10,12,15
+    % IMPORTANT! We can always compile them.
+    % ?debugFmt("~p~n", [Tree]),
+    % Root = eel_tree:get_root(Tree),
 
-    {ok, T, _} = erl_scan:string(S),
-    {ok, E} = erl_parse:parse_exprs(T),
-    {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>}}),
-    iolist_to_binary(IOList).
 
-    % iolist_to_binary(IO).
+    State = eel_tree:get_metadata(Tree),
+    MVertices = State#tree_state.master_vertices,
+    lists:foldl(
+        fun(Label, Acc) ->
+            Vertex = eel_tree:fetch_vertex(Label, Acc),
+            S =
+                binary_to_list(
+                    iolist_to_binary([do_compile_vertex_children(Vertex, Acc), $.])
+                ),
+            {ok, T, _} = erl_scan:string(S),
+            {ok, E} = erl_parse:parse_exprs(T),
 
-    % [compile_vertex_children(Root, Tree, []), $.].
-    % eel_tree:map_vertices(
-    %     fun(_Id, Vertex) ->
-    %         compile_vertex_children(Vertex, Tree)
-    %     end,
-    %     Tree
-    % ).
+            M = eel_tree:get_vertex_metadata(Vertex),
+            Metadata = M#master_vertex{
+                ast = E
+            },
+            V = eel_tree:set_vertex_metadata(Metadata, Vertex),
+            eel_tree:put_vertex(V, Acc)
+        end,
+        Tree,
+        MVertices
+    ).
 
-compile_vertex_children(
-    Vertex0,
-    Tree,
-    % {TAcc, EAcc} = Acc
-    Acc
-) ->
+    % Root = eel_tree:fetch_vertex(12, Tree),
+    % S =
+    %     binary_to_list(
+    %         iolist_to_binary([do_compile_vertex_children(Root, Tree), $.])
+    %     ),
+
+    % {ok, T, _} = erl_scan:string(S),
+    % {ok, E} = erl_parse:parse_exprs(T),
+    % {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>}}),
+    % iolist_to_binary(IOList).
+
+do_compile_vertex_children(Vertex0, Tree) ->
     Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
     case eel_tree:get_vertex_metadata(Vertex) of
-        subtree ->
+        #master_vertex{} ->
             Children = eel_tree:fetch_vertex_children(Vertex, Tree),
-
             First = lists:last(Children),
             FirstMeta = eel_tree:get_vertex_metadata(First),
-
-            % {T, Expr} =
             Expr =
-            lists:reverse(
-                    lists:map(
-                        fun
-                            (Child) ->
-
-                                compile_vertex_children(Child, Tree, [])
-                                % compile_vertex_children(Child, Tree, Acc0)
-                        end,
-                        Children
-                    )),
-
+                lists:reverse(lists:map(
+                    fun(Child) ->
+                        do_compile_vertex_children(Child, Tree)
+                    end,
+                    Children
+                )),
             case FirstMeta of
-                #expr_token{marker = #marker{id = expr_start}} ->
+                #slave_vertex{token =
+                    #expr_token{marker = #marker{id = expr_start}}
+                } ->
                     Expr;
                 _ ->
                     [ $[, lists:join(<<$,>>, Expr), $] ]
             end;
-
-                    % ?debugFmt("[EXPR] ~p~n", [Expr]),
-                    % Expr;
-
-            % First = hd(Children),
-            % FirstMeta = eel_tree:get_vertex_metadata(First),
-
-            % case FirstMeta of
-            %     #expr_token{marker = #marker{id = expr_start}} ->
-            %         {T, Expr};
-            %     _ ->
-            %         {T, lists:join(<<",">>, Expr)}
-            % end;
-
-
-
-            % {lists:reverse(T), lists:reverse(Expr)};
-            % lists:flatten(io_lib:format("~s", [Expr]));
-            % lists:join(<<",">>, Expr);
-        #text_token{} = Token ->
+        #slave_vertex{token = #text_token{} = Token} ->
             <<"<<\"", (Token#text_token.handled_text)/binary, "\"/utf8>>">>;
-            % {[Token | TAcc], [<<"<<\"", (Token#text_token.handled_text)/binary, "\">>">> | EAcc]};
-
-        % #expr_token{marker = #marker{id = expr_start}} = Token ->
-        %     <<(Token#expr_token.handled_expr)/binary, " [">>;
-        % #expr_token{marker = #marker{id = expr_continue}} = Token ->
-        %     <<"] ", (Token#expr_token.handled_expr)/binary, " [">>;
-        % #expr_token{marker = #marker{id = expr_end}} = Token ->
-        %     <<"] ", (Token#expr_token.handled_expr)/binary>>;
-        #expr_token{} = Token ->
-            % ?debugFmt("~p~n", [{TAcc, Token#expr_token.handled_expr}]),
+        #slave_vertex{token = #expr_token{} = Token} ->
             Token#expr_token.handled_expr
-            % {[Token | TAcc], [Token#expr_token.handled_expr | EAcc]}
     end.
 
-% map_child() ->
 
+handle_render(Vertex, Tree) ->
+    handle_render(Vertex, Tree, #{}).
 
-    % lists:foldl(fun (Child, Tree0) ->
-    %     case eel_tree:get_vertex_metadata(Child) of
-    %         subtree ->
-    %             compile_vertex_children(Child, Tree0);
-    %         #expr_token{} = Token0 ->
-    %             AST = binary_to_ast(Token0#expr_token.handled_expr),
-    %             Token = Token0#expr_token{ast = AST},
-    %             NVertex = eel_tree:set_vertex_metadata(Token, Vertex),
-    %             eel_tree:put_vertex(NVertex, Tree0);
-    %         _ ->
-    %             Tree0
-    %     end
-    %     % Compiled = compile_vertex(Child, Tree0),
-    %     % eel_tree:put_vertex(Compiled, Tree0)
-    % end, Tree, Children).
-
-% compile_vertex(Vertex, Tree) ->
-%     Metadata = eel_tree:get_vertex_metadata(Vertex),
-%     compile_tree_vertex_metadata(Metadata, Vertex, Tree).
-
-% % compile_tree_vertex_metadata(#text_token{} = Token, Vertex) ->
-% %     eel_tree:set_vertex_metadata(Token, Vertex);
-% compile_tree_vertex_metadata(#text_token{}, Vertex, _) ->
-%     Vertex;
-% compile_tree_vertex_metadata(#expr_token{} = Token0, Vertex, _) ->
-%     AST = binary_to_ast(Token0#expr_token.handled_expr),
-%     Token = Token0#expr_token{ast = AST},
-%     eel_tree:set_vertex_metadata(Token, Vertex);
-% compile_tree_vertex_metadata(subtree, Vertex, Tree) ->
-%     compile_vertex_children(Vertex, Tree).
-
-a() ->
-    _1 = [{vertex,0,21,[],false,{text_token,<<"</p>">>,<<"</p>">>,undefined}},
-
-    {vertex,0,4,[20,9,8,6,5],false,subtree},  % <-
-
-    {vertex,0,3,[],false,{text_token,<<"!<p>">>,<<"!<p>">>,undefined}},
-    {vertex,0,2,[],false,
-            {expr_token,<<"@world">>,<<"maps:get(world, Bindings)">>,
-                        v2_eel_smart_engine,
-                        {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
-                        [world],
-                        undefined}},
-    {vertex,0,1,[],false,{text_token,<<"Hello, ">>,<<"Hello, ">>,undefined}}],
-
-    _2 =  [{vertex,4,20,[],false,
-    {expr_token,<<"end">>,<<"end">>,v2_eel_smart_engine,
-                {marker,expr_end,<<"<%">>,<<".%>">>,
-                        [fetch_vertex_parent,push_token,
-                         fetch_vertex_parent]},
-                [],undefined}},
-{vertex,4,9,"\n",false,subtree},
-{vertex,4,8,[],false,
-    {expr_token,<<"; false ->">>,<<"; false ->">>,v2_eel_smart_engine,
-                {marker,expr_continue,<<"<%">>,<<"%>">>,
-                        [fetch_vertex_parent,push_token,add_vertex]},
-                [],undefined}},
-{vertex,4,6,[7],false,subtree},
-{vertex,4,5,[],false,
-    {expr_token,<<"case @bool of true ->">>,
-                <<"case maps:get(bool, Bindings) of true ->">>,
-                v2_eel_smart_engine,
-                {marker,expr_start,<<"<%=">>,<<"%>">>,
-                        [add_vertex,push_token,add_vertex]},
-                [bool],
-                undefined}}],
-
-    % TODO: Remove commas
-    % S = "[<<\"Hello, \">>,maps:get(world, Bindings),<<\"!<p>\">>,[case maps:get(bool, Bindings) of true ->,[<<\"True\">>],; false ->,[<<\"False\">>],end]].",
-    % TODO: Remover colchetes
-    % S = "[<<\"Hello, \">>,maps:get(world, Bindings),<<\"!<p>\">>,[case maps:get(bool, Bindings) of true -> [<<\"True\">>] ; false -> [<<\"False\">>] end]].",
-    S = "[<<\"Hello, \">>,maps:get(world, Bindings),<<\"!<p>\">>,case maps:get(bool, Bindings) of true -> [<<\"True\">>] ; false -> [<<\"False\">>] end].",
-    {ok, T, _} = erl_scan:string(S),
-    {ok, E} = erl_parse:parse_exprs(T),
-    {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => true}}),
+handle_render(Vertex0, Tree, Bindings) ->
+    Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
+    Metadata = eel_tree:get_vertex_metadata(Vertex),
+    AST = Metadata#master_vertex.ast,
+    {value, IOList, _} = erl_eval:exprs(AST, #{'Bindings' => Bindings}),
     IOList.

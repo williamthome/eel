@@ -7,16 +7,20 @@
 
 -record(text_token, { text         :: binary()
                     , handled_text :: binary()
-                    , ast          :: ast()
                     }).
 
 -record(expr_token, { expr         :: binary()
                     , handled_expr :: binary()
                     , engine       :: engine()
-                    , marker       :: #marker{} | none
+                    , marker       :: #marker{}
                     , vars         :: [atom()]
-                    , ast          :: ast()
                     }).
+
+-record(master_vertex, {ast :: ast()}).
+
+-record(slave_vertex, {token :: token()}).
+
+-record(tree_state, {master_vertices :: [#master_vertex{}]}).
 
 -type marker_id()            :: term().
 -type marker_symbol()        :: binary().

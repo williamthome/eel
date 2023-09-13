@@ -1,6 +1,8 @@
+% @see https://www.geeksforgeeks.org/introduction-to-tree-data-structure-and-algorithm-tutorials/
 -module(eel_tree).
 
 -export([ new/0
+        , new/1
         , add_vertex/1
         , add_vertex/2
         , add_vertex/3
@@ -9,6 +11,8 @@
         , get_vertex_count/1
         , get_vertices/1
         , get_root/1
+        , get_metadata/1
+        , set_metadata/2
 
         , get_vertex_parent/1
         , get_vertex_label/1
@@ -34,31 +38,40 @@
 -endif.
 
 -record(tree, { vertex_count :: non_neg_integer()
-              , vertices     :: #{label := [vertex()]}
+              , vertices     :: #{label() := vertices()}
               , root         :: label()
+              , metadata     :: metadata()
               }).
 
 -record(vertex, { parent   :: label()
                 , label    :: label()
-                , children :: [vertex()]
+                , children :: vertices()
                 , is_root  :: boolean()
-                , metadata :: term()
+                , is_leaf  :: boolean()
+                , metadata :: metadata()
                 }).
 
 -opaque tree()   :: #tree{}.
 -opaque vertex() :: #vertex{}.
 
--type label() :: term().
+% TODO: Maybe rename to key.
+-type label()    :: term().
+-type vertices() :: [vertex()].
+-type metadata() :: term().
 
 %%%=============================================================================
 %%% API functions
 %%%=============================================================================
 
 new() ->
+    new(#{}).
+
+new(Opts) ->
     #tree{
         vertex_count = 0,
         vertices = #{},
-        root = undefined
+        root = undefined,
+        metadata = maps:get(metadata, Opts, undefined)
     }.
 
 add_vertex(Tree) ->
@@ -102,6 +115,9 @@ fetch_vertex_parent(Vertex, Tree) ->
 fetch_vertex_children(Vertex, Tree) ->
     lists:map( fun(Child) -> fetch_vertex(Child, Tree) end
              , get_vertex_children(Vertex) ).
+
+get_metadata(#tree{metadata = Metadata}) -> Metadata.
+set_metadata(Metadata, Tree) -> Tree#tree{metadata = Metadata}.
 
 get_vertex_count(#tree{vertex_count = VertexCount}) -> VertexCount.
 get_vertices(#tree{vertices = Vertices}) -> Vertices.
