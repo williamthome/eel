@@ -320,7 +320,7 @@ tree_test() ->
     % ?debugFmt("~n~p", [Result]),
 
     CTree = handle_compile(Tree),
-    % ?debugFmt("~n~p", [CTree]),
+    ?debugFmt("~n~p", [CTree]),
 
     Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>},
     RenderState = handle_render(Root, CTree, Bindings),
@@ -485,6 +485,7 @@ handle_compile(Tree) ->
     % {value, IOList, _} = erl_eval:exprs(E, #{'Bindings' => #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>}}),
     % iolist_to_binary(IOList).
 
+% TODO: Engine handler
 do_compile_vertex_children(Vertex0, Tree) ->
     Vertex = eel_tree:fetch_vertex(Vertex0, Tree),
     case eel_tree:get_vertex_metadata(Vertex) of
