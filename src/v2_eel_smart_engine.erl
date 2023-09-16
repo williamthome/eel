@@ -45,7 +45,7 @@ markers() ->
         #marker{
             id = comment,
             start = <<"<%%">>,
-            final = <<"%%>">>,
+            final = <<".%>">>,
             tree_behavior = [ignore_token]
         }
     ].

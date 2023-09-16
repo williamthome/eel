@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        function renderVertex(label, tree) {
+            const [statics, dynamics] = tree[label]
+
+            return function render() {
+                console.log(label)
+                return +label
+            }
+        }
+
+        const tree0 = {
+            0: {
+                id: "app",
+                range: [0, 3],
+                parent: null,
+            },
+            4: {
+
+            }
+        }
+
+        function render(vertices) {
+
+        }
+
+
+        // const renderState = {
+        //     0: "World",
+        //     1: "baz",
+        // }
+
+
+        const tree = {
+            0: [
+                ["</p>","!<p>","Hello, "],
+                [
+                    4,
+                    "World"
+                ]
+            ],
+            4: [
+                ["</p>", "<p>"],
+                ["baz"]
+            ]
+        }
+        console.log(tree)
+    </script>
+</body>
+</html>

@@ -166,25 +166,36 @@ render_test() ->
     Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>},
     RootLabel = 0, % NOTE: We can render any vertex
     Render = render_vertex(RootLabel, Tree, Bindings),
-    ?debugFmt("~p", [iolist_to_binary(Render)]),
+    % Render = render_vertices([12,15], Tree, Bindings),
+    ?debugFmt("~p", [Render]),
 
     ok.
 
 -endif.
 
+render_vertices(Vertices, Tree, Bindings) ->
+    lists:foldl(
+      fun(VertexLabel, Acc) ->
+        Acc#{VertexLabel => render_vertex(VertexLabel, Tree, Bindings)}
+      end,
+      #{},
+      Vertices
+    ).
+
 render_vertex(VertexLabel, Tree, Bindings) ->
     Vertices = maps:get(vertices, Tree),
     Vertex = maps:get(VertexLabel, Vertices),
-    do_render_vertex(Vertex, Tree, Bindings).
+    do_render_vertex(VertexLabel, Vertex, Tree, Bindings).
 
-do_render_vertex(Vertex, Tree, Bindings) ->
+do_render_vertex(VertexLabel, Vertex, Tree, Bindings) ->
     Statics = maps:get(statics, Vertex),
     Dynamics = maps:get(dynamics, Vertex),
-    render(Statics, Dynamics, Tree, Bindings).
+    render(VertexLabel, Statics, Dynamics, Tree, Bindings).
 
-render(Statics, Dynamics0, Tree, Bindings) ->
+render(VertexLabel, Statics, Dynamics0, Tree, Bindings) ->
     Dynamics = render_dynamics(Dynamics0, Tree, Bindings),
-    zip(Statics, Dynamics).
+    [Statics, Dynamics].
+    % zip(Statics, Dynamics).
 
 zip(Statics, Dynamics) ->
     do_zip(Statics, Dynamics, []).

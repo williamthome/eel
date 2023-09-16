@@ -232,7 +232,7 @@ new_expr_token(Expr, HandledExpr, Engine, Marker, Vars) ->
 % binary_to_ast(<<>>) ->
 %     [];
 binary_to_ast(Bin) ->
-    case erl_scan:string(binary_to_list(<<Bin/binary, $.>>)) of
+    case erl_scan:string(binary_to_list(iolist_to_binary([Bin, $.]))) of
         {ok, Tokens, _} ->
             case erl_parse:parse_exprs(Tokens) of
                 {ok, AST} ->
@@ -308,6 +308,12 @@ tree_test() ->
                 "<% end .%>"
             "<% end .%>"
         "</p>"
+        "<ul>"
+            "<%= lists:map(fun(Item) -> %>"
+                "<%% TODO: Items to binary .%>"
+                "<li><%= @prefix .%><%= integer_to_binary(Item) .%></li>"
+            "<% end, [1,2,3]) .%>"
+        "</ul>"
     >>,
     Tokens = tokenize(Bin),
     {Root, Tree} = tokens_tree(Tokens),
@@ -319,16 +325,112 @@ tree_test() ->
     % Result = v2_eel_smart_engine:handle_tree(Normalized),
     % ?debugFmt("~n~p", [Result]),
 
-    CTree = #{vertices => handle_compile(Tree)},
-    ?debugFmt("~n~p", [CTree]),
+    % CTree = #{vertices => handle_compile(Tree)},
+    % FIXME: Vertex 17
+    {P, V, D, _} = fold_compile(Root, Tree),
+    % ?debugFmt("~n~p", [CTree]),
 
-    % Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>},
-    % RenderState = handle_render(Root, CTree, Bindings),
-    % ?debugFmt("~n~p", [iolist_to_binary(RenderState)]),
+    Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>, prefix => <<"Item - ">>},
+%     % RenderState = handle_render(Root, CTree, Bindings),
+%     % ?debugFmt("~n~p", [iolist_to_binary(RenderState)]),
+
+%     ok.
+
+% parts_test() ->
+    State = #{
+        parts => P,
+        vars => V,
+        dynamics => D
+        % parts => #{
+        %     0 => <<"Hello ">>,
+        %     1 => merl:quote("maps:get(world, Bindings)"),
+        %     2 => <<"!<p><p>">>,
+        %     3 => merl:quote("maps:get(from, Bindings)"),
+        %     4 => <<"</p></p>">>
+        % },
+        % vars => [
+        %     {world, 1},
+        %     {from, 3}
+        % ]
+    },
+
+    % ?debugFmt("~p", [State]),
+
+    % Bindings = #{world => <<"World">>, from => <<"Erlang">>},
+    % Indexes = get_vars_indexes(maps:get(vars, State), Bindings),
+
+    % NOTE: Below we render all dynamics
+    Indexes = maps:get(dynamics, State),
+    Parts = maps:get(parts, State),
+    Changes = eval_parts(Indexes, Parts, #{'Bindings' => Bindings}),
+    ?debugFmt("[Changes] ~p", [Changes]),
+    Parts2 = maps:merge(Parts, Changes),
+    % FIXME: Flatten list
+    ?debugFmt("[Send this to client] ~p", [Parts2]),
+
+    % NOTE: Below we render just changes
+    Bindings2 = #{world => <<"William">>},
+    Indexes2 = get_vars_indexes(maps:get(vars, State), Bindings2),
+    Changes2 = eval_parts(Indexes2, Parts, #{'Bindings' => Bindings2}),
+    ?debugFmt("[Changes2] ~p", [Changes2]),
+    Parts3 = maps:merge(Parts2, Changes2),
+
+    Bindings3 = #{prefix => <<"N - ">>},
+    Indexes3 = get_vars_indexes(maps:get(vars, State), Bindings3),
+    Changes3 = eval_parts(Indexes3, Parts, #{'Bindings' => Bindings3}),
+    ?debugFmt("[Changes3] ~p", [Changes3]),
+    Parts4 = maps:merge(Parts3, Changes3),
+
+    ?debugFmt("[RESULT] ~p", [maps:values(Parts4)]),
 
     ok.
 
 -endif.
+
+% FIXME
+get_vars_indexes(Vars0, Bindings) ->
+    Vars = maps:keys(Bindings),
+    sets:to_list(
+        lists:foldl(fun(Var, Set0) ->
+            Indexes = proplists:get_all_values(Var, Vars0),
+
+            % ?debugFmt("[I] ~p~n", [{Var, Indexes}]),
+
+            lists:foldl(fun(Index, Set) ->
+                sets:add_element(Index, Set)
+            end, Set0, Indexes)
+        end, sets:new([{version, 2}]), Vars)
+    ).
+    % Keys = maps:keys(Bindings),
+    % Vars = maps:with(Keys, Vars0),
+    % sets:to_list(
+    %     maps:fold(fun(_, Indexes, Set0) ->
+    %         lists:foldl(fun(Index, Set) ->
+    %             sets:add_element(Index, Set)
+    %         end, Set0, Indexes)
+    %     end, sets:new([{version, 2}]), Vars)
+    % ).
+
+eval_parts(Indexes, Parts, Bindings) ->
+    lists:foldl(fun(Index, Acc) ->
+        Acc#{Index => eval_part(Index, Parts, Bindings)}
+    end, #{}, Indexes).
+
+eval_part(Index, Parts, Bindings) ->
+    Expr = maps:get(Index, Parts),
+    case erl_eval:exprs(Expr, Bindings) of
+        {value, IOData, _} when is_binary(IOData) ->
+            IOData;
+        {value, [IOData], _} ->
+            IOData;
+        {value, IOData, _} ->
+            % NOTE: Here we have a list that can be optimized to the changes return.
+            %       We need to know the static x dynamics of the expression.
+            % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOData}]),
+            IOData
+    end.
+
+% -------------------------------------------------
 
 tokens_tree(Tokens) ->
     Tree0 = eel_tree:new(),
@@ -546,82 +648,113 @@ handle_compile(Tree) ->
 
 fold_compile(VertexLabel, Tree) ->
     Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
+    State = {#{}, [], [], 0},
+    do_fold_compile(Vertex, false, State, Tree).
+
+do_fold_compile(Vertex, Rec, State, Tree) ->
     Children = lists:reverse(eel_tree:fetch_vertex_children(Vertex, Tree)),
-    State = {#{statics => [], dynamics => []}, 0},
-    do_fold_compile(Children, State).
+    do_fold_compile_0(Children, Rec, State, Tree).
 
-do_fold_compile([Vertex | T] = Vertices, State) ->
+do_fold_compile_0([Vertex | T] = Vertices, Rec, State, Tree) ->
     Metadata = eel_tree:get_vertex_metadata(Vertex),
-    case do_fold_compile_1(Metadata, State, Vertices) of
-        {halt, Ret} ->
-            Ret;
+    case do_fold_compile_1(Metadata, Rec, State, Vertices, Tree) of
+        {halt, State1} ->
+            State1;
         State1 ->
-            do_fold_compile(T, State1)
-    end;
-do_fold_compile([], {Acc, _}) ->
-    Acc.
+            do_fold_compile_0(T, Rec, State1, Tree)
+        end;
+do_fold_compile_0([], Rec, {Acc, V, D, I} = State, _) ->
+    case maps:find(I, Acc) of
+        {ok, Expr} ->
+            {Acc#{I => lists:join($,, lists:reverse(Expr))}, V, D, I};
+            % case Rec of
+            %     true ->
+            %         {Acc#{I => lists:join($,, lists:reverse(Expr))}, V, D, I};
+            %     false ->
+            %         ?debugFmt("[E] ~p~n", [Acc]),
+            %         State
+            % end;
+        error ->
+            State
+    end.
 
-do_fold_compile_1(#master_vertex{}, {Acc, I}, [Vertex | _]) ->
-    {Acc#{
-        dynamics => [#{
-            index => I,
-            vertex => eel_tree:get_vertex_label(Vertex)
-        } | maps:get(dynamics, Acc)]
-    }, I+1};
-do_fold_compile_1(#slave_vertex{token = Token}, State, Vertices) ->
-    do_fold_compile_2(Token, State, Vertices).
+do_fold_compile_1(#master_vertex{}, Rec, State, [Vertex | _], Tree) ->
+    do_fold_compile(Vertex, Rec, State, Tree);
+do_fold_compile_1(#slave_vertex{token = Token}, Rec, State, Vertices, Tree) ->
+    do_fold_compile_2(Token, Rec, State, Vertices, Tree).
 
-do_fold_compile_2(#text_token{} = Token, {Acc, I}, _Vertices) ->
+do_fold_compile_2(#text_token{} = Token, false, {Acc, V, D, I}, _Vertices, _Tree) ->
     Static = Token#text_token.handled_text,
-    {Acc#{statics => [Static | maps:get(statics, Acc)]}, I+1};
-do_fold_compile_2(#expr_token{marker = #marker{id = expr}} = Token, {Acc, I}, [Vertex | _]) ->
+    {Acc#{I => Static}, V, D, I+1};
+do_fold_compile_2(#text_token{} = Token, true, {Acc, V, D, I}, _Vertices, _Tree) ->
+    Static = Token#text_token.handled_text,
+    % {Acc#{I => <<"<<\"", Static/binary, "\"/utf8>>">>}, V, I};
+    {Acc#{I => [<<"<<\"", Static/binary, "\"/utf8>>">> | maps:get(I, Acc, [])]}, V, D, I};
+do_fold_compile_2(#expr_token{marker = #marker{id = expr}} = Token, false, {Acc, V, D, I}, [Vertex | _], _Tree) ->
     {ok, AST} = binary_to_ast(Token#expr_token.handled_expr),
-    {Acc#{
-        dynamics => [#{
-            index => I,
-            vertex => eel_tree:get_vertex_label(Vertex),
-            expr => Token#expr_token.handled_expr,
-            vars => Token#expr_token.vars,
-            ast => AST
-        } | maps:get(dynamics, Acc)]
-    }, I+1};
-do_fold_compile_2(#expr_token{marker = #marker{id = expr_start}} = Token, {Acc, I}, [Vertex | Vertices]) ->
-    {Expr, Vars} = do_fold_compile_3(Vertices, {Token#expr_token.handled_expr, Token#expr_token.vars}),
+    VMap = lists:map(fun(TV) -> {TV, I} end, Token#expr_token.vars),
+    {Acc#{I => AST}, lists:merge(V, VMap), [I | D], I+1};
+do_fold_compile_2(#expr_token{marker = #marker{id = expr}} = Token, true, {Acc, V, D, I}, [Vertex | _], _Tree) ->
+    % {ok, AST} = binary_to_ast(Token#expr_token.handled_expr),
+    VMap = lists:map(fun(TV) -> {TV, I} end, Token#expr_token.vars),
+    {Acc#{I => [Token#expr_token.handled_expr | maps:get(I, Acc, [])]}, lists:merge(V, VMap), D, I};
+do_fold_compile_2(#expr_token{marker = #marker{id = expr_start}} = Token, false, State, [Vertex | Vertices], Tree) ->
+    {{Acc, V, D, I}, {Expr, Vars}} = do_fold_compile_3(Vertices, {Token#expr_token.handled_expr, Token#expr_token.vars}, false, State, Tree),
     {ok, AST} = binary_to_ast(Expr),
-    {halt, Acc#{
-        dynamics => [#{
-            index => I,
-            vertex => eel_tree:get_vertex_label(Vertex),
-            expr => Expr,
-            vars => Vars,
-            ast => AST
-        } | maps:get(dynamics, Acc)]
-    }}.
+    VMap = lists:map(fun(TV) -> {TV, I} end, Token#expr_token.vars),
+    {halt, {Acc#{I => AST}, lists:merge(V, VMap), [I | D], I+1}};
+% FIXME: Issue here
+do_fold_compile_2(#expr_token{marker = #marker{id = expr_start}} = Token, true, {AA, _, _, _} = State, [Vertex | Vertices], Tree) ->
+    % ?debugFmt("~p~n", [AA]),
 
-do_fold_compile_3([Vertex | T], Acc) ->
+    {{Acc, V, D, I}, {Expr, Vars}} = do_fold_compile_3(Vertices, {Token#expr_token.handled_expr, Token#expr_token.vars}, true, State, Tree),
+    VMap = lists:map(fun(TV) -> {TV, I} end, Token#expr_token.vars),
+    % {ok, AST} = binary_to_ast(Expr),
+    {halt, {Acc#{I => Expr}, lists:merge(V, VMap), D, I+1}}.
+
+do_fold_compile_3([Vertex | T], Acc, Rec, State, Tree) ->
     Token = eel_tree:get_vertex_metadata(Vertex),
-    Acc1 = do_fold_compile_4(Token, Acc, Vertex),
-    do_fold_compile_3(T, Acc1);
-do_fold_compile_3([], Acc) ->
-    Acc.
+    {State1, Acc1} = do_fold_compile_4(Token, Acc, Vertex, Rec, State, Tree),
+    do_fold_compile_3(T, Acc1, Rec, State1, Tree);
+do_fold_compile_3([], Acc, _, State, _) ->
+    {State, Acc}.
 
-do_fold_compile_4(#master_vertex{}, {E, V}, Vertex) ->
-    VertexLabel =
-        case eel_tree:get_vertex_label(Vertex) of
-            VL when is_integer(VL) ->
-                integer_to_binary(VL);
-            VL when is_atom(VL) ->
-                atom_to_binary(VL);
-            VL when is_binary(VL) ->
-                VL;
-            VL when is_list(VL) ->
-                list_to_binary(VL)
-        end,
-    E1 = <<E/binary, 32, "v2_eel_renderer:render_vertex(", VertexLabel/binary, ", Tree, Bindings)">>,
-    {E1, V};
-do_fold_compile_4(#slave_vertex{token = #expr_token{handled_expr = Expr}}, {E, V}, _) ->
-    E1 = <<E/binary, 32, Expr/binary>>,
-    {E1, V}.
+do_fold_compile_4(#master_vertex{}, {E, V}, Vertex, Rec, {A, Vars, D, I} = State, Tree) ->
+    % Children = lists:reverse(eel_tree:fetch_vertex_children(Vertex, Tree)),
+    {Comp, VV, D1, II} = do_fold_compile(Vertex, true, {#{}, Vars, D, I}, Tree),
+    % ?debugFmt("[COM] ~p~n", [erl_syntax:revert(erl_syntax:abstract(maps:values(Comp)))]),
+
+    % ?debugFmt("~p~n", [hd(maps:values(Comp))]),
+
+    Expr=maps:values(Comp),
+        % case Rec of
+        %     true ->
+        %         lists:join($,, hd(maps:values(Comp)));
+        %     false ->
+        %         maps:values(Comp)
+        % end,
+    % ?debugFmt("[COM] ~p~n", [Expr]),
+
+    % State1 = do_fold_compile(Vertex, false, {A, I}, Tree),
+
+
+    VertexLabel = integer_to_binary(I),
+        % case eel_tree:get_vertex_label(Vertex) of
+        %     VL when is_integer(VL) ->
+        %         integer_to_binary(VL);
+        %     VL when is_atom(VL) ->
+        %         atom_to_binary(VL);
+        %     VL when is_binary(VL) ->
+        %         VL;
+        %     VL when is_list(VL) ->
+        %         list_to_binary(VL)
+        % end,
+    % E1 = <<E/binary, 32, "v2_eel_renderer:render_part(", VertexLabel/binary, ", Tree, Bindings)">>,
+    E1 = [E, 32, $[, Expr, $], 32],
+    {{A, VV, D1, I}, {E1, V}};
+do_fold_compile_4(#slave_vertex{token = #expr_token{handled_expr = Expr}}, {E, V}, _, Rec, State, _) ->
+    E1 = [E, 32, Expr],
+    {State, {E1, V}}.
 
 % TODO: Engine handler
 % do_compile_vertex_children(Vertex0, Tree) ->
