@@ -294,30 +294,23 @@ binary_to_ast(Bin) ->
 
 tree_test() ->
     Bin = <<
-        "Hello, <%= @world .%>!"
-        "<p>"
-            "<%= case @bool of %>"
-            "<% true -> %>"
-                "True"
-            "<% ; false -> %>"
-                "<%= case @foo of %>"
-                "<% foo -> %>"
-                    "Foo"
-                "<% ; _ -> %>"
-                    "<p><%= @bar .%></p>"
-                "<% end .%>"
-            "<% end .%>"
-        "</p>"
-        "<ul>"
+        "<html>"
+        "<head>"
+            "<title><%= @title .%></title>"
+        "</head>"
+        "<body>"
+            "<ul>"
             "<%= lists:map(fun(Item) -> %>"
                 "<%% TODO: Items to binary .%>"
-                "<li><%= @prefix .%><%= integer_to_binary(Item) .%></li>"
-            "<% end, [1,2,3]) .%>"
-        "</ul>"
+                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+            "<% end, @items) .%>"
+            "</ul>"
+        "</body>"
+        "</html>"
     >>,
     Tokens = tokenize(Bin),
     {Root, Tree} = tokens_tree(Tokens),
-    % ?debugFmt("~n~p", [Tree]),
+    ?debugFmt("~n~p", [Tree]),
 
     % Normalized = tree_vertex_children(Root, Tree),
     % ?debugFmt("~n~p", [Normalized]),
@@ -330,7 +323,7 @@ tree_test() ->
     {P, V, D, _} = fold_compile(Root, Tree),
     % ?debugFmt("~n~p", [CTree]),
 
-    Bindings = #{world => <<"World">>, bool => false, foo => bar, bar => <<"baz">>, prefix => <<"Item - ">>},
+    Bindings = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
 %     % RenderState = handle_render(Root, CTree, Bindings),
 %     % ?debugFmt("~n~p", [iolist_to_binary(RenderState)]),
 
@@ -366,22 +359,22 @@ tree_test() ->
     ?debugFmt("[Changes] ~p", [Changes]),
     Parts2 = maps:merge(Parts, Changes),
     % FIXME: Flatten list
-    ?debugFmt("[Send this to client] ~p", [Parts2]),
+    ?debugFmt("[Send this to client] ~p", [maps:values(Parts2)]),
 
     % NOTE: Below we render just changes
-    Bindings2 = #{world => <<"William">>},
-    Indexes2 = get_vars_indexes(maps:get(vars, State), Bindings2),
-    Changes2 = eval_parts(Indexes2, Parts, #{'Bindings' => Bindings2}),
-    ?debugFmt("[Changes2] ~p", [Changes2]),
-    Parts3 = maps:merge(Parts2, Changes2),
+    % Bindings2 = #{world => <<"William">>},
+    % Indexes2 = get_vars_indexes(maps:get(vars, State), Bindings2),
+    % Changes2 = eval_parts(Indexes2, Parts, #{'Bindings' => Bindings2}),
+    % ?debugFmt("[Changes2] ~p", [Changes2]),
+    % Parts3 = maps:merge(Parts2, Changes2),
 
-    Bindings3 = #{prefix => <<"N - ">>},
-    Indexes3 = get_vars_indexes(maps:get(vars, State), Bindings3),
-    Changes3 = eval_parts(Indexes3, Parts, #{'Bindings' => Bindings3}),
-    ?debugFmt("[Changes3] ~p", [Changes3]),
-    Parts4 = maps:merge(Parts3, Changes3),
+    % Bindings3 = #{prefix => <<"N - ">>},
+    % Indexes3 = get_vars_indexes(maps:get(vars, State), Bindings3),
+    % Changes3 = eval_parts(Indexes3, Parts, #{'Bindings' => Bindings3}),
+    % ?debugFmt("[Changes3] ~p", [Changes3]),
+    % Parts4 = maps:merge(Parts3, Changes3),
 
-    ?debugFmt("[RESULT] ~p", [maps:values(Parts4)]),
+    % ?debugFmt("[RESULT] ~p", [maps:values(Parts4)]),
 
     ok.
 

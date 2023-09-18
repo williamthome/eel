@@ -4,54 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <script src="morphdom.min.js"></script>
 </head>
 <body>
     <script>
-        function renderVertex(label, tree) {
-            const [statics, dynamics] = tree[label]
-
-            return function render() {
-                console.log(label)
-                return +label
+        //  TODO: Security
+        function EElFactory() {
+            function joinParts(parts) {
+                return parts.map(function join(x) {
+                    return Array.isArray(x) ? joinParts(x) : x
+                }).join("")
             }
-        }
 
-        const tree0 = {
-            0: {
-                id: "app",
-                range: [0, 3],
-                parent: null,
-            },
-            4: {
-
+            function changeParts(parts, changes) {
+                Object.entries(changes).forEach(([i,v]) => {
+                    parts[i] = v
+                })
+                return parts
             }
+
+            function applyParts(elem, parts) {
+                const html = joinParts(parts)
+                applyHtml(elem, html)
+            }
+
+            function applyHtml(elem, html) {
+                morphdom(elem, html, {
+                    // @see https://github.com/patrick-steele-idem/morphdom#can-i-make-morphdom-blaze-through-the-dom-tree-even-faster-yes
+                    onBeforeElUpdated: function(fromEl, toEl) {
+                        if (fromEl.isEqualNode(toEl)) {
+                            return false
+                        }
+
+                        return true
+                    },
+                })
+            }
+
+            function build(parts, opts = {}) {
+                const root = opts.root || document.documentElement
+
+                function update(changes) {
+                    changeParts(parts, changes)
+                    applyParts(root, parts)
+                }
+
+                return { update }
+            }
+
+            return { build }
         }
 
-        function render(vertices) {
-
-        }
-
-
-        // const renderState = {
-        //     0: "World",
-        //     1: "baz",
-        // }
-
-
-        const tree = {
-            0: [
-                ["</p>","!<p>","Hello, "],
-                [
-                    4,
-                    "World"
-                ]
+        const parts = [
+            "<html><head><title>",              // 0
+            "EEl",                              // 1
+            "</title></head><body><ul>",        // 2
+            [                                   // 3
+                ["<li>","Item - ","1","</li>"],
+                ["<li>","Item - ","2","</li>"],
+                ["<li>","Item - ","3","</li>"]
             ],
-            4: [
-                ["</p>", "<p>"],
-                ["baz"]
+            "</ul></body></html>"               // 4
+        ]
+
+        const eel = EElFactory().build(parts)
+
+        eel.update({
+            1: "EEl - Embedded Erlang",
+            3: [
+                ["<li>","1","</li>"],
+                ["<li>","2","</li>"]
             ]
-        }
-        console.log(tree)
+        })
+
+        window.eel = eel
     </script>
 </body>
 </html>

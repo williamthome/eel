@@ -100,21 +100,26 @@ normalize_expr(_, Expr, _) ->
 %     <<>>.
 
 collect_expr_vars(<<$@, T0/binary>>, Acc) ->
-    {T, Var} = collect_expr_var(T0, <<>>),
+    {T, Var} = collect_expr_var(T0),
     collect_expr_vars(T, [binary_to_atom(Var) | Acc]);
 collect_expr_vars(<<_, T/binary>>, Acc) ->
     collect_expr_vars(T, Acc);
 collect_expr_vars(<<>>, Acc) ->
     Acc.
 
-collect_expr_var(<<32, _/binary>> = T, Acc) ->
-    {T, Acc};
-collect_expr_var(<<H, T/binary>>, Acc) ->
+collect_expr_var(<<H, T/binary>>) when H >= $a andalso H =< $z ->
+    collect_expr_var(T, <<H>>);
+collect_expr_var(_) ->
+    error(badarg).
+
+collect_expr_var(<<H, T/binary>>, Acc) when (H >= $a andalso H =< $z)
+                                          ; (H >= $A andalso H =< $A)
+                                          ; (H >= $0 andalso H =< $9)
+                                          ; H =:= $_
+                                          ; H =:= $@ ->
     collect_expr_var(T, <<Acc/binary, H>>);
-collect_expr_var(<<>>, <<>>) ->
-    error(badarg);
-collect_expr_var(<<>>, Acc) ->
-    {<<>>, Acc}.
+collect_expr_var(T, Acc) ->
+    {T, Acc}.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
