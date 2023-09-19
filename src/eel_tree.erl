@@ -31,6 +31,9 @@
 
 -export_type([ tree/0
              , vertex/0
+             , label/0
+             , vertices/0
+             , metadata/0
              ]).
 
 -ifdef(TEST).
@@ -190,13 +193,19 @@ put_vertices(Vertices, Tree0) ->
 -ifdef(TEST).
 
 tree_test() ->
+    Expected = {tree,3,
+    #{root => {vertex,undefined,root,[b,a],true,undefined,undefined},
+      a => {vertex,root,a,[],false,undefined,undefined},
+      b => {vertex,root,b,[],false,undefined,undefined}},
+    root,undefined},
+
     Tree0 = new(),
     {VR, Tree1} = add_vertex(root, Tree0),
     {VA, Tree2} = add_vertex(a, Tree1),
     {VB, Tree3} = add_vertex(b, Tree2),
     Tree4 = add_edge(VR, VA, Tree3),
     Tree5 = add_edge(VR, VB, Tree4),
-    ?debugFmt("~p", [Tree5]),
-    ok.
+    Result = Tree5,
+    ?assertEqual(Expected, Result).
 
 -endif.
