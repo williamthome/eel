@@ -87,11 +87,8 @@ collect_expr_var(T, Acc) ->
     {T, Acc}.
 
 handle_tokens(Tokens) ->
-    {Reversed, _} = lists:foldl(
-        fun resolve_tokens_acc/2,
-        {[], {in_text, false}},
-        Tokens
-    ),
+    Acc = {[], {in_text, false}},
+    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens),
     lists:reverse(Reversed).
 
  % Expr

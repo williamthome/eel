@@ -25,33 +25,25 @@ tree(Tokens) ->
 %%%=============================================================================
 
 do_tree(Tokens, VParent, Tree) ->
-    lists:foldl(
-        fun
-            (#text_token{} = Token, {VParent0, Tree0}) ->
-                {_SVertex, Tree1} = add_slave_vertex(Token, VParent0, Tree0),
-                {VParent0, Tree1};
-            (#expr_token{marker = Marker} = Token, {VParent0, Tree0}) ->
-                resolve_tree_behaviors(
-                    Marker#marker.tree_behaviors,
-                    Token,
-                    VParent0,
-                    Tree0
-                );
-            (List, {VParent0, Tree0}) when is_list(List) ->
-                do_tree(List, VParent0, Tree0)
-        end,
-        {VParent, Tree},
-        Tokens
-    ).
+    lists:foldl(fun
+        (#text_token{} = Token, {VParent0, Tree0}) ->
+            {_SVertex, Tree1} = add_slave_vertex(Token, VParent0, Tree0),
+            {VParent0, Tree1};
+        (#expr_token{marker = Marker} = Token, {VParent0, Tree0}) ->
+            resolve_tree_behaviors(
+                Marker#marker.tree_behaviors,
+                Token,
+                VParent0,
+                Tree0
+            );
+        (List, {VParent0, Tree0}) when is_list(List) ->
+            do_tree(List, VParent0, Tree0)
+    end, {VParent, Tree}, Tokens).
 
 resolve_tree_behaviors(Behaviors, Token, VParent0, Tree0) ->
-    lists:foldl(
-        fun(Behavior, {VParent, Tree}) ->
-            resolve_tree_behavior(Behavior, Token, VParent, Tree)
-        end,
-        {VParent0, Tree0},
-        Behaviors
-    ).
+    lists:foldl(fun(Behavior, {VParent, Tree}) ->
+        resolve_tree_behavior(Behavior, Token, VParent, Tree)
+    end, {VParent0, Tree0}, Behaviors).
 
 resolve_tree_behavior(push_token, Token, VParent0, Tree0) ->
     {_SVertex, Tree} = add_slave_vertex(Token, VParent0, Tree0),

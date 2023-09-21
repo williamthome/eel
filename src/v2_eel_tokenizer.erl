@@ -86,8 +86,8 @@ do_tokenize(<<H, T/binary>>, State0) ->
     end;
 do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
     lists:foldl(fun(Engine, Tokens) ->
-                    Engine:handle_tokens(lists:flatten(Tokens))
-                end, lists:reverse(State#state.tokens), State#state.engines);
+        Engine:handle_tokens(lists:flatten(Tokens))
+    end, lists:reverse(State#state.tokens), State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
     case handle_text(State#state.engines, Text, State#state.converter) of
         {ok, Tokens} ->
