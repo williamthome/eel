@@ -55,33 +55,12 @@ do_tokenize(<<H, T/binary>>, State0) ->
             case handle_expr_end(T, Markers, <<>>) of
                 {ok, {Marker, Text, Expr, Rest}} ->
                     case handle_text(State#state.engines, Text, State#state.converter) of
-                        {ok, FirstToken} ->
+                        {ok, TextTokens} ->
                             case handle_expr(Engine, Marker, Expr, State#state.converter) of
-                                {ok, SecondToken} ->
+                                {ok, ExprTokens} ->
                                     do_tokenize(Rest, State#state{
                                         buffer = <<(State#state.buffer)/binary, Expr/binary>>,
-                                        tokens = [SecondToken, FirstToken | State#state.tokens],
-                                        text_acc = <<>>
-                                    });
-                                ignore ->
-                                    do_tokenize(Rest, State#state{
-                                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
-                                        tokens = [FirstToken | State#state.tokens],
-                                        text_acc = <<>>
-                                    });
-                                {error, Reason} ->
-                                    {error, Reason}
-                            end;
-                        ignore ->
-                            case handle_expr(Engine, Marker, Expr, State#state.converter) of
-                                {ok, SecondToken} ->
-                                    do_tokenize(Rest, State#state{
-                                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
-                                        tokens = [SecondToken | State#state.tokens],
-                                        text_acc = <<>>
-                                    });
-                                ignore ->
-                                    do_tokenize(Rest, State#state{
+                                        tokens = [ExprTokens, TextTokens | State#state.tokens],
                                         text_acc = <<>>
                                     });
                                 {error, Reason} ->
@@ -107,17 +86,15 @@ do_tokenize(<<H, T/binary>>, State0) ->
     end;
 do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
     lists:foldl(fun(Engine, Tokens) ->
-                    Engine:handle_tokens(Tokens)
+                    Engine:handle_tokens(lists:flatten(Tokens))
                 end, lists:reverse(State#state.tokens), State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
     case handle_text(State#state.engines, Text, State#state.converter) of
-        {ok, Token} ->
+        {ok, Tokens} ->
             do_tokenize(<<>>, State#state{
-                tokens = [Token | State#state.tokens],
+                tokens = [Tokens | State#state.tokens],
                 text_acc = <<>>
             });
-        ignore ->
-            do_tokenize(<<>>, State);
         {error, Reason} ->
             {error, Reason}
     end.
@@ -169,44 +146,50 @@ end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
 end_marker_match([], _) ->
     none.
 
-handle_text([Engine | Engines], Bin, Converter) ->
+handle_text(Engines, Bin, Converter) ->
+    do_handle_text(Engines, Bin, Converter, []).
+
+do_handle_text([Engine | Engines], Bin, Converter, Acc0) ->
     case Engine:handle_text(Bin, Converter) of
-        {ok, {text, Text}} when is_binary(Text) ->
-            handle_text(Engines, Text, Converter);
-        {ok, {expr, {Expr, #marker{} = Marker, Vars}}} when is_binary(Expr), is_list(Vars) ->
-            new_expr_token(Expr, Engine, Marker, Vars);
-        ignore ->
-            ignore;
+        {ok, Tokens} ->
+            Acc = resolve_handled_tokens(Tokens, Engine, Acc0),
+            do_handle_text(Engines, Bin, Converter, Acc);
         {error, Reason} ->
             {error, Reason}
     end;
-handle_text([], Text, _) ->
-    new_text_token(Text).
+do_handle_text([], _, _, Acc) ->
+    {ok, Acc}.
 
 handle_expr(Engine, Marker, Bin, Converter) ->
     case Engine:handle_expr(Marker, Bin, Converter) of
-        {ok, {text, Text}} when is_binary(Text) ->
-            new_text_token(Text);
-        {ok, {expr, {Expr, Vars}}} when is_binary(Expr), is_list(Vars) ->
-            new_expr_token(Expr, Engine, Marker, Vars);
-        ignore ->
-            ignore;
+        {ok, Tokens} ->
+            {ok, resolve_handled_tokens(Tokens, Engine, [])};
         {error, Reason} ->
             {error, Reason}
     end.
 
-new_text_token(Text) ->
-    {ok, #text_token{
-        text = Text
-    }}.
+resolve_handled_tokens([{text, Text} | T], Engine, Acc0) ->
+    Acc = [new_text_token(Text) | Acc0],
+    resolve_handled_tokens(T, Engine, Acc);
+resolve_handled_tokens([{expr, {Marker, Expr, Vars}} | T], Engine, Acc0) ->
+    Acc = [new_expr_token(Expr, Engine, Marker, Vars) | Acc0],
+    resolve_handled_tokens(T, Engine, Acc);
+resolve_handled_tokens([], _, Acc) ->
+    Acc.
 
-new_expr_token(Expr, Engine, Marker, Vars) ->
-    {ok, #expr_token{
+new_text_token(Text) when is_binary(Text) ->
+    #text_token{
+        text = Text
+    }.
+
+new_expr_token(Expr, Engine, Marker, Vars) when is_binary(Expr)
+                                              , is_list(Vars) ->
+    #expr_token{
         expr = Expr,
         engine = Engine,
         marker = Marker,
         vars = Vars
-    }}.
+    }.
 
 %%%=============================================================================
 %%% Tests

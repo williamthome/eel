@@ -44,13 +44,13 @@ markers() ->
     ].
 
 handle_text(Text, _) ->
-    {ok, {text, Text}}.
+    {ok, [{text, Text}]}.
 
 handle_expr(Marker, Expr0, Converter) ->
     Expr1 = replace_expr_vars(Expr0, <<>>),
     Expr = normalize_expr(Marker, Expr1, Converter),
     Vars = collect_expr_vars(Expr0, []),
-    {ok, {expr, {Expr, Vars}}}.
+    {ok, [{expr, {Marker, Expr, Vars}}]}.
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
