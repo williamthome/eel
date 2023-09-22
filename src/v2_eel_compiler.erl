@@ -1,6 +1,6 @@
 -module(v2_eel_compiler).
 
--export([compile/1]).
+-export([compile/1, compile/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -9,14 +9,29 @@
 -include("v2_eel.hrl").
 
 % TODO
--record(state, { parts, vars, dynamics, index, recursive, tree, vertices }).
+-record(state, { parts
+               , vars
+               , dynamics
+               , index
+               , recursive
+               , tree
+               , vertices
+               , converter
+               }).
+
+% TODO: Check if we should use 'v2_eel_converter' or keep the
+%       'undefined' as the converter.
+-define(CONVERTER, undefined).
 
 %%%=============================================================================
 %%% API functions
 %%%=============================================================================
 
-compile({Root, Tree}) ->
-    State = fold_compile(Root, Tree),
+compile(Payload) ->
+    compile(Payload, #{}).
+
+compile({Root, Tree}, Opts) ->
+    State = fold_compile(Root, Tree, Opts),
     #{
         parts => State#state.parts,
         vars => State#state.vars,
@@ -27,7 +42,10 @@ compile({Root, Tree}) ->
 %%% Internal functions
 %%%=============================================================================
 
-fold_compile(VertexLabel, Tree) ->
+default_converter() ->
+    ?CONVERTER.
+
+fold_compile(VertexLabel, Tree, Opts) ->
     Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
     State = #state{
         parts = #{},
@@ -35,7 +53,8 @@ fold_compile(VertexLabel, Tree) ->
         dynamics = [],
         index = 0,
         recursive = false,
-        tree = Tree
+        tree = Tree,
+        converter = maps:get(converter, Opts, default_converter())
     },
     do_fold_compile(Vertex, State).
 
@@ -96,7 +115,7 @@ do_fold_compile_2( #expr_token{marker = #marker{id = expr}} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    {ok, AST} = binary_to_ast(Token#expr_token.expr),
+    {ok, AST} = binary_to_ast(Token#expr_token.expr, State#state.converter),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = Parts#{
@@ -124,7 +143,7 @@ do_fold_compile_2( #expr_token{marker = #marker{id = expr_start}} = Token
                                      , Token#expr_token.expr, State0 ),
     Index = State#state.index,
     Parts = State#state.parts,
-    {ok, AST} = binary_to_ast(Expr),
+    {ok, AST} = binary_to_ast(Expr, State#state.converter),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = Parts#{
@@ -173,8 +192,9 @@ do_fold_compile_4(#slave_vertex{token = #expr_token{expr = Expr1}}, _, Expr0, St
 %%% Internal functions
 %%%=============================================================================
 
-binary_to_ast(Bin) ->
-    case erl_scan:string(binary_to_list(iolist_to_binary([Bin, $.]))) of
+binary_to_ast(Bin, Converter) ->
+    String = binary_to_list(iolist_to_binary(normalize_bin(Bin, Converter))),
+    case erl_scan:string(String) of
         {ok, Tokens, _} ->
             case erl_parse:parse_exprs(Tokens) of
                 {ok, AST} ->
@@ -185,6 +205,14 @@ binary_to_ast(Bin) ->
         {error, ErrorInfo, ErrorLocation} ->
             {error, {ErrorInfo, ErrorLocation}}
     end.
+
+normalize_bin(Expr, undefined) ->
+    [Expr, $.];
+normalize_bin(Expr, Converter) when is_binary(Converter)
+                                  ; is_list(Converter) ->
+[Converter, ":to_string(", Expr, ")."];
+normalize_bin(Expr, Converter) when is_atom(Converter) ->
+    normalize_bin(Expr, atom_to_binary(Converter)).
 
 %%%=============================================================================
 %%% Tests
@@ -244,7 +272,6 @@ compile_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary .%>"
                 "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
             "<% end, @items) .%>"
             "</ul>"

@@ -12,11 +12,9 @@
                , buffer    :: binary()
                , text_acc  :: binary()
                , tokens    :: [token()]
-               , converter :: module()
                }).
 
 -define(SMART_ENGINE, v2_eel_smart_engine).
--define(CONVERTER, v2_eel_converter).
 
 %%%=============================================================================
 %%% API functions
@@ -30,8 +28,7 @@ tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
         engines = maps:get(engines, Opts, default_engines()),
         buffer = <<>>,
         text_acc = <<>>,
-        tokens = [],
-        converter = atom_to_binary(maps:get(converter, Opts, default_converter()))
+        tokens = []
     },
     do_tokenize(Bin, State).
 
@@ -42,9 +39,6 @@ tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
 default_engines() ->
     [?SMART_ENGINE].
 
-default_converter() ->
-    ?CONVERTER.
-
 do_tokenize(<<H, T/binary>>, State0) ->
     State = State0#state{
         buffer = <<(State0#state.buffer)/binary, H>>,
@@ -54,9 +48,9 @@ do_tokenize(<<H, T/binary>>, State0) ->
         {ok, {Engine, Markers}} ->
             case handle_expr_end(T, Markers, <<>>) of
                 {ok, {Marker, Text, Expr, Rest}} ->
-                    case handle_text(State#state.engines, Text, State#state.converter) of
+                    case handle_text(State#state.engines, Text) of
                         {ok, TextTokens} ->
-                            case handle_expr(Engine, Marker, Expr, State#state.converter) of
+                            case handle_expr(Engine, Marker, Expr) of
                                 {ok, ExprTokens} ->
                                     do_tokenize(Rest, State#state{
                                         buffer = <<(State#state.buffer)/binary, Expr/binary>>,
@@ -89,7 +83,7 @@ do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
         Engine:handle_tokens(lists:flatten(Tokens))
     end, lists:reverse(State#state.tokens), State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
-    case handle_text(State#state.engines, Text, State#state.converter) of
+    case handle_text(State#state.engines, Text) of
         {ok, Tokens} ->
             do_tokenize(<<>>, State#state{
                 tokens = [Tokens | State#state.tokens],
@@ -146,22 +140,22 @@ end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
 end_marker_match([], _) ->
     none.
 
-handle_text(Engines, Bin, Converter) ->
-    do_handle_text(Engines, Bin, Converter, []).
+handle_text(Engines, Bin) ->
+    do_handle_text(Engines, Bin, []).
 
-do_handle_text([Engine | Engines], Bin, Converter, Acc0) ->
-    case Engine:handle_text(Bin, Converter) of
+do_handle_text([Engine | Engines], Bin, Acc0) ->
+    case Engine:handle_text(Bin) of
         {ok, Tokens} ->
             Acc = resolve_handled_tokens(Tokens, Engine, Acc0),
-            do_handle_text(Engines, Bin, Converter, Acc);
+            do_handle_text(Engines, Bin, Acc);
         {error, Reason} ->
             {error, Reason}
     end;
-do_handle_text([], _, _, Acc) ->
+do_handle_text([], _, Acc) ->
     {ok, Acc}.
 
-handle_expr(Engine, Marker, Bin, Converter) ->
-    case Engine:handle_expr(Marker, Bin, Converter) of
+handle_expr(Engine, Marker, Bin) ->
+    case Engine:handle_expr(Marker, Bin) of
         {ok, Tokens} ->
             {ok, resolve_handled_tokens(Tokens, Engine, [])};
         {error, Reason} ->

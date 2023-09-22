@@ -1,8 +1,8 @@
 -module(v2_eel_smart_engine).
 
 -export([ markers/0
-        , handle_text/2
-        , handle_expr/3
+        , handle_text/1
+        , handle_expr/2
         , handle_tokens/1
         , handle_tree/1
         ]).
@@ -43,12 +43,11 @@ markers() ->
         }
     ].
 
-handle_text(Text, _) ->
+handle_text(Text) ->
     {ok, [{text, Text}]}.
 
-handle_expr(Marker, Expr0, Converter) ->
-    Expr1 = replace_expr_vars(Expr0, <<>>),
-    Expr = normalize_expr(Marker, Expr1, Converter),
+handle_expr(Marker, Expr0) ->
+    Expr = replace_expr_vars(Expr0, <<>>),
     Vars = collect_expr_vars(Expr0, []),
     {ok, [{expr, {Marker, Expr, Vars}}]}.
 
@@ -60,9 +59,6 @@ replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
 replace_expr_vars(<<>>, Acc) ->
     Acc.
-
-normalize_expr(_, Expr, _) ->
-    Expr.
 
 collect_expr_vars(<<$@, T0/binary>>, Acc) ->
     {T, Var} = collect_expr_var(T0),
