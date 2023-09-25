@@ -58,7 +58,7 @@
 -opaque vertex() :: #vertex{}.
 
 % TODO: Maybe rename to key.
--type label()    :: term().
+-type label()    :: binary().
 -type vertices() :: [vertex()].
 -type metadata() :: term().
 
@@ -83,12 +83,19 @@ add_vertex(Tree) ->
 add_vertex(#vertex{} = Vertex, #tree{} = Tree0) ->
     Tree1 = put_vertex(Vertex, Tree0),
     Tree2 = incr_vertex_count(Tree1),
-    Tree = maybe_set_vertex_as_root(Vertex, Tree2),
-    {Vertex, Tree};
+    Tree3 = maybe_set_vertex_as_root(Vertex, Tree2),
+    case Vertex#vertex.parent of
+        undefined ->
+            {Vertex, Tree3};
+        Parent ->
+            VParent = fetch_vertex(Parent, Tree3),
+            Tree = put_vertex(VParent#vertex{is_leaf = false}, Tree3),
+            {Vertex, Tree}
+    end;
 add_vertex(Label, #tree{} = Tree) ->
     add_vertex(Label, Tree, #{});
 add_vertex(#tree{} = Tree, Opts) ->
-    Label = get_curr_index(Tree),
+    Label = integer_to_binary(get_curr_index(Tree)),
     add_vertex(Label, Tree, Opts).
 
 add_vertex(Label, Tree, Opts) ->
@@ -159,19 +166,21 @@ incr_vertex_count(#tree{vertex_count = Count} = Tree) ->
 % new_vertex(Label, Tree) ->
 %     new_vertex(Label, Tree, #{}).
 
-new_vertex(Label, Tree, Opts) ->
+new_vertex(Label, Tree0, Opts) ->
     Parent = maps:get(parent, Opts, undefined),
     Children = maps:get(children, Opts, []),
-    IsRoot = maps:get(is_root, Opts, map_size(get_vertices(Tree)) =:= 0),
+    IsRoot = maps:get(is_root, Opts, map_size(get_vertices(Tree0)) =:= 0),
     Metadata = maps:get(metadata, Opts, undefined),
-    new_vertex(Parent, Label, Children, IsRoot, Metadata).
+    IsLeaf = maps:get(is_leaf, Opts, true),
+    new_vertex(Parent, Label, Children, IsRoot, IsLeaf, Metadata).
 
-new_vertex(Parent, Label, Children, IsRoot, Metadata) ->
+new_vertex(Parent, Label, Children, IsRoot, IsLeaf, Metadata) ->
     #vertex{
         parent = Parent,
         label = Label,
         children = Children,
         is_root = IsRoot,
+        is_leaf = IsLeaf,
         metadata = Metadata
     }.
 

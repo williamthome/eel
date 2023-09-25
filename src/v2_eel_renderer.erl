@@ -1,6 +1,12 @@
 -module(v2_eel_renderer).
 
--export([render_all/2, render_changes/2]).
+-export([ render/2
+        , render/3
+        , render_changes/2
+        , render_changes/3
+        , get_vars_indexes/2
+        , get_vars_from_indexes/2
+        ]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -10,21 +16,38 @@
 %%% API functions
 %%%=============================================================================
 
-render_all(Bindings, State) ->
+render(Bindings, State) ->
+    render(Bindings, State, fun v2_eel_converter:to_string/1).
+
+render(Bindings, State, ToStringFun) ->
     Indexes = maps:get(dynamics, State),
-    Parts = maps:get(parts, State),
-    eval_parts(Indexes, Parts, #{'Bindings' => Bindings}).
+    eval_parts(Indexes, Bindings, State, ToStringFun).
 
 render_changes(Bindings, State) ->
-    Indexes = get_vars_indexes(maps:get(vars, State), Bindings),
-    Parts = maps:get(parts, State),
-    eval_parts(Indexes, Parts, #{'Bindings' => Bindings}).
+    render_changes(Bindings, State, fun v2_eel_converter:to_string/1).
+
+render_changes(Bindings, State, ToStringFun) ->
+    Indexes = get_vars_indexes(Bindings, State),
+    eval_parts(Indexes, Bindings, State, ToStringFun).
+
+get_vars_indexes(Bindings, State) ->
+    do_get_vars_indexes(Bindings, maps:get(vars, State)).
+
+get_vars_from_indexes(Indexes, State) ->
+    lists:filtermap(fun({Var, Index}) ->
+        case lists:member(Index, Indexes) of
+            true ->
+                {true, {Index, Var}};
+            false ->
+                false
+        end
+    end, maps:get(vars, State)).
 
 %%%=============================================================================
 %%% Internal functions
 %%%=============================================================================
 
-get_vars_indexes(Vars, Bindings) ->
+do_get_vars_indexes(Bindings, Vars) ->
     sets:to_list(
         lists:foldl(fun(Var, Set0) ->
             Indexes = proplists:get_all_values(Var, Vars),
@@ -34,23 +57,31 @@ get_vars_indexes(Vars, Bindings) ->
         end, sets:new([{version, 2}]), maps:keys(Bindings))
     ).
 
-eval_parts(Indexes, Parts, Bindings) ->
+eval_parts(Indexes, Bindings, State, ToStringFun) ->
+    Parts = maps:get(parts, State),
+    do_eval_parts(Indexes, Parts, #{'Bindings' => Bindings}, ToStringFun).
+
+do_eval_parts(Indexes, Parts, Bindings, ToStringFun) ->
     lists:foldl(fun(Index, Acc) ->
-        Acc#{Index => eval_part(Index, Parts, Bindings)}
+        Acc#{Index => eval_part(Index, Parts, Bindings, ToStringFun)}
     end, #{}, Indexes).
 
-eval_part(Index, Parts, Bindings) ->
+eval_part(Index, Parts, Bindings, ToStringFun) ->
     Expr = maps:get(Index, Parts),
     case erl_eval:exprs(Expr, Bindings) of
         {value, IOData, _} when is_binary(IOData) ->
             IOData;
-        {value, [IOData], _} ->
+        {value, [IOData], _} when is_binary(IOData) ->
             IOData;
-        {value, IOData, _} ->
+        {value, [Term], _} ->
+            ToStringFun(Term);
+        {value, IOData, _} when is_list(IOData) ->
             % NOTE: Here we have a list that can be optimized to the changes return.
             %       We need to know the static x dynamics of the expression.
             % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOData}]),
-            IOData
+            IOData;
+        {value, Term, _} ->
+            ToStringFun(Term)
     end.
 
 %%%=============================================================================
@@ -85,7 +116,7 @@ render_test() ->
          [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]},
     BindingsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
     StateAll = v2_eel_compiler:compile(Tree),
-    ResultAll = render_all(BindingsAll, StateAll),
+    ResultAll = render(BindingsAll, StateAll),
     ?assertEqual(ExpectedAll, ResultAll),
 
     ExpectedChanges = #{1 => <<"EEl - Embedded Erlang">>},
