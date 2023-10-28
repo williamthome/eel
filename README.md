@@ -2,6 +2,13 @@
 
 Much like Elixir has EEx, Erlang has EEl, or Embedded Erlang. With EEl we can embed and evaluate Erlang inside strings.
 
+<!-- TODO: Remove the disclaimer section -->
+## ⚠️ Disclaimer
+
+This is a WIP branch. Please do not use it!
+
+All the documentation below refers to the main branch.
+
 ## API
 
 The Erlang code it's written between section punctuations called `markers`.

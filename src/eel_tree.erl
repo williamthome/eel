@@ -58,13 +58,13 @@
 -opaque vertex() :: #vertex{}.
 
 % TODO: Maybe rename to key.
--type label()    :: binary().
+-type label()    :: term().
 -type vertices() :: [vertex()].
 -type metadata() :: term().
 
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
+%%======================================================================
+%% API functions
+%%======================================================================
 
 new() ->
     new(#{}).
@@ -95,7 +95,7 @@ add_vertex(#vertex{} = Vertex, #tree{} = Tree0) ->
 add_vertex(Label, #tree{} = Tree) ->
     add_vertex(Label, Tree, #{});
 add_vertex(#tree{} = Tree, Opts) ->
-    Label = integer_to_binary(get_curr_index(Tree)),
+    Label = get_curr_index(Tree),
     add_vertex(Label, Tree, Opts).
 
 add_vertex(Label, Tree, Opts) ->
@@ -109,6 +109,7 @@ add_edge(FromLabel, ToLabel, Tree) ->
     From0 = fetch_vertex(FromLabel, Tree),
     To0 = fetch_vertex(ToLabel, Tree),
     From = From0#vertex{
+        is_leaf = false,
         children = [To0#vertex.label | From0#vertex.children]
     },
     To = To0#vertex{parent = From0#vertex.label},
@@ -153,9 +154,9 @@ put_vertex(#vertex{label = Label} = Vertex, Tree) ->
         }
     }.
 
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
+%%======================================================================
+%% Internal functions
+%%======================================================================
 
 get_curr_index(#tree{vertex_count = Count}) ->
     Count.
@@ -195,17 +196,17 @@ maybe_set_vertex_as_root(#vertex{is_root = false}, Tree) ->
 put_vertices(Vertices, Tree0) ->
     lists:foldl(fun put_vertex/2, Tree0, Vertices).
 
-%%%=============================================================================
-%%% Tests
-%%%=============================================================================
+%%======================================================================
+%% Tests
+%%======================================================================
 
 -ifdef(TEST).
 
 tree_test() ->
     Expected = {tree,3,
-    #{root => {vertex,undefined,root,[b,a],true,undefined,undefined},
-      a => {vertex,root,a,[],false,undefined,undefined},
-      b => {vertex,root,b,[],false,undefined,undefined}},
+    #{root => {vertex,undefined,root,[b,a],true,false,undefined},
+      a => {vertex,root,a,[],false,true,undefined},
+      b => {vertex,root,b,[],false,true,undefined}},
     root,undefined},
 
     Tree0 = new(),

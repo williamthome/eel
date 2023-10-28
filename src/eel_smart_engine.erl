@@ -1,503 +1,158 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl default engine module.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_smart_engine).
 
--behaviour(eel_engine).
-
--compile(inline_list_funcs).
--compile({inline, [ handle_expr_start/2
-                  , handle_expr_end/3
-                  , do_parse_tokens_to_sd/4
-                  , do_parse_tokens_to_sd_1/4
-                  , do_parse_tokens_to_sd_2/5
-                  , compile/2
-                  , zip_compile/2
-                  ]}).
-
-%% eel_engine callbacks
--export([ init/1
-        , handle_expr_start/2
-        , handle_expr_end/3
-        , handle_text/3
-        , handle_body/2
-        , handle_compile/2
-        , handle_ast/2
+-export([ markers/0
+        , handle_text/1
+        , handle_expr/2
+        , handle_tokens/1
+        , handle_tree/1
         ]).
 
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
+-include("eel.hrl").
 
-%% Defines
--define(nested_expr(Index, Pos, Expr), {Index, {nested_expr, Pos, Expr}}).
+markers() ->
+    [
+        #marker{
+            id = expr,
+            start = <<"<%=">>,
+            final = <<".%>">>,
+            tree_behaviors = [push_token]
+        },
+        #marker{
+            id = expr_start,
+            start = <<"<%=">>,
+            final = <<"%>">>,
+            tree_behaviors = [add_vertex, push_token, add_vertex]
+        },
+        #marker{
+            id = expr_continue,
+            start = <<"<%">>,
+            final = <<"%>">>,
+            tree_behaviors = [fetch_vertex_parent, push_token, add_vertex]
+        },
+        #marker{
+            id = expr_end,
+            start = <<"<%">>,
+            final = <<".%>">>,
+            tree_behaviors = [fetch_vertex_parent, push_token, fetch_vertex_parent]
+        },
+        #marker{
+            id = comment,
+            start = <<"<%%">>,
+            final = <<".%>">>,
+            tree_behaviors = [ignore_token]
+        }
+    ].
 
--record(state, {
-    opts = #{} :: map()
-}).
-% -opaque state() :: #state{}.
+handle_text(Text) ->
+    {ok, [{text, Text}]}.
 
-%% Types
--type token_name() :: text
-                    | expr
-                    | start_expr
-                    | mid_expr
-                    | end_expr
-                    | nested_expr
-                    | comment
-                    | code.
--type token()      :: {token_name(), binary()}.
--type static()     :: eel_engine:static().
--type dynamic()    :: list().
+handle_expr(Marker, Expr0) ->
+    Expr = replace_expr_vars(Expr0, <<>>),
+    Vars = collect_expr_vars(Expr0, []),
+    {ok, [{expr, {Marker, Expr, Vars}}]}.
 
+% FIXME: Ignore when inside quotes (single [atom] and double [string]).
+replace_expr_vars(<<$@, T0/binary>>, Acc) ->
+    {T, Var} = collect_expr_var(T0, <<>>),
+    replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings)">>);
+replace_expr_vars(<<H, T/binary>>, Acc) ->
+    replace_expr_vars(T, <<Acc/binary, H>>);
+replace_expr_vars(<<>>, Acc) ->
+    Acc.
 
-%%%=============================================================================
-%%% eel_engine callbacks
-%%%=============================================================================
+collect_expr_vars(<<$@, T0/binary>>, Acc) ->
+    {T, Var} = collect_expr_var(T0),
+    collect_expr_vars(T, [binary_to_atom(Var) | Acc]);
+collect_expr_vars(<<_, T/binary>>, Acc) ->
+    collect_expr_vars(T, Acc);
+collect_expr_vars(<<>>, Acc) ->
+    Acc.
 
-init(Opts) ->
-    {ok, #state{opts = Opts}}.
+collect_expr_var(<<H, T/binary>>) when H >= $a andalso H =< $z ->
+    collect_expr_var(T, <<H>>);
+collect_expr_var(_) ->
+    error(badarg).
 
-%% tokenize callbacks
+collect_expr_var(<<H, T/binary>>, Acc) when (H >= $a andalso H =< $z)
+                                          ; (H >= $A andalso H =< $A)
+                                          ; (H >= $0 andalso H =< $9)
+                                          ; H =:= $_
+                                          ; H =:= $@ ->
+    collect_expr_var(T, <<Acc/binary, H>>);
+collect_expr_var(T, Acc) ->
+    {T, Acc}.
 
-handle_expr_start(<<"<%=", 32, Rest/binary>>, State) ->
-    {ok, {<<"<%=", 32>>, 4, Rest, State}};
-handle_expr_start(<<"<%", 32, Rest/binary>>, State) ->
-    {ok, {<<"<%", 32>>, 3, Rest, State}};
-handle_expr_start(<<"<%:", 32, Rest/binary>>, State) ->
-    {ok, {<<"<%:", 32>>, 4, Rest, State}};
-handle_expr_start(<<"<%%", 32, Rest/binary>>, State) ->
-    {ok, {<<"<%%", 32>>, 4, Rest, State}};
-handle_expr_start(_, State) ->
-    {ok, State}.
+handle_tokens(Tokens) ->
+    Acc = {[], {in_text, false}},
+    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens),
+    lists:reverse(Reversed).
 
-handle_expr_end(<<"<%=", 32>>, <<32, ".%>", Rest/binary>>, State) ->
-    {ok, {expr, 4, Rest, State}};
-handle_expr_end(<<"<%=", 32>>, <<32, "%>", Rest/binary>>, State) ->
-    {ok, {start_expr, 3, Rest, State}};
-handle_expr_end(<<"<%", 32>>, <<32, "%>", Rest/binary>>, State) ->
-    {ok, {mid_expr, 3, Rest, State}};
-handle_expr_end(<<"<%", 32>>, <<32, ".%>", Rest/binary>>, State) ->
-    {ok, {end_expr, 4, Rest, State}};
-handle_expr_end(<<"<%%", 32>>, <<32, "%%>", Rest/binary>>, State) ->
-    {ok, {comment, 4, Rest, State}};
-handle_expr_end(<<"<%:", 32>>, <<32, ":%>", Rest/binary>>, State) ->
-    {ok, {code, 4, Rest, State}};
-handle_expr_end(_, _, #state{} = State) ->
-    {ok, State}.
-
-handle_text(Text, Pos, State) ->
-    {ok, {Text, Pos, State}}.
-
-handle_body(Tokens, #state{}) ->
-    {ok, parse_tokens_to_sd(Tokens)}.
-
-%% compile callbacks
-
-handle_compile(Token, #state{opts = Opts} = State) ->
-    {ok, {compile(Token, Opts), State}}.
-
-handle_ast(AST, #state{}) ->
-    {ok, AST}.
-
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
-
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Parses tokens to statics and dynamics.
-%% @end
-%% -----------------------------------------------------------------------------
--spec parse_tokens_to_sd(Tokens) -> Result
-    when Tokens :: [token()]
-       , Result :: {static(), dynamic()}
-       .
-
-parse_tokens_to_sd(Tokens) ->
-    {[], SD} = do_parse_tokens_to_sd(Tokens),
-    SD.
-
-do_parse_tokens_to_sd(Tokens) ->
-    do_parse_tokens_to_sd(Tokens, in_text, undefined, {[], []}).
-
-do_parse_tokens_to_sd(Tokens, In, Prev, SD) ->
-    case do_parse_tokens_to_sd_1(Tokens, In, Prev, SD) of
-        {[], {S, D}} ->
-            {[], {lists:reverse(S), lists:reverse(D)}};
-        {RestTokens, Prev1, AccSD} ->
-            do_parse_tokens_to_sd(RestTokens, in_text, Prev1, AccSD)
-    end.
-
-% Single line expression
-do_parse_tokens_to_sd_1( [{_, {expr, _, _}} = H | T]
-                       , in_text
-                       , Prev
-                       , {S, D} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {S, [H | D]});
-do_parse_tokens_to_sd_1( [{_, {expr, _, _}} = H | T]
-                       , in_expr
-                       , Prev
-                       , {S, [HD | D]} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
-% Multiline expression
-do_parse_tokens_to_sd_1( [{_, {start_expr, _, _}} = H | T]
-                       , in_text
-                       , Prev
-                       , {S, D} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H] | D]});
-do_parse_tokens_to_sd_1( [{_, {start_expr, _, _}} | _] = T
-                       , in_expr
-                       , Prev
-                       , SD ) ->
-    parse_nested_sd(T, Prev, SD);
-do_parse_tokens_to_sd_1( [{_, {mid_expr, _, _}} = H | T]
-                       , in_expr
-                       , Prev
-                       , {S, [HD | D]} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
-do_parse_tokens_to_sd_1( [{_, {end_expr, _, _}} = H | T]
-                       , in_expr
-                       , _Prev
-                       , {S, [HD | D]} ) ->
-    {T, H, {S, [lists:reverse([H | HD]) | D]}};
+ % Expr
+ resolve_tokens_acc(
+    #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
+    {[#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc], {in_expr, false}}
+) ->
+     {[join_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+resolve_tokens_acc(
+    #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
+    {[#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc], {in_continue, false}}
+) ->
+     {[join_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+resolve_tokens_acc(
+    #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
+    {[#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc], {in_expr, false}}
+) ->
+     {[join_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
+resolve_tokens_acc(
+    #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
+    {[#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc], {in_continue, false}}
+) ->
+     {[join_expr_tokens(Token, TAcc) | Acc], {in_text, false}};
+resolve_tokens_acc(
+    #expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = Token,
+    {Acc, _}
+) ->
+     {[Token | Acc], {in_expr, false}};
+resolve_tokens_acc(
+    #expr_token{engine = ?MODULE} = Token,
+    {[#text_token{text = <<>>} | Acc], In}
+) ->
+    resolve_tokens_acc(Token, {Acc, In});
 % Text
-do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} | T]
-                       , in_text
-                       , {PrevIndex, {text, PrevPos, PrevText}}
-                       , {[{PrevIndex, {PrevPos, PrevText}} | S], D} ) ->
-    MergedText  = [PrevText, Text],
-    MergedToken = {Index, {text, Pos, MergedText}},
-    do_parse_tokens_to_sd_2( T
-                           , MergedToken
-                           , in_text
-                           , MergedToken
-                           , {[{Index, {Pos, MergedText}} | S], D}
-                           );
-do_parse_tokens_to_sd_1( [{Index, {text, Pos, Text}} = H | T]
-                       , in_text
-                       , Prev
-                       , {S, D} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {[{Index, {Pos, Text}} | S], D});
-do_parse_tokens_to_sd_1( [{_, {text, _, _}} | _] = T
-                       , in_expr
-                       , Prev
-                       , SD ) ->
-    parse_nested_sd(T, Prev, SD);
-% Comment
-do_parse_tokens_to_sd_1( [{_, {comment, _, _}} | T]
-                       , In
-                       , Prev
-                       , {S, D} ) ->
-    do_parse_tokens_to_sd_1(T, In, Prev, {S, D});
-% Debug
-do_parse_tokens_to_sd_1( [{_, {code, _, _}} = H | T]
-                       , in_text
-                       , Prev
-                       , {S, D} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_text, Prev, {S, [H | D]});
-do_parse_tokens_to_sd_1( [{_, {code, _, _}} = H | T]
-                       , in_expr
-                       , Prev
-                       , {S, [HD | D]} ) ->
-    do_parse_tokens_to_sd_2(T, H, in_expr, Prev, {S, [[H | HD] | D]});
-% Done
-do_parse_tokens_to_sd_1([], _, _, SD) ->
-    {[], SD}.
+resolve_tokens_acc(
+    #text_token{text = <<>>},
+    {[#expr_token{engine = ?MODULE} | _] = Acc, In}
+) ->
+    {Acc, In};
+resolve_tokens_acc(
+    #text_token{} = Token,
+    {[#text_token{} = TAcc | Acc], State}
+) ->
+     {[join_text_tokens(Token, TAcc) | Acc], State};
+resolve_tokens_acc(
+    #text_token{} = Token,
+    {Acc, State}
+) ->
+     {[Token | Acc], State};
+% None
+resolve_tokens_acc(
+    Token,
+    {Acc, State}
+) ->
+     {[Token | Acc], State}.
 
-do_parse_tokens_to_sd_2(Tokens, Curr, In, Prev, {S, D}) ->
-    SD =
-        case should_push_empty_static(Prev, Curr, {S, D}) of
-            true ->
-                {[<<>> | S], D};
-            false ->
-                {S, D}
-        end,
-    do_parse_tokens_to_sd_1(Tokens, In, Curr, SD).
+join_text_tokens(Discard, Keep) ->
+    Keep#text_token{
+        text = <<(Keep#text_token.text)/binary, 32,
+                 (Discard#text_token.text)/binary>>
+    }.
 
-should_push_empty_static(_, Curr, {[], _}) ->
-    is_expr(Curr);
-should_push_empty_static(Prev, Curr, {_, _}) ->
-    is_expr(Prev) andalso is_expr(Curr).
+join_expr_tokens(Discard, Keep) ->
+    Keep#expr_token{
+        expr = <<(Keep#expr_token.expr)/binary, 32,
+                 (Discard#expr_token.expr)/binary>>,
+        vars = lists:merge(Discard#expr_token.vars, Keep#expr_token.vars)
+    }.
 
-is_expr({_, {Name, _, _}}) when Name =:= expr
-                              ; Name =:= start_expr
-                              ; Name =:= end_expr
-                              ; Name =:= nested_expr
-                              ; Name =:= code ->
-    true;
-is_expr(_) ->
-    false.
-
-% Nested
-parse_nested_sd([{Index, {_, Pos, _}} | _] = T, Prev, {S, [HD | D]}) ->
-    {Tokens, Nested} = parse_nested_sd_1(T, Prev, {[], []}),
-    H = ?nested_expr(Index, Pos, Nested),
-    do_parse_tokens_to_sd_1(Tokens, in_expr, H, {S, [[H | HD] | D]}).
-
-parse_nested_sd_1([{_, {start_expr, _, _}} | _] = T, Prev, {S, D}) ->
-    {Tokens, _, {S1, [H]}} = do_parse_tokens_to_sd_1(T, in_text, Prev, {S, []}),
-    parse_nested_sd_1(Tokens, H, {S1, [H | D]});
-parse_nested_sd_1([{_, {mid_expr, _, _}} | _] = T, _, {S, D}) ->
-    {T, {lists:reverse(S), lists:reverse(D)}};
-parse_nested_sd_1([{_, {end_expr, _, _}} | _] = T, _, {S, D}) ->
-    {T, {lists:reverse(S), lists:reverse(D)}};
-parse_nested_sd_1([{Index, {text, Pos, Text}} = H | T], _, {S, D}) ->
-    parse_nested_sd_1(T, H, {[{Index, {Pos, Text}} | S], D});
-parse_nested_sd_1([{_, {expr, _, _}} = H | T], _, {S, D}) ->
-    parse_nested_sd_1(T, H, {S, [H | D]});
-parse_nested_sd_1([{_, {code, _, _}} = H | T], _, {S, D}) ->
-    parse_nested_sd_1(T, H, {S, [H | D]});
-parse_nested_sd_1([{_, {comment, _, _}} | T], Prev, {S, D}) ->
-    parse_nested_sd_1(T, Prev, {S, D}).
-
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Compile.
-%% @end
-%% -----------------------------------------------------------------------------
-
-compile({Index, {expr, Pos, Expr}}, _) ->
-    {Index, {Pos, wrap_expr(Expr)}};
-compile({Index, {start_expr, Pos, Expr}}, _) ->
-    {Index, {Pos, wrap_expr_begin(Expr)}};
-compile({Index, {mid_expr, Pos, Expr}}, _) ->
-    {Index, {Pos, [32, Expr, 32]}};
-compile({Index, {end_expr, Pos, Expr}}, _) ->
-    {Index, {Pos, wrap_expr_end(Expr)}};
-compile(Tokens, Opts) when is_list(Tokens) ->
-    [{Index, {_, Pos, _}} | _] = Tokens,
-    Expr =
-        lists:map(
-            fun(Token) ->
-                {_, {_, Bin}} = compile(Token, Opts),
-                Bin
-            end,
-            Tokens
-        ),
-    {Index, {Pos, Expr}};
-compile({Index, {nested_expr, Pos, Tokens}}, Opts) ->
-    Expr0 = zip_compile(Tokens, Opts),
-    Expr1 = lists:join(",", Expr0),
-    Expr = ["[", Expr1, "]"],
-    {Index, {Pos, wrap_expr(Expr)}};
-compile({Index, {code, Pos, Expr}}, _) ->
-    {Index, {Pos, wrap_expr([Expr, ",<<>>"])}}.
-
-zip_compile(Tokens, Opts) ->
-    lists:map(
-        fun
-            ({_, {_, Bin}}) ->
-                ["<<\"", Bin, "\">>"];
-            (Token) ->
-                {_, {_, Bin}} = compile(Token, Opts),
-                Bin
-        end,
-        eel_evaluator:zip(Tokens)
-    ).
-
-wrap_expr_begin(Expr) ->
-    [" eel_converter:to_string(fun()->", Expr].
-
-wrap_expr_end(Expr) ->
-    [Expr, " end)"].
-
-wrap_expr(Expr) ->
-    wrap_expr_end(wrap_expr_begin(Expr)).
-
-%%%=============================================================================
-%%% Tests
-%%%=============================================================================
-
--ifdef(TEST).
-
-% TODO: Improve tests
-
-handle_body_test() ->
-    Bin = <<
-        "<%= foo .%>"
-        "<h1>Title</h1>"
-        "<%: io:format(\"Print but not render me!~n\") :%>"
-        "<%= case 1 of %>"
-        "<% 2 -> %><p>Foo</p>"
-        "<% ; Bar -> %>"
-            "<p>"
-                "<%= case hello =:= world of %>"
-                "<% true -> %>"
-                    "<%= hello .%>"
-                "<% ; false -> %>"
-                    "<p>"
-                        "<%% This is a comment %%>"
-                        "<%: ignore_me :%>"
-                        "<%= case car =:= bus of %>"
-                        "<% true -> %>"
-                            "Car"
-                        "<% ; false -> %>"
-                            "<%= bus .%>"
-                        "<% end .%>"
-                    "</p>"
-                "<% end .%>"
-            "</p>"
-        "<% end .%>"
-        "<%= Foo = foo, Foo .%>"
-        "<footer>Footer</footer>"
-    >>,
-    Expected = {[<<>>,
-                   {2,{{1,12},"<h1>Title</h1>"}},
-                   <<>>,<<>>,
-                   {27,{{1,372},"<footer>Footer</footer>"}}],
-                  [{1,{expr,{1,1},"foo"}},
-                   {3,
-                    {code,{1,26},"io:format(\"Print but not render me!~n\")"}},
-                   [{4,{start_expr,{1,73},"case 1 of"}},
-                    {5,{mid_expr,{1,89},"2 ->"}},
-                    {6,{nested_expr,{1,99},{[{6,{{1,99},"<p>Foo</p>"}}],[]}}},
-                    {7,{mid_expr,{1,109},"; Bar ->"}},
-                    {8,
-                     {nested_expr,
-                      {1,123},
-                      {[{8,{{1,123},"<p>"}},{24,{{1,336},"</p>"}}],
-                       [[{9,{start_expr,{1,126},"case hello =:= world of"}},
-                         {10,{mid_expr,{1,156},"true ->"}},
-                         {11,{expr,{1,169},"hello"}},
-                         {12,{mid_expr,{1,182},"; false ->"}},
-                         {13,
-                          {nested_expr,
-                           {1,198},
-                           {[{13,{{1,198},"<p>"}},<<>>,{22,{{1,322},"</p>"}}],
-                            [{15,{code,{1,226},"ignore_me"}},
-                             [{16,{start_expr,{1,243},"case car =:= bus of"}},
-                              {17,{mid_expr,{1,269},"true ->"}},
-                              {18,
-                               {nested_expr,
-                                {1,282},
-                                {[{18,{{1,282},"Car"}}],[]}}},
-                              {19,{mid_expr,{1,285},"; false ->"}},
-                              {20,{expr,{1,301},"bus"}},
-                              {21,{end_expr,{1,312},"end"}}]]}}},
-                         {23,{end_expr,{1,326},"end"}}]]}}},
-                    {25,{end_expr,{1,340},"end"}}],
-                   {26,{expr,{1,350},"Foo = foo, Foo"}}]},
-    {ok, Result} = eel_tokenizer:tokenize(Bin, #{engine => ?MODULE}),
-    ?assertEqual(Expected, Result).
-
-parse_tokens_to_sd_test() ->
-    Tokens =[
-        {1,{text,{1,1},<<"<h1>">>}},
-        {2,{expr,{1,2},<<"maps:get('Title', Bindings, <<\"EEl\">>)">>}},
-        {3,{text,{1,46},<<"</h1>">>}},
-        {4,{comment,{1,47},<<"<h2><%= Foo .%></h2>">>}},
-        {5,{text,{1,73},<<"<ul>">>}},
-        {6,{start_expr,{1,74},<<"lists:map(fun(Item) ->">>}},
-        {7,{text,{1,101},<<"<li>">>}},
-        {8,{expr,{1,102},<<"Item">>}},
-        {9,{text,{1,112},<<"</li>">>}},
-        {10,{end_expr,{1,113},<<"end, List)">>}},
-        {11,{text,{1,128},<<"</ul>">>}},
-        {12,{start_expr,{1,129},<<"Length = erlang:length(List),">>}},
-        {13,{text,{1,163},<<"<div>Item count: ">>}},
-        {14,{expr,{1,164},<<"Length">>}},
-        {15,{text,{1,176},<<"</div>">>}},
-        {16,{start_expr,{1,177},<<"case Length > 0 of true ->">>}},
-        {17,{text,{1,208},<<"<ul>">>}},
-        {18,{start_expr,{1,209},<<"lists:map(fun(N) ->">>}},
-        {19,{text,{1,233},<<"<li>">>}},
-        {20,{expr,{1,234},<<"N">>}},
-        {21,{text,{1,241},<<"</li>">>}},
-        {22,{end_expr,{1,242},<<"end, lists:seq(1, Length))">>}},
-        {23,{text,{1,273},<<"</ul>">>}},
-        {24,{end_expr,{1,274},<<"; false -> <<\"Empty list\">> end">>}},
-        {25,{end_expr,{1,310},<<>>}}
-    ],
-    Expected =
-        {[{1,{{1,1},<<"<h1>">>}},
-                   {5,{{1,73},[<<"</h1>">>,<<"<ul>">>]}},
-                   {11,{{1,128},<<"</ul>">>}}],
-                  [{2,
-                    {expr,
-                     {1,2},
-                     <<"maps:get('Title', Bindings, <<\"EEl\">>)">>}},
-                   [{6,{start_expr,{1,74},<<"lists:map(fun(Item) ->">>}},
-                    {7,
-                     {nested_expr,
-                      {1,101},
-                      {[{7,{{1,101},<<"<li>">>}},{9,{{1,112},<<"</li>">>}}],
-                       [{8,{expr,{1,102},<<"Item">>}}]}}},
-                    {10,{end_expr,{1,113},<<"end, List)">>}}],
-                   [{12,
-                     {start_expr,{1,129},<<"Length = erlang:length(List),">>}},
-                    {13,
-                     {nested_expr,
-                      {1,163},
-                      {[{13,{{1,163},<<"<div>Item count: ">>}},
-                        {15,{{1,176},<<"</div>">>}}],
-                       [{14,{expr,{1,164},<<"Length">>}},
-                        [{16,
-                          {start_expr,
-                           {1,177},
-                           <<"case Length > 0 of true ->">>}},
-                         {17,
-                          {nested_expr,
-                           {1,208},
-                           {[{17,{{1,208},<<"<ul>">>}},
-                             {23,{{1,273},<<"</ul>">>}}],
-                            [[{18,
-                               {start_expr,{1,209},<<"lists:map(fun(N) ->">>}},
-                              {19,
-                               {nested_expr,
-                                {1,233},
-                                {[{19,{{1,233},<<"<li>">>}},
-                                  {21,{{1,241},<<"</li>">>}}],
-                                 [{20,{expr,{1,234},<<"N">>}}]}}},
-                              {22,
-                               {end_expr,
-                                {1,242},
-                                <<"end, lists:seq(1, Length))">>}}]]}}},
-                         {24,
-                          {end_expr,
-                           {1,274},
-                           <<"; false -> <<\"Empty list\">> end">>}}]]}}},
-                    {25,{end_expr,{1,310},<<>>}}]]},
-    Result = parse_tokens_to_sd(Tokens),
-    ?assertEqual(Expected, Result).
-
-handle_render_test() ->
-    Expected =
-        ["<h1>",<<"EEl">>,
-        ["</h1>","<ul>"],
-        [[<<"<li>">>,<<"foo">>,<<"</li>">>],
-         [<<"<li>">>,<<"bar">>,<<"</li>">>],
-         [<<"<li>">>,<<"baz">>,<<"</li>">>]],
-        "</ul>",
-        [<<"<div>Item count: ">>,<<"3">>,<<"</div>">>,
-         [<<"<ul>">>,
-          [[<<"<li>">>,<<"1">>,<<"</li>">>],
-           [<<"<li>">>,<<"2">>,<<"</li>">>],
-           [<<"<li>">>,<<"3">>,<<"</li>">>]],
-          <<"</ul>">>]]],
-    Bin = <<
-        "<h1><%= maps:get('Title', Bindings, <<\"EEl\">>) .%></h1>"
-        "<%% <h2><%= Foo .%></h2> %%>"
-        "<ul>"
-        "<%= lists:map(fun(Item) -> %>"
-        "<li><%= Item .%></li>"
-        "<% end, List) .%>"
-        "</ul>"
-        "<%= Length = erlang:length(List), %>"
-        "<div>Item count: <%= Length .%></div>"
-        "<%= case Length > 0 of true -> %>"
-        "<ul>"
-        "<%= lists:map(fun(N) -> %>"
-        "<li><%= N .%></li>"
-        "<% end, lists:seq(1, Length)) .%>"
-        "</ul>"
-        "<% ; false -> <<\"Empty list\">> end .%>"
-        "<%  .%>"
-    >>,
-    Result = eel:eval(Bin, #{'List' => [foo, bar, baz]}),
-    ?assertEqual(Expected, Result).
-
--endif.
+handle_tree(Tree) ->
+    Tree.

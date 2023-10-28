@@ -6,17 +6,12 @@
 %%%-----------------------------------------------------------------------------
 -module(eel_converter).
 
--compile({inline, [ to_string/2 ]}).
-
 %% API functions
--export([ to_string/1
-        , to_string/2
-        , filename_to_module/1
-        ]).
+-export([to_string/1]).
 
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
+%%======================================================================
+%% API functions
+%%======================================================================
 
 %% -----------------------------------------------------------------------------
 %% @doc to_string/1.
@@ -24,53 +19,21 @@
 %% -----------------------------------------------------------------------------
 -spec to_string(term()) -> iodata().
 
-to_string(Value) ->
-    to_string(Value, undefined).
-
-%% -----------------------------------------------------------------------------
-%% @doc to_string/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec to_string(term(), Options :: term()) -> iodata().
-
-to_string(List, undefined) when is_list(List) ->
+to_string(List) when is_list(List) ->
     List;
-to_string(Bin, undefined) when is_binary(Bin) ->
+to_string(Bin) when is_binary(Bin) ->
     Bin;
-to_string(Fun, undefined) when is_function(Fun, 0) ->
+to_string(Fun) when is_function(Fun, 0) ->
     to_string(Fun());
-to_string(undefined, _) ->
+to_string(undefined) ->
     <<>>;
-to_string([], _) ->
-    <<>>;
-to_string(Atom, undefined) when is_atom(Atom) ->
+to_string(Atom) when is_atom(Atom) ->
     erlang:atom_to_binary(Atom);
-to_string(Atom, Encoding) when is_atom(Atom), is_atom(Encoding) ->
-    erlang:atom_to_binary(Atom, Encoding);
-to_string(Float, undefined) when is_float(Float) ->
-    erlang:float_to_binary(Float);
-to_string(Float, Options) when is_float(Float), is_list(Options) ->
-    erlang:float_to_binary(Float, Options);
-to_string(Int, undefined) when is_integer(Int) ->
+% to_string(Float) when is_float(Float) ->
+%     erlang:float_to_binary(Float);
+to_string(Int) when is_integer(Int) ->
     erlang:integer_to_binary(Int);
-to_string(Int, Base) when is_integer(Int), is_integer(Base) ->
-    erlang:integer_to_binary(Int, Base);
-to_string(PID, undefined) when is_pid(PID) ->
+to_string(PID) when is_pid(PID) ->
     erlang:pid_to_list(PID);
-to_string(Term, _) ->
+to_string(Term) ->
     io_lib:format("~p", [Term]).
-
-%% -----------------------------------------------------------------------------
-%% @doc filename_to_module/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec filename_to_module(file:filename_all()) -> module().
-
-filename_to_module(Filename) when is_binary(Filename); is_list(Filename) ->
-    Basename =
-        case filename:basename(Filename) of
-            N when is_binary(N) -> N;
-            N when is_list(N) -> list_to_binary(N)
-        end,
-    Name = binary:replace(Basename, <<".">>, <<"_">>, [global]),
-    erlang:binary_to_atom(Name).

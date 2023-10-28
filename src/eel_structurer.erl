@@ -1,4 +1,4 @@
--module(v2_eel_structurer).
+-module(eel_structurer).
 
 -export([tree/1]).
 
@@ -6,11 +6,11 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("v2_eel.hrl").
+-include("eel.hrl").
 
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
+%%======================================================================
+%% API functions
+%%======================================================================
 
 tree(Tokens) ->
     Tree0 = eel_tree:new(),
@@ -20,9 +20,9 @@ tree(Tokens) ->
     Tree = eel_tree:set_metadata(State, Tree1),
     do_tree(Tokens, VRoot, Tree).
 
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
+%%======================================================================
+%% Internal functions
+%%======================================================================
 
 do_tree(Tokens, VParent, Tree) ->
     lists:foldl(fun
@@ -77,9 +77,9 @@ add_slave_vertex(Token, MVertex, Tree0) ->
     Tree = eel_tree:add_edge(MVertex, SVertex, Tree1),
     {SVertex, Tree}.
 
-%%%=============================================================================
-%%% Tests
-%%%=============================================================================
+%%======================================================================
+%% Tests
+%%======================================================================
 
 -ifdef(TEST).
 
@@ -101,7 +101,7 @@ tree_test() ->
         {vertex,<<"4">>,<<"11">>,[],false,undefined,
          {slave_vertex,
           {expr_token,<<"end, maps:get(items, Bindings))">>,
-           v2_eel_smart_engine,
+           eel_smart_engine,
            {marker,expr_end,<<"<%">>,<<".%>">>,
             [fetch_vertex_parent,push_token,
              fetch_vertex_parent]},
@@ -113,7 +113,7 @@ tree_test() ->
         {vertex,<<"0">>,<<"2">>,[],false,undefined,
          {slave_vertex,
           {expr_token,<<"maps:get(title, Bindings)">>,
-           v2_eel_smart_engine,
+           eel_smart_engine,
            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
            [title]}}},
        <<"3">> =>
@@ -129,7 +129,7 @@ tree_test() ->
         {vertex,<<"4">>,<<"5">>,[],false,undefined,
          {slave_vertex,
           {expr_token,<<"lists:map(fun(Item) ->">>,
-           v2_eel_smart_engine,
+           eel_smart_engine,
            {marker,expr_start,<<"<%=">>,<<"%>">>,
             [add_vertex,push_token,add_vertex]},
            []}}},
@@ -145,14 +145,14 @@ tree_test() ->
         {vertex,<<"6">>,<<"8">>,[],false,undefined,
          {slave_vertex,
           {expr_token,<<"maps:get(item_prefix, Bindings)">>,
-           v2_eel_smart_engine,
+           eel_smart_engine,
            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
            [item_prefix]}}},
        <<"9">> =>
         {vertex,<<"6">>,<<"9">>,[],false,undefined,
          {slave_vertex,
           {expr_token,<<"integer_to_binary(Item)">>,
-           v2_eel_smart_engine,
+           eel_smart_engine,
            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
            []}}}},
      <<"0">>,
@@ -173,7 +173,7 @@ tree_test() ->
         "</body>"
         "</html>"
     >>,
-    Tokens = v2_eel_tokenizer:tokenize(Bin),
+    Tokens = eel_tokenizer:tokenize(Bin),
     Result = tree(Tokens),
     ?assertEqual(Expected, Result).
 

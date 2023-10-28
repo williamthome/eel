@@ -1,317 +1,237 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl tokenizer module.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_tokenizer).
 
--compile(inline_list_funcs).
--compile({inline, [ do_tokenize/9
-                  , find_end_marker/6
-                  ]}).
-
-%% API functions
--export([ tokenize/1
-        , tokenize/2
-        , tokenize_file/1
-        , tokenize_file/2
-        ]).
-
-%% Types
--export_type([ tokens/0
-             , result/0
-             ]).
-
-%% Includes
--include("eel_core.hrl").
--include_lib("kernel/include/logger.hrl").
+-export([tokenize/1, tokenize/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--export([ init/1
-        , handle_expr_start/2
-        , handle_expr_end/3
-        , handle_text/3
-        , handle_body/2
-        ]).
 -endif.
 
-%% Types
--type tokens() :: {eel_engine:static(), eel_engine:dynamic()}.
--type result() :: {ok, tokens()} | {error, term()}.
+-include("eel.hrl").
 
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
+-record(state, { engines   :: [engine()]
+               , buffer    :: binary()
+               , text_acc  :: binary()
+               , tokens    :: [token() | [token()]]
+               }).
 
-%% -----------------------------------------------------------------------------
-%% @doc tokenize/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec tokenize(iodata()) -> result().
+-define(SMART_ENGINE, eel_smart_engine).
 
-tokenize(IoData) ->
-    tokenize(IoData, ?DEFAULT_ENGINE_OPTS).
+%%======================================================================
+%% API functions
+%%======================================================================
 
-%% -----------------------------------------------------------------------------
-%% @doc tokenize/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec tokenize(iodata(), map()) -> result().
+tokenize(Bin) ->
+    tokenize(Bin, #{}).
 
-tokenize(Bin, Opts) when is_binary(Bin) ->
-    Eng = maps:get(engine, Opts, ?DEFAULT_ENGINE),
-    case Eng:init(Opts) of
-        {ok, InitState} ->
-            case do_tokenize(Bin, Eng, InitState, 1, {1, 1}, {1, 1}, [], [], Opts) of
-                {ok, {Tokens, EndState}} ->
-                    Eng:handle_body(Tokens, EndState);
-                {error, Reason} ->
-                    {error, Reason}
+tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
+    State = #state{
+        engines = maps:get(engines, Opts, default_engines()),
+        buffer = <<>>,
+        text_acc = <<>>,
+        tokens = []
+    },
+    do_tokenize(Bin, State).
+
+%%======================================================================
+%% Internal functions
+%%======================================================================
+
+default_engines() ->
+    [?SMART_ENGINE].
+
+do_tokenize(<<H, T/binary>>, State0) ->
+    State = State0#state{
+        buffer = <<(State0#state.buffer)/binary, H>>,
+        text_acc = <<(State0#state.text_acc)/binary, H>>
+    },
+    case handle_expr_start(State#state.engines, State#state.text_acc) of
+        {ok, {Engine, Markers}} ->
+            case handle_expr_end(T, Markers, <<>>) of
+                {ok, {Marker, Text, Expr, Rest}} ->
+                    case handle_text(State#state.engines, Text) of
+                        {ok, TextTokens} ->
+                            case handle_expr(Engine, Marker, Expr) of
+                                {ok, ExprTokens} ->
+                                    do_tokenize(Rest, State#state{
+                                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
+                                        tokens = [ExprTokens, TextTokens | State#state.tokens],
+                                        text_acc = <<>>
+                                    });
+                                {error, Reason} ->
+                                    {error, Reason}
+                            end;
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
+                none ->
+                    % TODO: Check if should just skip when no end marker found.
+                    %       e.g: do_tokenize(T, State)
+                    error({noendmarker, #{
+                        engine => Engine,
+                        markers_candidate => Markers,
+                        buffer => State#state.buffer,
+                        text => State#state.text_acc
+                    }})
             end;
-        {error, Reason} ->
-            {error, Reason}
+        none ->
+            do_tokenize(T, State)
     end;
-tokenize(List, Opts) when is_list(List) ->
-    tokenize(erlang:iolist_to_binary(List), Opts).
-
-%% -----------------------------------------------------------------------------
-%% @doc tokenize_file/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all()) -> result().
-
-tokenize_file(Filename) ->
-    tokenize_file(Filename, ?DEFAULT_ENGINE_OPTS).
-
-%% -----------------------------------------------------------------------------
-%% @doc tokenize_file/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec tokenize_file(file:filename_all(), map()) -> result().
-
-tokenize_file(Filename, Opts) ->
-    case file:read_file(Filename) of
-        {ok, Bin} ->
-            tokenize(Bin, Opts);
+do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
+    lists:foldl(fun(Engine, Tokens) ->
+        Engine:handle_tokens(lists:flatten(Tokens))
+    end, lists:reverse(State#state.tokens), State#state.engines);
+do_tokenize(<<>>, #state{text_acc = Text} = State) ->
+    case handle_text(State#state.engines, Text) of
+        {ok, Tokens} ->
+            do_tokenize(<<>>, State#state{
+                tokens = [Tokens | State#state.tokens],
+                text_acc = <<>>
+            });
         {error, Reason} ->
             {error, Reason}
     end.
 
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
-
-do_tokenize( <<H, T/binary>> = Bin
-           , Eng
-           , State
-           , Index
-           , PrevPos
-           , {Ln, Col} = Pos
-           , Text
-           , Acc
-           , Opts
-           ) ->
-    try
-        case Eng:handle_expr_start(Bin, State) of
-            {ok, {SMarker, SMarkerSize, StartExpr, NewState}} ->
-                SExprPos = {Ln, Col + SMarkerSize},
-                case find_end_marker(StartExpr, Eng, SMarker, SExprPos, [], NewState) of
-                    {ok, {MarkerId, EndExprPos, Expr, Rest, ExprState}} ->
-                        case Text of
-                            [] ->
-                                ExprToken = {Index, {MarkerId, Pos, Expr}},
-                                do_tokenize( Rest
-                                        , Eng
-                                        , ExprState
-                                        , Index + 1
-                                        , EndExprPos
-                                        , EndExprPos
-                                        , []
-                                        , [ExprToken | Acc]
-                                        , Opts
-                                        );
-                            [$\n] ->
-                                ExprToken = {Index, {MarkerId, {Ln, 1}, Expr}},
-                                do_tokenize( Rest
-                                        , Eng
-                                        , ExprState
-                                        , Index + 1
-                                        , EndExprPos
-                                        , EndExprPos
-                                        , []
-                                        , [ExprToken | Acc]
-                                        , Opts
-                                        );
-                            Text ->
-                                % NOTE: handle_text is using the ExprState, this can
-                                %       be an issue because the text is placed before
-                                %       the expression and not after.
-                                case Eng:handle_text(lists:reverse(Text), PrevPos, ExprState) of
-                                    {ok, {NewText, NewTextPos, TextState}} ->
-                                        TextToken = {Index, {text, NewTextPos, NewText}},
-                                        ExprToken = {Index + 1, {MarkerId, Pos, Expr}},
-                                        do_tokenize( Rest
-                                                , Eng
-                                                , TextState
-                                                , Index + 2
-                                                , EndExprPos
-                                                , EndExprPos
-                                                , []
-                                                , [ExprToken, TextToken | Acc]
-                                                , Opts
-                                                );
-                                    {error, Reason} ->
-                                        {error, Reason}
-                                end
-                        end;
-                    {error, no_end_marker} ->
-                        {error, {no_end_marker, {Pos, SMarker, Bin}}}
-                end;
-            {ok, NewState} ->
-                NextPos = char_pos(H, Pos),
-                do_tokenize( T
-                        , Eng
-                        , NewState
-                        , Index
-                        , PrevPos
-                        , NextPos
-                        , [H | Text]
-                        , Acc
-                        , Opts
-                        );
-            {error, Reason} ->
-                {error, Reason}
-        end
-    catch
-        Class:ErrReason:Stacktrace ->
-            ?LOG_ERROR(#{ class => Class
-                        , reason => ErrReason
-                        , stacktrace => Stacktrace
-                        , module => ?MODULE
-                        , function => tokenize
-                        , arity => 2
-                        , position => Pos
-                        , rest => Bin
-                        , eof => false
-                        , options => Opts
-                        }),
-            erlang:raise(Class, ErrReason, Stacktrace)
+handle_expr_start([Engine | Engines], Bin) ->
+    case start_marker_match(Engine:markers(), Bin, []) of
+        [] ->
+            handle_expr_start(Engines, Bin);
+        Markers ->
+            {ok, {Engine, Markers}}
     end;
-do_tokenize(<<>>, _, State, _, _, _, [], Acc, _) ->
-    {ok, {lists:reverse(Acc), State}};
-do_tokenize(<<>>, Eng, State, Index, Pos, _, Text, Acc, Opts) ->
-    try
-        case Eng:handle_text(lists:reverse(Text), Pos, State) of
-            {ok, {NewText, NewTextPost, TextState}} ->
-                TextToken = {Index, {text, NewTextPost, NewText}},
-                {ok, {lists:reverse([TextToken | Acc]), TextState}};
-            {error, Reason} ->
-                {error, Reason}
-        end
-    catch
-        Class:ErrReason:Stacktrace ->
-            ?LOG_ERROR(#{ class => Class
-                        , reason => ErrReason
-                        , stacktrace => Stacktrace
-                        , module => ?MODULE
-                        , function => tokenize
-                        , arity => 2
-                        , position => Pos
-                        , rest => <<>>
-                        , eof => true
-                        , options => Opts
-                        }),
-            erlang:raise(Class, ErrReason, Stacktrace)
-    end.
+handle_expr_start([], _) ->
+    none.
 
-find_end_marker( <<H, T/binary>> = Bin
-               , Eng
-               , SMarker
-               , {Ln, Col} = PrevPos
-               , Expr
-               , State
-               ) ->
-    case Eng:handle_expr_end(SMarker, Bin, State) of
-        {ok, {MarkerId, EndMarkerSize, Rest, NewState}} ->
-            NewPrevPos = {Ln, Col + EndMarkerSize},
-            {ok, {MarkerId, NewPrevPos, lists:reverse(Expr), Rest, NewState}};
-        {ok, NewState} ->
-            Acc = [H | Expr],
-            NewPrevPos = char_pos(H, PrevPos),
-            find_end_marker(T, Eng, SMarker, NewPrevPos, Acc, NewState);
+start_marker_match([#marker{start = Start} = Marker | Markers], Bin, Acc) ->
+    BSize = erlang:byte_size(Bin),
+    MSize = erlang:byte_size(Start),
+    case Bin of
+        <<Start:MSize/binary, 32>> ->
+            start_marker_match(Markers, Bin, [{Marker, <<>>} | Acc]);
+        <<Text:(BSize-MSize-1)/binary, Start:MSize/binary, 32>> ->
+            start_marker_match(Markers, Bin, [{Marker, Text} | Acc]);
+        _ ->
+            start_marker_match(Markers, Bin, Acc)
+    end;
+start_marker_match([], _, Acc) ->
+    Acc.
+
+handle_expr_end(<<H, T/binary>>, Markers, Acc0) ->
+    Acc = <<Acc0/binary, H>>,
+    case end_marker_match(Markers, Acc) of
+        {ok, {Marker, Text, Expr}} ->
+            {ok, {Marker, Text, Expr, T}};
+        none ->
+            handle_expr_end(T, Markers, Acc)
+    end;
+handle_expr_end(<<>>, _, _) ->
+    none.
+
+end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
+    BSize = erlang:byte_size(Bin),
+    MSize = erlang:byte_size(Final),
+    case Bin of
+        <<Expr:(BSize-MSize-1)/binary, 32, Final:MSize/binary>> ->
+            {ok, {Marker, Text, Expr}};
+        _ ->
+            end_marker_match(Markers, Bin)
+    end;
+end_marker_match([], _) ->
+    none.
+
+handle_text(Engines, Bin) ->
+    do_handle_text(Engines, Bin, []).
+
+do_handle_text([Engine | Engines], Bin, Acc0) ->
+    case Engine:handle_text(Bin) of
+        {ok, Tokens} ->
+            Acc = resolve_handled_tokens(Tokens, Engine, Acc0),
+            do_handle_text(Engines, Bin, Acc);
         {error, Reason} ->
             {error, Reason}
     end;
-find_end_marker(<<>>, _, _, _, _, _) ->
-    {error, no_end_marker}.
+do_handle_text([], _, Acc) ->
+    {ok, Acc}.
 
-char_pos($\n, {Ln, _}) ->
-    {Ln + 1, 1};
-char_pos(_, {Ln, Col}) ->
-    {Ln, Col + 1}.
+handle_expr(Engine, Marker, Bin) ->
+    case Engine:handle_expr(Marker, Bin) of
+        {ok, Tokens} ->
+            {ok, resolve_handled_tokens(Tokens, Engine, [])};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
-%%%=============================================================================
-%%% Tests
-%%%=============================================================================
+resolve_handled_tokens([{text, Text} | T], Engine, Acc0) ->
+    Acc = [new_text_token(Text) | Acc0],
+    resolve_handled_tokens(T, Engine, Acc);
+resolve_handled_tokens([{expr, {Marker, Expr, Vars}} | T], Engine, Acc0) ->
+    Acc = [new_expr_token(Expr, Engine, Marker, Vars) | Acc0],
+    resolve_handled_tokens(T, Engine, Acc);
+resolve_handled_tokens([], _, Acc) ->
+    Acc.
+
+new_text_token(Text) when is_binary(Text) ->
+    #text_token{
+        text = Text
+    }.
+
+new_expr_token(Expr, Engine, Marker, Vars) when is_binary(Expr)
+                                              , is_list(Vars) ->
+    #expr_token{
+        expr = Expr,
+        engine = Engine,
+        marker = Marker,
+        vars = Vars
+    }.
+
+%%======================================================================
+%% Tests
+%%======================================================================
 
 -ifdef(TEST).
 
 tokenize_test() ->
-    Bin1 = <<"{{ Hey }}!\nSay hello to {{ This }}\n{{ World }}!">>,
-    Expected1 = {ok, [
-        {1,{var,{1,1}," Hey "}},
-        {2,{text,{1,10},"!\nSay hello to "}},
-        {3,{var,{2,14}," This "}},
-        {4,{var,{3,1}," World "}},
-        {5,{text,{3,12},"!"}}
-    ]},
-    Bin2 = <<"Foo">>,
-    Expected2 = {ok, [
-        {1,{text,{1,1},"Foo"}}
-    ]},
-    Bin3 = <<"{{ Foo }}{{ Bar }}Baz">>,
-    Expected3 = {ok, [
-        {1,{var,{1,1}," Foo "}},
-        {2,{var,{1,10}," Bar "}},
-        {3,{text,{1,19},"Baz"}}
-    ]},
-    Opts = #{engine => ?MODULE},
-    [
-        ?assertEqual(Expected1, tokenize(Bin1, Opts)),
-        ?assertEqual(Expected2, tokenize(Bin2, Opts)),
-        ?assertEqual(Expected3, tokenize(Bin3, Opts))
-    ].
+    Expected = [{text_token,<<"<html><head><title>">>},
+    {expr_token,<<"maps:get(title, Bindings)">>,eel_smart_engine,
+                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                [title]},
+    {text_token,<<"</title></head><body><ul>">>},
+    {expr_token,<<"lists:map(fun(Item) ->">>,eel_smart_engine,
+                {marker,expr_start,<<"<%=">>,<<"%>">>,
+                        [add_vertex,push_token,add_vertex]},
+                []},
+    {expr_token,<<"TODO: Items to binary">>,eel_smart_engine,
+                {marker,comment,<<"<%%">>,<<".%>">>,[ignore_token]},
+                []},
+    {text_token,<<"<li>">>},
+    {expr_token,<<"maps:get(item_prefix, Bindings)">>,eel_smart_engine,
+                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                [item_prefix]},
+    {expr_token,<<"integer_to_binary(Item)">>,eel_smart_engine,
+                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                []},
+    {text_token,<<"</li>">>},
+    {expr_token,<<"end, maps:get(items, Bindings))">>,eel_smart_engine,
+                {marker,expr_end,<<"<%">>,<<".%>">>,
+                        [fetch_vertex_parent,push_token,fetch_vertex_parent]},
+                [items]},
+    {text_token,<<"</ul></body></html>">>}],
 
-tokenize_file_test() ->
-    Filename = "/tmp/foo.eel",
-    Bin = <<"\"Foo\"">>,
-    ok = file:write_file(Filename, Bin),
-    Expected = [{1, {text,{1, 1},"\"Foo\""}}],
-    Opts = #{engine => ?MODULE},
-    {ok, Result} = tokenize_file(Filename, Opts),
+    Bin = <<
+        "<html>"
+        "<head>"
+            "<title><%= @title .%></title>"
+        "</head>"
+        "<body>"
+            "<ul>"
+            "<%= lists:map(fun(Item) -> %>"
+                "<%% TODO: Items to binary .%>"
+                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+            "<% end, @items) .%>"
+            "</ul>"
+        "</body>"
+        "</html>"
+    >>,
+    Result = tokenize(Bin),
     ?assertEqual(Expected, Result).
-
-% Engine
-
-init(#{}) ->
-    {ok, []}.
-
-handle_expr_start(<<"{{", Rest/binary>>, State) ->
-    {ok, {<<"{{">>, 2, Rest, State}};
-handle_expr_start(_, State) ->
-    {ok, State}.
-
-handle_expr_end(<<"{{">>, <<"}}", Rest/binary>>, State) ->
-    {ok, {var, 2, Rest, State}};
-handle_expr_end(_, _, State) ->
-    {ok, State}.
-
-handle_text(Text, Pos, State) ->
-    {ok, {Text, Pos, State}}.
-
-handle_body(Tokens, _State) ->
-    {ok, Tokens}.
 
 -endif.

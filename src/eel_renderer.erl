@@ -1,222 +1,128 @@
-%%%-----------------------------------------------------------------------------
-%%% @author William Fank Thomé [https://github.com/williamthome]
-%%% @copyright 2023 William Fank Thomé
-%%% @doc EEl renderer module.
-%%% @end
-%%%-----------------------------------------------------------------------------
 -module(eel_renderer).
 
--compile(inline_list_funcs).
--compile({inline, [ render/3
-                  , capitalize_keys/2
-                  ]}).
-
-%% API functions
--export([ render/1
-        , render/2
+-export([ render/2
         , render/3
+        , render_changes/2
+        , render_changes/3
+        , get_vars_indexes/2
+        , get_vars_from_indexes/2
         ]).
-
-%% Types
--export_type([ bindings/0
-             , dynamic/0
-             , changes/0
-             , snapshot/0
-             , result/0
-             ]).
-
-%% Includes
--include("eel_core.hrl").
--include_lib("kernel/include/logger.hrl").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-%% Types
--type snapshot() :: eel_snapshot:snapshot().
--type bindings() :: eel_snapshot:bindings().
--type dynamic()  :: eel_snapshot:dynamice().
--type changes()  :: eel_snapshot:changes().
--type options()  :: map().
--type result()   :: {ok, snapshot()}.
+%%======================================================================
+%% API functions
+%%======================================================================
 
-%%%=============================================================================
-%%% API functions
-%%%=============================================================================
+render(Bindings, State) ->
+    render(Bindings, State, fun eel_converter:to_string/1).
 
-%% -----------------------------------------------------------------------------
-%% @doc render/1.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(Snapshot) -> Result
-    when Snapshot :: snapshot()
-       , Result   :: result()
-       .
+render(Bindings, State, ToStringFun) ->
+    Indexes = maps:get(dynamics, State),
+    eval_parts(Indexes, Bindings, State, ToStringFun).
 
-render(Snapshot) ->
-    render(#{}, Snapshot, ?DEFAULT_ENGINE_OPTS).
+render_changes(Bindings, State) ->
+    render_changes(Bindings, State, fun eel_converter:to_string/1).
 
-%% -----------------------------------------------------------------------------
-%% @doc render/2.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot) -> Result
-    when Bindings :: bindings()
-       , Snapshot :: snapshot()
-       , Result   :: result()
-       .
+render_changes(Bindings, State, ToStringFun) ->
+    Indexes = get_vars_indexes(Bindings, State),
+    eval_parts(Indexes, Bindings, State, ToStringFun).
 
-render(Bindings, Snapshot) ->
-    render(Bindings, Snapshot, ?DEFAULT_ENGINE_OPTS).
+get_vars_indexes(Bindings, State) ->
+    do_get_vars_indexes(Bindings, maps:get(vars, State)).
 
-%% -----------------------------------------------------------------------------
-%% @doc render/3.
-%% @end
-%% -----------------------------------------------------------------------------
--spec render(Bindings, Snapshot, Opts) -> Result
-    when Bindings :: bindings()
-       , Snapshot :: snapshot()
-       , Opts     :: options()
-       , Result   :: result()
-       .
+get_vars_from_indexes(Indexes, State) ->
+    lists:filtermap(fun({Var, Index}) ->
+        case lists:member(Index, Indexes) of
+            true ->
+                {true, {Index, Var}};
+            false ->
+                false
+        end
+    end, maps:get(vars, State)).
 
-render(Params0, Snapshot, Opts) ->
-    Static = eel_snapshot:get_static(Snapshot),
-    DynamicSnap = eel_snapshot:get_dynamic(Snapshot),
-    AST = eel_snapshot:get_ast(Snapshot),
-    BindingsSnap = eel_snapshot:get_bindings(Snapshot),
-    Vars = eel_snapshot:get_vars(Snapshot),
-    Params = normalize_bindings(Params0, Opts),
-    MergedBindings = maps:merge(BindingsSnap, Params),
-    EvalBindings = MergedBindings#{'Bindings' => MergedBindings},
-    LocalFunHandler = maps:get(local_function_handler, Opts, none),
-    NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
-    {Dynamic0, Changes0, Bindings0} =
-        lists:foldl(
-            fun({Index, IndexVars}, {DAcc, CAcc, BAcc}) ->
-                case should_eval_exprs(DynamicSnap, Params, IndexVars) of
-                    true ->
-                        {Index, {Pos, EvalAST}} = proplists:lookup(Index, AST),
-                        try
-                            {Bin, NewBindings} = eval( EvalAST
-                                                     , BAcc
-                                                     , LocalFunHandler
-                                                     , NonLocalFunHandler
-                                                     ),
-                            { [{Index, {Pos, Bin}} | DAcc]
-                            , [{Index, Bin} | CAcc]
-                            , NewBindings
-                            }
-                        catch
-                            Class:Reason:Stacktrace ->
-                                ?LOG_ERROR(#{ class => Class
-                                            , reason => Reason
-                                            , stacktrace => Stacktrace
-                                            , module => ?MODULE
-                                            , function => ?FUNCTION_NAME
-                                            , arity => ?FUNCTION_ARITY
-                                            , ast => EvalAST
-                                            , position => Pos
-                                            , bindings => BAcc
-                                            , options => Opts
-                                            }),
-                                erlang:raise(Class, Reason, Stacktrace)
-                        end;
-                    false ->
-                        DCache = proplists:lookup(Index, DynamicSnap),
-                        {[DCache | DAcc], CAcc, BAcc}
-                end
-            end,
-            {[], [], EvalBindings},
-            Vars
-        ),
-    Dynamic = lists:reverse(Dynamic0),
-    Changes = lists:reverse(Changes0),
-    Bindings = maps:remove('Bindings', Bindings0),
-    {ok, eel_snapshot:new(Static, Dynamic, AST, Bindings, Vars, Changes)}.
+%%======================================================================
+%% Internal functions
+%%======================================================================
 
-should_eval_exprs(undefined, _, _) ->
-    true;
-should_eval_exprs(_, Params, Vars) ->
-    lists:member('Bindings', Vars) orelse contains_any_var(Params, Vars).
+do_get_vars_indexes(Bindings, Vars) ->
+    sets:to_list(
+        lists:foldl(fun(Var, Set0) ->
+            Indexes = proplists:get_all_values(Var, Vars),
+            lists:foldl(fun(Index, Set) ->
+                sets:add_element(Index, Set)
+            end, Set0, Indexes)
+        end, sets:new([{version, 2}]), maps:keys(Bindings))
+    ).
 
-eval(Exprs, Bindings, LocalFunHandler, NonLocalFunHandler) ->
-    {value, Binary, NewBindings} = erl_eval:exprs( Exprs
-                                                 , Bindings
-                                                 , LocalFunHandler
-                                                 , NonLocalFunHandler
-                                                 ),
-    {Binary, NewBindings}.
+eval_parts(Indexes, Bindings, State, ToStringFun) ->
+    Parts = maps:get(parts, State),
+    do_eval_parts(Indexes, Parts, #{'Bindings' => Bindings}, ToStringFun).
 
-contains_any_var(Map, Vars) ->
-    MapKeys = maps:keys(Map),
-    lists:any(fun(V) -> lists:member(V, MapKeys) end, Vars).
+do_eval_parts(Indexes, Parts, Bindings, ToStringFun) ->
+    lists:foldl(fun(Index, Acc) ->
+        Acc#{Index => eval_part(Index, Parts, Bindings, ToStringFun)}
+    end, #{}, Indexes).
 
-%%%=============================================================================
-%%% Internal functions
-%%%=============================================================================
+eval_part(Index, Parts, Bindings, ToStringFun) ->
+    Expr = maps:get(Index, Parts),
+    case erl_eval:exprs(Expr, Bindings) of
+        {value, IOData, _} when is_binary(IOData) ->
+            IOData;
+        {value, [IOData], _} when is_binary(IOData) ->
+            IOData;
+        {value, [Term], _} ->
+            ToStringFun(Term);
+        {value, IOData, _} when is_list(IOData) ->
+            % NOTE: Here we have a list that can be optimized to the changes return.
+            %       We need to know the static x dynamics of the expression.
+            % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOData}]),
+            IOData;
+        {value, Term, _} ->
+            ToStringFun(Term)
+    end.
 
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Normalize bindings keys to capitalized key, e.g.:
-%%
-%%          #{foo_bar => baz} -> #{'FooBar' => baz}
-%%
-%%      This is for the eval/2, who expects capitalized atoms.
-%% @end
-%% -----------------------------------------------------------------------------
-
-normalize_bindings(Bindings, #{snake_case := true} = Opts) ->
-    capitalize_keys(Bindings, Opts);
-normalize_bindings(Bindings, #{}) ->
-    Bindings.
-
-capitalize_keys(Bindings, Opts) when is_list(Bindings) ->
-    lists:map(fun({K, V}) -> {capitalize(K, Opts), V} end, Bindings);
-capitalize_keys(Bindings, Opts) when is_map(Bindings) ->
-    maps:fold(fun(K, V, Acc) -> Acc#{capitalize(K, Opts) => V} end, #{}, Bindings).
-
-%% -----------------------------------------------------------------------------
-%% @private
-%% @doc Transforms a snake_case atom() to CameCase, e.g.:
-%%
-%%          foo_bar: &lt;&lt;"FooBar"&gt;&gt
-%% @end
-%% -----------------------------------------------------------------------------
-
-capitalize(Atom, Opts) when is_atom(Atom) ->
-    to_atom(do_capitalize(erlang:atom_to_binary(Atom)), Opts).
-
-do_capitalize(<<H, T/binary>>) when H >= $a, H =< $z ->
-    do_capitalize_1(T, <<(H - 32)>>);
-do_capitalize(Bin) when is_binary(Bin) ->
-    do_capitalize_1(Bin, <<>>).
-
-do_capitalize_1(<<$_, H, T/binary>>, Acc) when H >= $a, H =< $z ->
-    do_capitalize_1(T, <<Acc/binary, (H - 32)>>);
-do_capitalize_1(<<H, T/binary>>, Acc) ->
-    do_capitalize_1(T, <<Acc/binary, H>>);
-do_capitalize_1(<<>>, Acc) ->
-    Acc.
-
-to_atom(Bin, #{safe_atoms := true}) ->
-    erlang:binary_to_existing_atom(Bin);
-to_atom(Bin, #{}) ->
-    erlang:binary_to_atom(Bin).
-
-%%%=============================================================================
-%%% Tests
-%%%=============================================================================
+%%======================================================================
+%% Tests
+%%======================================================================
 
 -ifdef(TEST).
 
-capitalize_test() ->
-    ?assertEqual('FooBar', capitalize(foo_bar, #{})).
+render_test() ->
+    Bin = <<
+        "<html>"
+        "<head>"
+            "<title><%= @title .%></title>"
+        "</head>"
+        "<body>"
+            "<ul>"
+            "<%= lists:map(fun(Item) -> %>"
+                "<%% TODO: Items to binary .%>"
+                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+            "<% end, @items) .%>"
+            "</ul>"
+        "</body>"
+        "</html>"
+    >>,
+    Tokens = eel_tokenizer:tokenize(Bin),
+    Tree = eel_structurer:tree(Tokens),
 
-capitalize_keys_test() ->
-    [ ?assertEqual([{'FooBar', baz}], capitalize_keys([{foo_bar, baz}], #{}))
-    , ?assertEqual(#{'FooBar' => baz}, capitalize_keys(#{foo_bar => baz}, #{}))
-    ].
+    ExpectedAll = #{1 => <<"EEl">>,
+    3 =>
+        [[<<"<li>">>,<<"Item - ">>,<<"1">>,<<"</li>">>],
+         [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
+         [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]},
+    BindingsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
+    StateAll = eel_compiler:compile(Tree),
+    ResultAll = render(BindingsAll, StateAll),
+    ?assertEqual(ExpectedAll, ResultAll),
+
+    ExpectedChanges = #{1 => <<"EEl - Embedded Erlang">>},
+    BindingsChanges = #{title => <<"EEl - Embedded Erlang">>},
+    StateChanges = maps:merge(StateAll, ResultAll),
+    ResultChanges = render_changes(BindingsChanges, StateChanges),
+    ?assertEqual(ExpectedChanges, ResultChanges).
 
 -endif.
