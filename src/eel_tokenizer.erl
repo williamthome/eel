@@ -8,10 +8,10 @@
 
 -include("eel.hrl").
 
--record(state, { engines   :: [engine()]
-               , buffer    :: binary()
-               , text_acc  :: binary()
-               , tokens    :: [token() | [token()]]
+-record(state, { engines  :: [engine()]
+               , buffer   :: binary()
+               , text_acc :: binary()
+               , tokens   :: [token() | [token()]]
                }).
 
 -define(SMART_ENGINE, eel_smart_engine).
