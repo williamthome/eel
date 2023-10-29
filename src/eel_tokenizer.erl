@@ -23,14 +23,15 @@
 tokenize(Bin) ->
     tokenize(Bin, #{}).
 
-tokenize(Bin, Opts) when is_binary(Bin), is_map(Opts) ->
+tokenize(Input, Opts)
+  when (is_binary(Input) orelse is_list(Input)), is_map(Opts) ->
     State = #state{
         engines = maps:get(engines, Opts, default_engines()),
         buffer = <<>>,
         text_acc = <<>>,
         tokens = []
     },
-    do_tokenize(Bin, State).
+    do_tokenize(iolist_to_binary(Input), State).
 
 %%======================================================================
 %% Internal functions
