@@ -40,19 +40,21 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--record(tree, { vertex_count :: non_neg_integer()
-              , vertices     :: #{label() := vertices()}
-              , root         :: label()
-              , metadata     :: metadata()
-              }).
+-record( tree,
+       { vertex_count :: non_neg_integer()
+       , vertices     :: #{label() := vertices()}
+       , root         :: label()
+       , metadata     :: metadata()
+       }).
 
--record(vertex, { parent   :: label()
-                , label    :: label()
-                , children :: vertices()
-                , is_root  :: boolean()
-                , is_leaf  :: boolean()
-                , metadata :: metadata()
-                }).
+-record( vertex,
+       { parent   :: label()
+       , label    :: label()
+       , children :: vertices()
+       , is_root  :: boolean()
+       , is_leaf  :: boolean()
+       , metadata :: metadata()
+       }).
 
 -opaque tree()   :: #tree{}.
 -opaque vertex() :: #vertex{}.
@@ -204,10 +206,10 @@ put_vertices(Vertices, Tree0) ->
 
 tree_test() ->
     Expected = {tree,3,
-    #{root => {vertex,undefined,root,[b,a],true,false,undefined},
-      a => {vertex,root,a,[],false,true,undefined},
-      b => {vertex,root,b,[],false,true,undefined}},
-    root,undefined},
+        #{root => {vertex,undefined,root,[b,a],true,false,undefined},
+        a => {vertex,root,a,[],false,true,undefined},
+        b => {vertex,root,b,[],false,true,undefined}},
+        root,undefined},
 
     Tree0 = new(),
     {VR, Tree1} = add_vertex(root, Tree0),

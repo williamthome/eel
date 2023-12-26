@@ -9,18 +9,19 @@
 -include("eel.hrl").
 
 % TODO
--record(state, { parts
-               , vars
-               , dynamics
-               , index
-               , recursive
-               , tree
-               , vertices
-               , converter
-               }).
+-record( state,
+       { parts
+       , vars
+       , dynamics
+       , index
+       , recursive
+       , tree
+       , vertices
+       , converter
+       }).
 
 % TODO: Check if we should use 'eel_converter' or keep the
-%       'undefined' as the converter.
+%       'undefined' as the value converter.
 -define(CONVERTER, undefined).
 
 %%======================================================================
@@ -208,9 +209,9 @@ binary_to_ast(Bin, Converter) ->
 
 normalize_bin(Expr, undefined) ->
     [Expr, $.];
-normalize_bin(Expr, Converter) when is_binary(Converter)
-                                  ; is_list(Converter) ->
-[Converter, ":to_string(", Expr, ")."];
+normalize_bin(Expr, Converter)
+  when is_binary(Converter); is_list(Converter) ->
+    [Converter, ":to_string(", Expr, ")."];
 normalize_bin(Expr, Converter) when is_atom(Converter) ->
     normalize_bin(Expr, atom_to_binary(Converter)).
 

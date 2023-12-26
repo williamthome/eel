@@ -8,11 +8,12 @@
 
 -include("eel.hrl").
 
--record(state, { engines  :: [engine()]
-               , buffer   :: binary()
-               , text_acc :: binary()
-               , tokens   :: [token() | [token()]]
-               }).
+-record( state,
+       { engines  :: [engine()]
+       , buffer   :: binary()
+       , text_acc :: binary()
+       , tokens   :: [token() | [token()]]
+       }).
 
 -define(SMART_ENGINE, eel_smart_engine).
 
@@ -54,8 +55,10 @@ do_tokenize(<<H, T/binary>>, State0) ->
                             case handle_expr(Engine, Marker, Expr) of
                                 {ok, ExprTokens} ->
                                     do_tokenize(Rest, State#state{
-                                        buffer = <<(State#state.buffer)/binary, Expr/binary>>,
-                                        tokens = [ExprTokens, TextTokens | State#state.tokens],
+                                        buffer = << (State#state.buffer)/binary
+                                                  , Expr/binary >>,
+                                        tokens = [ExprTokens, TextTokens
+                                                 | State#state.tokens ],
                                         text_acc = <<>>
                                     });
                                 {error, Reason} ->
@@ -171,12 +174,10 @@ resolve_handled_tokens([], _, Acc) ->
     Acc.
 
 new_text_token(Text) when is_binary(Text) ->
-    #text_token{
-        text = Text
-    }.
+    #text_token{text = Text}.
 
-new_expr_token(Expr, Engine, Marker, Vars) when is_binary(Expr)
-                                              , is_list(Vars) ->
+new_expr_token(Expr, Engine, Marker, Vars)
+  when is_binary(Expr), is_list(Vars) ->
     #expr_token{
         expr = Expr,
         engine = Engine,

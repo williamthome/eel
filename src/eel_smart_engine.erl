@@ -73,11 +73,12 @@ collect_expr_var(<<H, T/binary>>) when H >= $a andalso H =< $z ->
 collect_expr_var(_) ->
     error(badarg).
 
-collect_expr_var(<<H, T/binary>>, Acc) when (H >= $a andalso H =< $z)
-                                          ; (H >= $A andalso H =< $A)
-                                          ; (H >= $0 andalso H =< $9)
-                                          ; H =:= $_
-                                          ; H =:= $@ ->
+collect_expr_var(<<H, T/binary>>, Acc)
+  when (H >= $a andalso H =< $z)
+     ; (H >= $A andalso H =< $A)
+     ; (H >= $0 andalso H =< $9)
+     ; H =:= $_
+     ; H =:= $@ ->
     collect_expr_var(T, <<Acc/binary, H>>);
 collect_expr_var(T, Acc) ->
     {T, Acc}.
@@ -90,27 +91,31 @@ handle_tokens(Tokens) ->
  % Expr
  resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
-    {[#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc], {in_expr, false}}
+    { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
+    , {in_expr, false} }
 ) ->
-     {[join_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
-    {[#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc], {in_continue, false}}
+    { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
+    , {in_continue, false} }
 ) ->
-     {[join_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
-    {[#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc], {in_expr, false}}
+    { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
+    , {in_expr, false} }
 ) ->
-     {[join_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
+     {[merge_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
-    {[#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc], {in_continue, false}}
+    { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
+    , {in_continue, false} }
 ) ->
-     {[join_expr_tokens(Token, TAcc) | Acc], {in_text, false}};
+     {[merge_expr_tokens(Token, TAcc) | Acc], {in_text, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = Token,
-    {Acc, _}
+    {Acc, _In}
 ) ->
      {[Token | Acc], {in_expr, false}};
 resolve_tokens_acc(
@@ -128,7 +133,7 @@ resolve_tokens_acc(
     #text_token{} = Token,
     {[#text_token{} = TAcc | Acc], State}
 ) ->
-     {[join_text_tokens(Token, TAcc) | Acc], State};
+     {[merge_text_tokens(Token, TAcc) | Acc], State};
 resolve_tokens_acc(
     #text_token{} = Token,
     {Acc, State}
@@ -141,13 +146,13 @@ resolve_tokens_acc(
 ) ->
      {[Token | Acc], State}.
 
-join_text_tokens(Discard, Keep) ->
+merge_text_tokens(Discard, Keep) ->
     Keep#text_token{
         text = <<(Keep#text_token.text)/binary, 32,
                  (Discard#text_token.text)/binary>>
     }.
 
-join_expr_tokens(Discard, Keep) ->
+merge_expr_tokens(Discard, Keep) ->
     Keep#expr_token{
         expr = <<(Keep#expr_token.expr)/binary, 32,
                  (Discard#expr_token.expr)/binary>>,
