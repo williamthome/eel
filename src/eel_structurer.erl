@@ -84,79 +84,79 @@ add_slave_vertex(Token, MVertex, Tree0) ->
 -ifdef(TEST).
 
 tree_test() ->
-    Expected = {<<"0">>,
-    {tree,13,
-     #{<<"0">> =>
-        {vertex,undefined,<<"0">>,
-         [<<"12">>,<<"4">>,<<"3">>,<<"2">>,<<"1">>],
-         true,undefined,
-         {master_vertex,undefined}},
-       <<"1">> =>
-        {vertex,<<"0">>,<<"1">>,[],false,undefined,
-         {slave_vertex,{text_token,<<"<html><head><title>">>}}},
-       <<"10">> =>
-        {vertex,<<"6">>,<<"10">>,[],false,undefined,
-         {slave_vertex,{text_token,<<"</li>">>}}},
-       <<"11">> =>
-        {vertex,<<"4">>,<<"11">>,[],false,undefined,
-         {slave_vertex,
-          {expr_token,<<"end, maps:get(items, Bindings))">>,
-           eel_smart_engine,
-           {marker,expr_end,<<"<%">>,<<".%>">>,
-            [fetch_vertex_parent,push_token,
-             fetch_vertex_parent]},
-           [items]}}},
-       <<"12">> =>
-        {vertex,<<"0">>,<<"12">>,[],false,undefined,
-         {slave_vertex,{text_token,<<"</ul></body></html>">>}}},
-       <<"2">> =>
-        {vertex,<<"0">>,<<"2">>,[],false,undefined,
-         {slave_vertex,
-          {expr_token,<<"maps:get(title, Bindings)">>,
-           eel_smart_engine,
-           {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
-           [title]}}},
-       <<"3">> =>
-        {vertex,<<"0">>,<<"3">>,[],false,undefined,
-         {slave_vertex,
-          {text_token,<<"</title></head><body><ul>">>}}},
-       <<"4">> =>
-        {vertex,<<"0">>,<<"4">>,
-         [<<"11">>,<<"6">>,<<"5">>],
-         false,undefined,
-         {master_vertex,undefined}},
-       <<"5">> =>
-        {vertex,<<"4">>,<<"5">>,[],false,undefined,
-         {slave_vertex,
-          {expr_token,<<"lists:map(fun(Item) ->">>,
-           eel_smart_engine,
-           {marker,expr_start,<<"<%=">>,<<"%>">>,
-            [add_vertex,push_token,add_vertex]},
-           []}}},
-       <<"6">> =>
-        {vertex,<<"4">>,<<"6">>,
-         [<<"10">>,<<"9">>,<<"8">>,<<"7">>],
-         false,undefined,
-         {master_vertex,undefined}},
-       <<"7">> =>
-        {vertex,<<"6">>,<<"7">>,[],false,undefined,
-         {slave_vertex,{text_token,<<"<li>">>}}},
-       <<"8">> =>
-        {vertex,<<"6">>,<<"8">>,[],false,undefined,
-         {slave_vertex,
-          {expr_token,<<"maps:get(item_prefix, Bindings)">>,
-           eel_smart_engine,
-           {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
-           [item_prefix]}}},
-       <<"9">> =>
-        {vertex,<<"6">>,<<"9">>,[],false,undefined,
-         {slave_vertex,
-          {expr_token,<<"integer_to_binary(Item)">>,
-           eel_smart_engine,
-           {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
-           []}}}},
-     <<"0">>,
-     {tree_state,[<<"6">>,<<"4">>,<<"0">>]}}},
+    Expected = {0,
+        {tree,13,
+        #{0 =>
+            {vertex,undefined,0,
+            [12,4,3,2,1],
+            true,false,
+            {master_vertex,undefined}},
+        1 =>
+            {vertex,0,1,[],false,true,
+            {slave_vertex,{text_token,<<"<html><head><title>">>}}},
+        2 =>
+            {vertex,0,2,[],false,true,
+            {slave_vertex,
+            {expr_token,<<"maps:get(title, Bindings)">>,
+            eel_smart_engine,
+            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+            [title]}}},
+        3 =>
+            {vertex,0,3,[],false,true,
+            {slave_vertex,
+            {text_token,<<"</title></head><body><ul>">>}}},
+        4 =>
+            {vertex,0,4,
+            [11,6,5],
+            false,false,
+            {master_vertex,undefined}},
+        5 =>
+            {vertex,4,5,[],false,true,
+            {slave_vertex,
+            {expr_token,<<"lists:map(fun(Item) ->">>,
+            eel_smart_engine,
+            {marker,expr_start,<<"<%=">>,<<"%>">>,
+                [add_vertex,push_token,add_vertex]},
+            []}}},
+        6 =>
+            {vertex,4,6,
+            [10,9,8,7],
+            false,false,
+            {master_vertex,undefined}},
+        7 =>
+            {vertex,6,7,[],false,true,
+            {slave_vertex,{text_token,<<"<li>">>}}},
+        8 =>
+            {vertex,6,8,[],false,true,
+            {slave_vertex,
+            {expr_token,<<"maps:get(item_prefix, Bindings)">>,
+            eel_smart_engine,
+            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+            [item_prefix]}}},
+        9 =>
+            {vertex,6,9,[],false,true,
+            {slave_vertex,
+            {expr_token,<<"integer_to_binary(Item)">>,
+            eel_smart_engine,
+            {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+            []}}},
+        10 =>
+            {vertex,6,10,[],false,true,
+            {slave_vertex,{text_token,<<"</li>">>}}},
+        11 =>
+            {vertex,4,11,[],false,true,
+            {slave_vertex,
+            {expr_token,<<"end, maps:get(items, Bindings))">>,
+            eel_smart_engine,
+            {marker,expr_end,<<"<%">>,<<".%>">>,
+                [fetch_vertex_parent,push_token,
+                fetch_vertex_parent]},
+            [items]}}},
+        12 =>
+            {vertex,0,12,[],false,true,
+            {slave_vertex,{text_token,<<"</ul></body></html>">>}}}},
+        0,
+        {tree_state,[6,4,0]}}},
 
     Bin = <<
         "<html>"
