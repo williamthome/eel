@@ -109,9 +109,9 @@ start_marker_match([#marker{start = Start} = Marker | Markers], Bin, Acc) ->
     BSize = erlang:byte_size(Bin),
     MSize = erlang:byte_size(Start),
     case Bin of
-        <<Start:MSize/binary, 32>> ->
+        <<Start:MSize/binary>> ->
             start_marker_match(Markers, Bin, [{Marker, <<>>} | Acc]);
-        <<Text:(BSize-MSize-1)/binary, Start:MSize/binary, 32>> ->
+        <<Text:(BSize-MSize)/binary, Start:MSize/binary>> ->
             start_marker_match(Markers, Bin, [{Marker, Text} | Acc]);
         _ ->
             start_marker_match(Markers, Bin, Acc)
@@ -134,7 +134,7 @@ end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
     BSize = erlang:byte_size(Bin),
     MSize = erlang:byte_size(Final),
     case Bin of
-        <<Expr:(BSize-MSize-1)/binary, 32, Final:MSize/binary>> ->
+        <<Expr:(BSize-MSize)/binary, Final:MSize/binary>> ->
             {ok, {Marker, Text, Expr}};
         _ ->
             end_marker_match(Markers, Bin)
@@ -194,26 +194,26 @@ new_expr_token(Expr, Engine, Marker, Vars)
 tokenize_test() ->
     Expected = [{text_token,<<"<html><head><title>">>},
     {expr_token,<<"maps:get(title, Bindings)">>,eel_smart_engine,
-                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
                 [title]},
     {text_token,<<"</title></head><body><ul>">>},
     {expr_token,<<"lists:map(fun(Item) ->">>,eel_smart_engine,
-                {marker,expr_start,<<"<%=">>,<<"%>">>,
+                {marker,expr_start,<<"<%= ">>,<<" %>">>,
                         [add_vertex,push_token,add_vertex]},
                 []},
     {expr_token,<<"TODO: Items to binary">>,eel_smart_engine,
-                {marker,comment,<<"<%%">>,<<".%>">>,[ignore_token]},
+                {marker,comment,<<"<%% ">>,<<" .%>">>,[ignore_token]},
                 []},
     {text_token,<<"<li>">>},
     {expr_token,<<"maps:get(item_prefix, Bindings)">>,eel_smart_engine,
-                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
                 [item_prefix]},
     {expr_token,<<"integer_to_binary(Item)">>,eel_smart_engine,
-                {marker,expr,<<"<%=">>,<<".%>">>,[push_token]},
+                {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
                 []},
     {text_token,<<"</li>">>},
     {expr_token,<<"end, maps:get(items, Bindings))">>,eel_smart_engine,
-                {marker,expr_end,<<"<%">>,<<".%>">>,
+                {marker,expr_end,<<"<% ">>,<<" .%>">>,
                         [fetch_vertex_parent,push_token,fetch_vertex_parent]},
                 [items]},
     {text_token,<<"</ul></body></html>">>}],

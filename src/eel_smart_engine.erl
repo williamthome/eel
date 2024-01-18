@@ -13,32 +13,32 @@ markers() ->
     [
         #marker{
             id = expr,
-            start = <<"<%=">>,
-            final = <<".%>">>,
+            start = <<"<%= ">>,
+            final = <<" .%>">>,
             tree_behaviors = [push_token]
         },
         #marker{
             id = expr_start,
-            start = <<"<%=">>,
-            final = <<"%>">>,
+            start = <<"<%= ">>,
+            final = <<" %>">>,
             tree_behaviors = [add_vertex, push_token, add_vertex]
         },
         #marker{
             id = expr_continue,
-            start = <<"<%">>,
-            final = <<"%>">>,
+            start = <<"<% ">>,
+            final = <<" %>">>,
             tree_behaviors = [fetch_vertex_parent, push_token, add_vertex]
         },
         #marker{
             id = expr_end,
-            start = <<"<%">>,
-            final = <<".%>">>,
+            start = <<"<% ">>,
+            final = <<" .%>">>,
             tree_behaviors = [fetch_vertex_parent, push_token, fetch_vertex_parent]
         },
         #marker{
             id = comment,
-            start = <<"<%%">>,
-            final = <<".%>">>,
+            start = <<"<%% ">>,
+            final = <<" .%>">>,
             tree_behaviors = [ignore_token]
         }
     ].
