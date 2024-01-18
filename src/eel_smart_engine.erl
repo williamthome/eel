@@ -53,8 +53,17 @@ handle_expr(Marker, Expr0) ->
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
-    {T, Var} = collect_expr_var(T0, <<>>),
-    replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings)">>);
+    case collect_expr_var(T0, <<>>) of
+        {T, Var} ->
+            replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings)">>)
+        % TODO: Find a mechanism to provide default functionality.
+        %       It's fine to use maps:get(foo, Bindings, bar) in templates,
+        %       but we cannot track the variable in this way.
+        %       Maybe the syntax can be:
+        %       1> <%= @foo||@bar||foo:bar() .%> = maps:get(foo, Bindings, maps:get(bar, Bindings, foo:bar()))
+        % {T, Var, Default} ->
+        %     replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings, ", Default/binary, ")">>)
+    end;
 replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
 replace_expr_vars(<<>>, Acc) ->
