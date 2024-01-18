@@ -1,6 +1,6 @@
 -module(eel_tokenizer).
 
--export([tokenize/1, tokenize/2]).
+-export([tokenize/1, tokenize/2, default_engines/0]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
