@@ -99,7 +99,7 @@ tree_test() ->
             {slave_vertex,
             {expr_token,<<"maps:get(title, Bindings)">>,
             eel_smart_engine,
-            {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
+            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[push_token]},
             [title]}}},
         3 =>
             {vertex,0,3,[],false,true,
@@ -115,7 +115,7 @@ tree_test() ->
             {slave_vertex,
             {expr_token,<<"lists:map(fun(Item) ->">>,
             eel_smart_engine,
-            {marker,expr_start,<<"<%= ">>,<<" %>">>,
+            {marker,expr_start,<<"<%=\\s+">>,<<"\\s+%>">>,
                 [add_vertex,push_token,add_vertex]},
             []}}},
         6 =>
@@ -131,14 +131,14 @@ tree_test() ->
             {slave_vertex,
             {expr_token,<<"maps:get(item_prefix, Bindings)">>,
             eel_smart_engine,
-            {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
+            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[push_token]},
             [item_prefix]}}},
         9 =>
             {vertex,6,9,[],false,true,
             {slave_vertex,
             {expr_token,<<"integer_to_binary(Item)">>,
             eel_smart_engine,
-            {marker,expr,<<"<%= ">>,<<" .%>">>,[push_token]},
+            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[push_token]},
             []}}},
         10 =>
             {vertex,6,10,[],false,true,
@@ -148,7 +148,7 @@ tree_test() ->
             {slave_vertex,
             {expr_token,<<"end, maps:get(items, Bindings))">>,
             eel_smart_engine,
-            {marker,expr_end,<<"<% ">>,<<" .%>">>,
+            {marker,expr_end,<<"<%\\s+">>,<<"\\s+.%>">>,
                 [fetch_vertex_parent,push_token,
                 fetch_vertex_parent]},
             [items]}}},
