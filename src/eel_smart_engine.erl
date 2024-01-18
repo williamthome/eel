@@ -148,16 +148,17 @@ resolve_tokens_acc(
 
 merge_text_tokens(Discard, Keep) ->
     Keep#text_token{
-        text = <<(Keep#text_token.text)/binary, 32,
-                 (Discard#text_token.text)/binary>>
+        text = merge_bin(Keep#text_token.text, Discard#text_token.text)
     }.
 
 merge_expr_tokens(Discard, Keep) ->
     Keep#expr_token{
-        expr = <<(Keep#expr_token.expr)/binary, 32,
-                 (Discard#expr_token.expr)/binary>>,
+        expr = merge_bin(Keep#expr_token.expr, Discard#expr_token.expr),
         vars = lists:merge(Discard#expr_token.vars, Keep#expr_token.vars)
     }.
+
+merge_bin(A, B) ->
+    <<A/binary, 32, B/binary>>.
 
 handle_tree(Tree) ->
     Tree.
