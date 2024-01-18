@@ -5,13 +5,12 @@
     tree_behaviors :: [marker_tree_behavior()]
 }).
 
--record(text_token, { text         :: binary()
-                    }).
+-record(text_token, { text   :: binary() }).
 
--record(expr_token, { expr         :: binary()
-                    , engine       :: engine()
-                    , marker       :: #marker{}
-                    , vars         :: [atom()]
+-record(expr_token, { expr   :: binary()
+                    , engine :: engine()
+                    , marker :: #marker{}
+                    , vars   :: [atom()]
                     }).
 
 -record(master_vertex, {ast :: ast()}).
