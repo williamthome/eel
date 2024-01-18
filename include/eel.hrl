@@ -2,6 +2,8 @@
     id    :: marker_id(),
     start :: marker_symbol(),
     final :: marker_symbol(),
+    start_groups :: [marker_regex_group()],
+    final_groups :: [marker_regex_group()],
     tree_behaviors :: [marker_tree_behavior()]
 }).
 
@@ -21,6 +23,7 @@
 
 -type marker_id()            :: term().
 -type marker_symbol()        :: binary().
+-type marker_regex_group()   :: binary().
 -type marker_tree_behavior() :: add_vertex
                               | push_token
                               | fetch_vertex_parent
