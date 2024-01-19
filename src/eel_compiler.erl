@@ -112,7 +112,7 @@ do_fold_compile_2( #text_token{} = Token
             Index => [<<"<<\"", Static/binary, "\"/utf8>>">> | IndexParts]
         }
     };
-do_fold_compile_2( #expr_token{marker = #marker{id = expr}} = Token
+do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
@@ -126,7 +126,7 @@ do_fold_compile_2( #expr_token{marker = #marker{id = expr}} = Token
         vars = lists:merge(State#state.vars, Vars),
         dynamics = [Index | State#state.dynamics]
     };
-do_fold_compile_2( #expr_token{marker = #marker{id = expr}} = Token
+do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = true} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
@@ -138,7 +138,7 @@ do_fold_compile_2( #expr_token{marker = #marker{id = expr}} = Token
         },
         vars = lists:merge(State#state.vars, Vars)
     };
-do_fold_compile_2( #expr_token{marker = #marker{id = expr_start}} = Token
+do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = false} = State0 ) ->
     {Expr, State} = do_fold_compile_3( tl(State0#state.vertices)
                                      , Token#expr_token.expr, State0 ),
@@ -154,7 +154,7 @@ do_fold_compile_2( #expr_token{marker = #marker{id = expr_start}} = Token
         vars = lists:merge(State#state.vars, Vars),
         dynamics = [Index | State#state.dynamics]
     }};
-do_fold_compile_2( #expr_token{marker = #marker{id = expr_start}} = Token
+do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = true} = State0 ) ->
     {Expr, State} = do_fold_compile_3( tl(State0#state.vertices)
                                      , Token#expr_token.expr, State0 ),

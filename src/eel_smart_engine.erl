@@ -17,13 +17,15 @@ markers() ->
             id = expr,
             start = <<"<%=\\s+">>,
             final = <<"\\s+.%>">>,
-            tree_behaviors = [push_token]
+            tree_behaviors = [push_token],
+            compile_as = expr
         },
         #marker{
             id = expr_start,
             start = <<"<%=\\s+">>,
             final = <<"\\s+%>">>,
-            tree_behaviors = [add_vertex, push_token, add_vertex]
+            tree_behaviors = [add_vertex, push_token, add_vertex],
+            compile_as = expr_start
         },
         #marker{
             id = expr_continue,

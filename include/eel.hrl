@@ -4,7 +4,8 @@
     final          :: marker_symbol(),
     start_groups   :: [marker_regex_group()],
     final_groups   :: [marker_regex_group()],
-    tree_behaviors :: [marker_tree_behavior()]
+    tree_behaviors :: [marker_tree_behavior()],
+    compile_as     :: marker_compile_as()
 }).
 
 -record(text_token, { text   :: binary() }).
@@ -31,6 +32,8 @@
                               | fun( (token(), eel_tree:label(), eel_tree:tree()) ->
                                      {eel_tree:label(), eel_tree:tree()} )
                               .
+-type marker_compile_as()    :: expr | expr_start | undefined.
+
 -type engine()     :: module().
 -type text_token() :: #text_token{}.
 -type expr_token() :: #expr_token{}.
