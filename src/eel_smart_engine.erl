@@ -45,8 +45,8 @@ markers() ->
         }
     ].
 
-handle_text(Text) ->
-    {ok, [{text, Text}]}.
+handle_text(_Text) ->
+    next.
 
 handle_expr(Marker, Expr0) ->
     Expr = normalize_expr(Expr0),

@@ -148,19 +148,17 @@ marker_match(Bin, Marker) ->
             nomatch
     end.
 
-handle_text(Engines, Bin) ->
-    do_handle_text(Engines, Bin, []).
-
-do_handle_text([Engine | Engines], Bin, Acc0) ->
+handle_text([Engine | Engines], Bin) ->
     case Engine:handle_text(Bin) of
         {ok, Tokens} ->
-            Acc = resolve_handled_tokens(Tokens, Engine, Acc0),
-            do_handle_text(Engines, Bin, Acc);
+            {ok, resolve_handled_tokens(Tokens, Engine, [])};
         {error, Reason} ->
-            {error, Reason}
+            {error, Reason};
+        next ->
+            handle_text(Engines, Bin)
     end;
-do_handle_text([], _, Acc) ->
-    {ok, Acc}.
+handle_text([], Bin) ->
+    {ok, [new_text_token(Bin)]}.
 
 handle_expr(Engine, Marker, Bin) ->
     case Engine:handle_expr(Marker, Bin) of
