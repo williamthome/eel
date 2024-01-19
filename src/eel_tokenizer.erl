@@ -197,7 +197,7 @@ new_expr_token(Expr, Engine, Marker, Vars)
 
 tokenize_test() ->
     Expected = [{text_token,<<"<html><head><title>">>},
-    {expr_token,<<"maps:get(title, Bindings)">>,
+    {expr_token,<<"(maps:get(title, Bindings))">>,
                 eel_smart_engine,
                 {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
                         [push_token]},
@@ -208,13 +208,13 @@ tokenize_test() ->
                         [],[],
                         [add_vertex,push_token,add_vertex]},
                 []},
-    {expr_token,<<"TODO: Items to binary">>,eel_smart_engine,
-                {marker,comment,<<"<%%\\s+">>,<<"\\s+.%>">>,[],
+    {expr_token,<<"TODO: Items to binary.">>,eel_smart_engine,
+                {marker,comment,<<"<%%\\s+">>,<<"\\s+%%>">>,[],
                         [],
                         [ignore_token]},
                 []},
     {text_token,<<"<li>">>},
-    {expr_token,<<"maps:get(item_prefix, Bindings)">>,
+    {expr_token,<<"(maps:get(item_prefix, Bindings))">>,
                 eel_smart_engine,
                 {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
                         [push_token]},
@@ -224,7 +224,7 @@ tokenize_test() ->
                         [push_token]},
                 []},
     {text_token,<<"</li>">>},
-    {expr_token,<<"end, maps:get(items, Bindings))">>,
+    {expr_token,<<"end, (maps:get(items, Bindings)))">>,
                 eel_smart_engine,
                 {marker,expr_end,<<"<%\\s+">>,<<"\\s+.%>">>,[],
                         [],
@@ -241,7 +241,7 @@ tokenize_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary .%>"
+                "<%% TODO: Items to binary. %%>"
                 "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
             "<% end, @items) .%>"
             "</ul>"

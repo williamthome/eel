@@ -99,7 +99,7 @@ render_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary .%>"
+                "<%% TODO: Items to binary. %%>"
                 "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
             "<% end, @items) .%>"
             "</ul>"

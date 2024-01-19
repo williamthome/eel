@@ -97,7 +97,7 @@ tree_test() ->
        2 =>
         {vertex,0,2,[],false,true,
          {slave_vertex,
-          {expr_token,<<"maps:get(title, Bindings)">>,
+          {expr_token,<<"(maps:get(title, Bindings))">>,
            eel_smart_engine,
            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
             [push_token]},
@@ -130,7 +130,7 @@ tree_test() ->
        8 =>
         {vertex,6,8,[],false,true,
          {slave_vertex,
-          {expr_token,<<"maps:get(item_prefix, Bindings)">>,
+          {expr_token,<<"(maps:get(item_prefix, Bindings))">>,
            eel_smart_engine,
            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
             [push_token]},
@@ -149,7 +149,7 @@ tree_test() ->
        11 =>
         {vertex,4,11,[],false,true,
          {slave_vertex,
-          {expr_token,<<"end, maps:get(items, Bindings))">>,
+          {expr_token,<<"end, (maps:get(items, Bindings)))">>,
            eel_smart_engine,
            {marker,expr_end,<<"<%\\s+">>,<<"\\s+.%>">>,[],[],
             [fetch_vertex_parent,push_token,
@@ -169,7 +169,7 @@ tree_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary .%>"
+                "<%% TODO: Items to binary. %%>"
                 "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
             "<% end, @items) .%>"
             "</ul>"
