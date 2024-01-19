@@ -54,9 +54,9 @@ do_tokenize(<<H, T/binary>>, State0) ->
                         {ok, TextTokens} ->
                             case handle_expr(Engine, Marker, Expr) of
                                 {ok, ExprTokens} ->
+                                    Buffer = State#state.buffer,
                                     do_tokenize(Rest, State#state{
-                                        buffer = << (State#state.buffer)/binary
-                                                  , Expr/binary >>,
+                                        buffer = <<Buffer/binary, Expr/binary>>,
                                         tokens = [ExprTokens, TextTokens
                                                  | State#state.tokens ],
                                         text_acc = <<>>
