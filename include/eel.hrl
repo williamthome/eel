@@ -1,9 +1,9 @@
 -record(marker, {
-    id    :: marker_id(),
-    start :: marker_symbol(),
-    final :: marker_symbol(),
-    start_groups :: [marker_regex_group()],
-    final_groups :: [marker_regex_group()],
+    id             :: marker_id(),
+    start          :: marker_symbol(),
+    final          :: marker_symbol(),
+    start_groups   :: [marker_regex_group()],
+    final_groups   :: [marker_regex_group()],
     tree_behaviors :: [marker_tree_behavior()]
 }).
 
@@ -15,11 +15,11 @@
                     , vars   :: [atom()]
                     }).
 
--record(master_vertex, {ast :: ast()}).
+-record(master_vertex, { ast :: ast() }).
 
--record(slave_vertex, {token :: token()}).
+-record(slave_vertex, { token :: token() }).
 
--record(tree_state, {master_vertices :: [#master_vertex{}]}).
+-record(tree_state, { master_vertices :: [#master_vertex{}] }).
 
 -type marker_id()            :: term().
 -type marker_symbol()        :: binary().
