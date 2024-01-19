@@ -5,6 +5,8 @@
         , handle_expr/2
         , handle_tokens/1
         , handle_tree/1
+        , normalize_expr/1
+        , collect_expr_vars/1
         ]).
 
 -include("eel.hrl").
@@ -47,9 +49,12 @@ handle_text(Text) ->
     {ok, [{text, Text}]}.
 
 handle_expr(Marker, Expr0) ->
-    Expr = replace_expr_vars(Expr0, <<>>),
-    Vars = collect_expr_vars(Expr0, []),
+    Expr = normalize_expr(Expr0),
+    Vars = collect_expr_vars(Expr0),
     {ok, [{expr, {Marker, Expr, Vars}}]}.
+
+normalize_expr(Expr) ->
+    replace_expr_vars(Expr, <<>>).
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
@@ -68,6 +73,9 @@ replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
 replace_expr_vars(<<>>, Acc) ->
     Acc.
+
+collect_expr_vars(Expr) ->
+    collect_expr_vars(Expr, []).
 
 collect_expr_vars(<<$@, T0/binary>>, Acc) ->
     {T, Var} = collect_expr_var(T0),
