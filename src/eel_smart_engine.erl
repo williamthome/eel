@@ -58,16 +58,17 @@ normalize_expr(Expr) ->
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
-    case find_var_ending(T0) of
-        {Var, T} ->
-            replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings)">>)
-        % TODO: Find a mechanism to provide default functionality.
-        %       It's fine to use maps:get(foo, Bindings, bar) in templates,
-        %       but we cannot track the variable in this way.
-        %       Maybe the syntax can be:
-        %       1> <%= @foo||@bar||foo:bar() .%> = maps:get(foo, Bindings, maps:get(bar, Bindings, foo:bar()))
-        % {T, Var, Default} ->
-        %     replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings, ", Default/binary, ")">>)
+    {Var, T1} = find_var_ending(T0),
+    case find_var_default(T1) of
+        {Default0, T} ->
+            Default = normalize_expr(Default0),
+            replace_expr_vars(T, <<Acc/binary,
+                "(maps:get(", Var/binary, ", Bindings, ", Default/binary, "))"
+            >>);
+        none ->
+            replace_expr_vars(T1, <<Acc/binary,
+                "(maps:get(", Var/binary, ", Bindings))"
+            >>)
     end;
 replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
@@ -99,6 +100,31 @@ find_var_ending(<<H, T/binary>>, Acc)
     find_var_ending(T, <<Acc/binary, H>>);
 find_var_ending(T, Var) ->
     {Var, T}.
+
+% FIXME: Ignore when inside quotes (single [atom] and double [string]).
+% TODO: Improve the default syntax or remove it.
+%       Currently, this is valid:
+%       1> @foo \\ @bar \\ baz. = (maps:get(foo, Bindings, (maps:get(bar, Bindings, baz))))
+%       The required dot at the end is strange, specially where the comma
+%       is required:
+%       2> #{foo => @foo \\ foo., bar => @bar \\ @baz.}
+%       The '\\' comes from Elixir's default syntax on functions.
+find_var_default(<<$\s, T/binary>>) ->
+    find_var_default(T);
+% Erlang ignores the first backslash, so only one is considered.
+find_var_default(<<$\\, T/binary>>) ->
+    find_var_default_ending(T, <<>>);
+find_var_default(_) ->
+    none.
+
+find_var_default_ending(<<$., T/binary>>, Default) ->
+    {Default, T};
+find_var_default_ending(<<$\s, T/binary>>, <<>>) ->
+    find_var_default_ending(T, <<>>);
+find_var_default_ending(<<H, T/binary>>, Acc) ->
+    find_var_default_ending(T, <<Acc/binary, H>>);
+find_var_default_ending(<<>>, Default) ->
+    {Default, <<>>}.
 
 handle_tokens(Tokens) ->
     Acc = {[], {in_text, false}},
