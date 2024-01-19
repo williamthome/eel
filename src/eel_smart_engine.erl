@@ -6,7 +6,7 @@
         , handle_tokens/1
         , handle_tree/1
         , normalize_expr/1
-        , collect_expr_vars/1
+        , get_expr_vars/1
         ]).
 
 -include("eel.hrl").
@@ -50,7 +50,7 @@ handle_text(Text) ->
 
 handle_expr(Marker, Expr0) ->
     Expr = normalize_expr(Expr0),
-    Vars = collect_expr_vars(Expr0),
+    Vars = get_expr_vars(Expr0),
     {ok, [{expr, {Marker, Expr, Vars}}]}.
 
 normalize_expr(Expr) ->
@@ -58,8 +58,8 @@ normalize_expr(Expr) ->
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
-    case collect_expr_var(T0, <<>>) of
-        {T, Var} ->
+    case find_var_ending(T0) of
+        {Var, T} ->
             replace_expr_vars(T, <<Acc/binary, "maps:get(", Var/binary, ", Bindings)">>)
         % TODO: Find a mechanism to provide default functionality.
         %       It's fine to use maps:get(foo, Bindings, bar) in templates,
@@ -74,31 +74,31 @@ replace_expr_vars(<<H, T/binary>>, Acc) ->
 replace_expr_vars(<<>>, Acc) ->
     Acc.
 
-collect_expr_vars(Expr) ->
-    collect_expr_vars(Expr, []).
+get_expr_vars(Expr) ->
+    get_expr_vars(Expr, []).
 
-collect_expr_vars(<<$@, T0/binary>>, Acc) ->
-    {T, Var} = collect_expr_var(T0),
-    collect_expr_vars(T, [binary_to_atom(Var) | Acc]);
-collect_expr_vars(<<_, T/binary>>, Acc) ->
-    collect_expr_vars(T, Acc);
-collect_expr_vars(<<>>, Acc) ->
+get_expr_vars(<<$@, T0/binary>>, Acc) ->
+    {Var, T} = find_var_ending(T0),
+    get_expr_vars(T, [binary_to_atom(Var) | Acc]);
+get_expr_vars(<<_, T/binary>>, Acc) ->
+    get_expr_vars(T, Acc);
+get_expr_vars(<<>>, Acc) ->
     Acc.
 
-collect_expr_var(<<H, T/binary>>) when H >= $a andalso H =< $z ->
-    collect_expr_var(T, <<H>>);
-collect_expr_var(_) ->
+find_var_ending(<<H, T/binary>>) when H >= $a andalso H =< $z ->
+    find_var_ending(T, <<H>>);
+find_var_ending(_) ->
     error(badarg).
 
-collect_expr_var(<<H, T/binary>>, Acc)
+find_var_ending(<<H, T/binary>>, Acc)
   when (H >= $a andalso H =< $z)
      ; (H >= $A andalso H =< $A)
      ; (H >= $0 andalso H =< $9)
      ; H =:= $_
      ; H =:= $@ ->
-    collect_expr_var(T, <<Acc/binary, H>>);
-collect_expr_var(T, Acc) ->
-    {T, Acc}.
+    find_var_ending(T, <<Acc/binary, H>>);
+find_var_ending(T, Var) ->
+    {Var, T}.
 
 handle_tokens(Tokens) ->
     Acc = {[], {in_text, false}},
