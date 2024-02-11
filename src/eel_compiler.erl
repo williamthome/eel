@@ -237,7 +237,10 @@ normalize_expr(Expr) ->
 -ifdef(TEST).
 
 compile_test() ->
-    Expected = #{parts =>
+    Expected = #{metadata =>
+        #{0 => undefined,1 => undefined,2 => undefined,
+          3 => undefined,4 => undefined},
+       parts =>
         #{0 => <<"<html><head><title>">>,
           1 =>
            [{call,1,
