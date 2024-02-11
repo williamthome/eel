@@ -17,7 +17,7 @@
 %%======================================================================
 
 render(Assigns, State) ->
-    render(Assigns, #{}, State).
+    render(Assigns, State, #{}).
 
 render(Assigns, State, Opts) ->
     IsPartialRender = false,
