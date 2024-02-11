@@ -199,14 +199,14 @@ do_fold_compile_3([], Expr, State) ->
 do_fold_compile_4(#master_vertex{}, Vertex, Expr0, State0) ->
     StateTmp = do_fold_compile(Vertex, State0#state{parts = #{}, recursive = true}),
     Expr1 = maps:values(StateTmp#state.parts),
-    Expr = [Expr0, 32, $[, Expr1, $], 32],
+    Expr = [Expr0, $\s, $[, Expr1, $], $\s],
     State = State0#state{
         vars = StateTmp#state.vars,
         dynamics = StateTmp#state.dynamics
     },
     {Expr, State};
 do_fold_compile_4(#slave_vertex{token = #expr_token{expr = Expr1}}, _, Expr0, State) ->
-    Expr = [Expr0, 32, Expr1],
+    Expr = [Expr0, $\s, Expr1],
     {Expr, State}.
 
 %%======================================================================

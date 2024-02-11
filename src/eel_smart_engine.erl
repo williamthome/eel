@@ -220,4 +220,4 @@ merge_expr_tokens(Discard, Keep) ->
     }.
 
 merge_bin(A, B) ->
-    <<A/binary, 32, B/binary>>.
+    <<A/binary, $\s, B/binary>>.
