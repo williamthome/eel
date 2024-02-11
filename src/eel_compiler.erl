@@ -17,12 +17,8 @@
        , recursive
        , tree
        , vertices
-       , converter
+       , metadata
        }).
-
-% TODO: Check if we should use 'eel_converter' or keep the
-%       'undefined' as the value converter.
--define(CONVERTER, undefined).
 
 %%======================================================================
 %% API functions
@@ -36,15 +32,13 @@ compile({Root, Tree}, Opts) ->
     #{
         parts => State#state.parts,
         vars => State#state.vars,
-        dynamics => State#state.dynamics
+        dynamics => State#state.dynamics,
+        metadata => State#state.metadata
     }.
 
 %%======================================================================
 %% Internal functions
 %%======================================================================
-
-default_converter() ->
-    ?CONVERTER.
 
 fold_compile(VertexLabel, Tree, Opts) ->
     Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
@@ -55,7 +49,7 @@ fold_compile(VertexLabel, Tree, Opts) ->
         index = 0,
         recursive = false,
         tree = Tree,
-        converter = maps:get(converter, Opts, default_converter())
+        metadata = #{}
     },
     do_fold_compile(Vertex, State).
 
@@ -90,33 +84,44 @@ do_fold_compile_1(#master_vertex{}, #state{vertices = [Vertex | _]} = State) ->
 do_fold_compile_1(#slave_vertex{token = Token}, State) ->
     do_fold_compile_2(Token, State).
 
+% TODO: Marker match must bem more generic.
+%       The engine should be able to handle it.
 do_fold_compile_2( #text_token{} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
+    Metadata = State#state.metadata,
     Static = Token#text_token.text,
     State#state{
         parts = Parts#{
             Index => Static
         },
-        index = Index+1
+        index = Index+1,
+        metadata = Metadata#{
+            Index => Token#text_token.metadata
+        }
     };
 do_fold_compile_2( #text_token{} = Token
                  , #state{recursive = true} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
+    Metadata = State#state.metadata,
     IndexParts = maps:get(Index, Parts, []),
     Static = Token#text_token.text,
     State#state{
         parts = Parts#{
             Index => [<<"<<\"", Static/binary, "\"/utf8>>">> | IndexParts]
+        },
+        metadata = Metadata#{
+            Index => Token#text_token.metadata
         }
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    {ok, AST} = binary_to_ast(Token#expr_token.expr, State#state.converter),
+    Metadata = State#state.metadata,
+    {ok, AST} = expr_ast(Token#expr_token.expr),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = Parts#{
@@ -124,19 +129,26 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
         },
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
-        dynamics = [Index | State#state.dynamics]
+        dynamics = [Index | State#state.dynamics],
+        metadata = Metadata#{
+            Index => Token#expr_token.metadata
+        }
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = true} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
+    Metadata = State#state.metadata,
     IndexParts = maps:get(Index, Parts, []),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = Parts#{
             Index => [Token#expr_token.expr | IndexParts]
         },
-        vars = lists:merge(State#state.vars, Vars)
+        vars = lists:merge(State#state.vars, Vars),
+        metadata = Metadata#{
+            Index => Token#expr_token.metadata
+        }
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = false} = State0 ) ->
@@ -144,7 +156,8 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
                                      , Token#expr_token.expr, State0 ),
     Index = State#state.index,
     Parts = State#state.parts,
-    {ok, AST} = binary_to_ast(Expr, State#state.converter),
+    Metadata = State#state.metadata,
+    {ok, AST} = expr_ast(Expr),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = Parts#{
@@ -152,7 +165,10 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
         },
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
-        dynamics = [Index | State#state.dynamics]
+        dynamics = [Index | State#state.dynamics],
+        metadata = Metadata#{
+            Index => Token#expr_token.metadata
+        }
     }};
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = true} = State0 ) ->
@@ -160,13 +176,17 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
                                      , Token#expr_token.expr, State0 ),
     Index = State#state.index,
     Parts = State#state.parts,
+    Metadata = State#state.metadata,
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = Parts#{
             Index => Expr
         },
         index = Index+1,
-        vars = lists:merge(State#state.vars, Vars)
+        vars = lists:merge(State#state.vars, Vars),
+        metadata = Metadata#{
+            Index => Token#expr_token.metadata
+        }
     }}.
 
 do_fold_compile_3([Vertex | T], Expr0, State0) ->
@@ -193,8 +213,8 @@ do_fold_compile_4(#slave_vertex{token = #expr_token{expr = Expr1}}, _, Expr0, St
 %% Internal functions
 %%======================================================================
 
-binary_to_ast(Bin, Converter) ->
-    String = binary_to_list(iolist_to_binary(normalize_bin(Bin, Converter))),
+expr_ast(Bin) ->
+    String = binary_to_list(iolist_to_binary(normalize_expr(Bin))),
     case erl_scan:string(String) of
         {ok, Tokens, _} ->
             case erl_parse:parse_exprs(Tokens) of
@@ -207,13 +227,8 @@ binary_to_ast(Bin, Converter) ->
             {error, {ErrorInfo, ErrorLocation}}
     end.
 
-normalize_bin(Expr, undefined) ->
-    [Expr, $.];
-normalize_bin(Expr, Converter)
-  when is_binary(Converter); is_list(Converter) ->
-    [Converter, ":to_string(", Expr, ")."];
-normalize_bin(Expr, Converter) when is_atom(Converter) ->
-    normalize_bin(Expr, atom_to_binary(Converter)).
+normalize_expr(Expr) ->
+    [Expr, $.].
 
 %%======================================================================
 %% Tests

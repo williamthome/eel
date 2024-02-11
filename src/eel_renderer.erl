@@ -17,21 +17,31 @@
 %%======================================================================
 
 render(Bindings, State) ->
-    render(Bindings, State, fun eel_converter:to_string/1).
+    render(Bindings, #{}, State).
 
-render(Bindings, State, ToStringFun) ->
+render(Bindings, State, Opts) ->
+    IsPartialRender = false,
     Indexes = maps:get(dynamics, State),
-    eval_parts(Indexes, Bindings, State, ToStringFun).
+    eval_parts(IsPartialRender, Indexes, Bindings, State, Opts).
 
 render_changes(Bindings, State) ->
-    render_changes(Bindings, State, fun eel_converter:to_string/1).
+    render_changes(Bindings, State, #{}).
 
-render_changes(Bindings, State, ToStringFun) ->
+render_changes(Bindings, State, Opts) ->
+    IsPartialRender = true,
     Indexes = get_vars_indexes(Bindings, State),
-    eval_parts(Indexes, Bindings, State, ToStringFun).
+    eval_parts(IsPartialRender, Indexes, Bindings, State, Opts).
 
 get_vars_indexes(Bindings, State) ->
-    do_get_vars_indexes(Bindings, maps:get(vars, State)).
+    Vars = maps:get(vars, State),
+    sets:to_list(
+        lists:foldl(fun(Var, Set0) ->
+            Indexes = proplists:get_all_values(Var, Vars),
+            lists:foldl(fun(Index, Set) ->
+                sets:add_element(Index, Set)
+            end, Set0, Indexes)
+        end, sets:new([{version, 2}]), maps:keys(Bindings))
+    ).
 
 get_vars_from_indexes(Indexes, State) ->
     lists:filtermap(fun({Var, Index}) ->
@@ -47,26 +57,20 @@ get_vars_from_indexes(Indexes, State) ->
 %% Internal functions
 %%======================================================================
 
-do_get_vars_indexes(Bindings, Vars) ->
-    sets:to_list(
-        lists:foldl(fun(Var, Set0) ->
-            Indexes = proplists:get_all_values(Var, Vars),
-            lists:foldl(fun(Index, Set) ->
-                sets:add_element(Index, Set)
-            end, Set0, Indexes)
-        end, sets:new([{version, 2}]), maps:keys(Bindings))
-    ).
-
-eval_parts(Indexes, Bindings, State, ToStringFun) ->
+eval_parts(Partial, Indexes, Bindings, State, Opts) ->
     Parts = maps:get(parts, State),
-    do_eval_parts(Indexes, Parts, #{'Bindings' => Bindings}, ToStringFun).
-
-do_eval_parts(Indexes, Parts, Bindings, ToStringFun) ->
+    ToStringFun = maps:get(to_string, Opts, fun eel_converter:to_string/1),
     lists:foldl(fun(Index, Acc) ->
-        Acc#{Index => eval_part(Index, Parts, Bindings, ToStringFun)}
+        Acc#{Index => eval_part(Partial, Index, Parts, ToStringFun, Bindings, State)}
     end, #{}, Indexes).
 
-eval_part(Index, Parts, Bindings, ToStringFun) ->
+eval_part(Partial, Index, Parts, ToStringFun, Bindings0, State) ->
+    Bindings = #{
+        '__PARTIAL__' => Partial,
+        '__INDEX__' => Index,
+        '__STATE__' => State,
+        'Bindings' => Bindings0
+    },
     Expr = maps:get(Index, Parts),
     case erl_eval:exprs(Expr, Bindings) of
         {value, IOData, _} when is_binary(IOData) ->
