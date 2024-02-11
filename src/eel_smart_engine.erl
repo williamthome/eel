@@ -53,7 +53,12 @@ handle_text(_Text) ->
 handle_expr(Marker, Expr0) ->
     Expr = normalize_expr(Expr0),
     Vars = get_expr_vars(Expr0),
-    {ok, [{expr, {Marker, Expr, Vars}}]}.
+    {ok, [#expr_token{
+        engine = ?MODULE,
+        marker = Marker,
+        expr = Expr,
+        vars = Vars
+    }]}.
 
 normalize_expr(Expr) ->
     replace_expr_vars(Expr, <<>>).

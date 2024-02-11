@@ -158,7 +158,7 @@ handle_text([Engine | Engines], Bin) ->
             handle_text(Engines, Bin)
     end;
 handle_text([], Bin) ->
-    {ok, [new_text_token(Bin)]}.
+    {ok, [#text_token{text = Bin}]}.
 
 handle_expr(Engine, Marker, Bin) ->
     case Engine:handle_expr(Marker, Bin) of
@@ -168,26 +168,14 @@ handle_expr(Engine, Marker, Bin) ->
             {error, Reason}
     end.
 
-resolve_handled_tokens([{text, Text} | T], Engine, Acc0) ->
-    Acc = [new_text_token(Text) | Acc0],
+resolve_handled_tokens([#text_token{} = TextToken | T], Engine, Acc0) ->
+    Acc = [TextToken | Acc0],
     resolve_handled_tokens(T, Engine, Acc);
-resolve_handled_tokens([{expr, {Marker, Expr, Vars}} | T], Engine, Acc0) ->
-    Acc = [new_expr_token(Expr, Engine, Marker, Vars) | Acc0],
+resolve_handled_tokens([#expr_token{} = ExprToken | T], Engine, Acc0) ->
+    Acc = [ExprToken | Acc0],
     resolve_handled_tokens(T, Engine, Acc);
 resolve_handled_tokens([], _, Acc) ->
     Acc.
-
-new_text_token(Text) when is_binary(Text) ->
-    #text_token{text = Text}.
-
-new_expr_token(Expr, Engine, Marker, Vars)
-  when is_binary(Expr), is_list(Vars) ->
-    #expr_token{
-        expr = Expr,
-        engine = Engine,
-        marker = Marker,
-        vars = Vars
-    }.
 
 %%======================================================================
 %% Tests
