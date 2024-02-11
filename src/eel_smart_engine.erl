@@ -4,7 +4,6 @@
         , handle_text/1
         , handle_expr/2
         , handle_tokens/1
-        , handle_tree/1
         , normalize_expr/1
         , get_expr_vars/1
         ]).
@@ -209,6 +208,3 @@ merge_expr_tokens(Discard, Keep) ->
 
 merge_bin(A, B) ->
     <<A/binary, 32, B/binary>>.
-
-handle_tree(Tree) ->
-    Tree.
