@@ -60,17 +60,31 @@ get_vars_from_indexes(Indexes, State) ->
 eval_parts(Partial, Indexes, Assigns, State, Opts) ->
     Parts = maps:get(parts, State),
     ToStringFun = maps:get(to_string, Opts, fun eel_converter:to_string/1),
-    lists:foldl(fun(Index, Acc) ->
-        Acc#{Index => eval_part(Partial, Index, Parts, ToStringFun, Assigns, State)}
-    end, #{}, Indexes).
+    case Opts of
+        #{debug_info := true} ->
+            Globals = maps:get(global_vars, Opts, #{}),
+            Bindings0 = Globals#{
+                '__PARTIAL__' => Partial,
+                '__STATE__' => State,
+                'Assigns' => Assigns
+            },
+            lists:foldl(fun(Index, Acc) ->
+                Bindings = Bindings0#{
+                    '__INDEX__' => Index
+                },
+                Part = eval_part(Index, Parts, ToStringFun, Bindings),
+                Acc#{Index => Part}
+            end, #{}, Indexes);
+        #{} ->
+            Globals = maps:get(global_vars, Opts, #{}),
+            Bindings = Globals#{'Assigns' => Assigns},
+            lists:foldl(fun(Index, Acc) ->
+                Part = eval_part(Index, Parts, ToStringFun, Bindings),
+                Acc#{Index => Part}
+            end, #{}, Indexes)
+    end.
 
-eval_part(Partial, Index, Parts, ToStringFun, Assigns, State) ->
-    Bindings = #{
-        '__PARTIAL__' => Partial,
-        '__INDEX__' => Index,
-        '__STATE__' => State,
-        'Assigns' => Assigns
-    },
+eval_part(Index, Parts, ToStringFun, Bindings) ->
     Expr = maps:get(Index, Parts),
     case erl_eval:exprs(Expr, Bindings) of
         {value, IOData, _} when is_binary(IOData) ->
