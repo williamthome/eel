@@ -69,11 +69,11 @@ replace_expr_vars(<<$@, T0/binary>>, Acc) ->
         {Default0, T} ->
             Default = normalize_expr(Default0),
             replace_expr_vars(T, <<Acc/binary,
-                "(maps:get(", Var/binary, ", Bindings, ", Default/binary, "))"
+                "(maps:get(", Var/binary, ", Assigns, ", Default/binary, "))"
             >>);
         none ->
             replace_expr_vars(T1, <<Acc/binary,
-                "(maps:get(", Var/binary, ", Bindings))"
+                "(maps:get(", Var/binary, ", Assigns))"
             >>)
     end;
 replace_expr_vars(<<H, T/binary>>, Acc) ->
@@ -110,7 +110,7 @@ find_var_ending(T, Var) ->
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve the default syntax or remove it.
 %       Currently, this is valid:
-%       1> @foo \\ @bar \\ baz. = (maps:get(foo, Bindings, (maps:get(bar, Bindings, baz))))
+%       1> @foo \\ @bar \\ baz. = (maps:get(foo, Assigns, (maps:get(bar, Assigns, baz))))
 %       The required dot at the end is strange, specially where the comma
 %       is required:
 %       2> #{foo => @foo \\ foo., bar => @bar \\ @baz.}

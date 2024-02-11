@@ -16,23 +16,23 @@
 %% API functions
 %%======================================================================
 
-render(Bindings, State) ->
-    render(Bindings, #{}, State).
+render(Assigns, State) ->
+    render(Assigns, #{}, State).
 
-render(Bindings, State, Opts) ->
+render(Assigns, State, Opts) ->
     IsPartialRender = false,
     Indexes = maps:get(dynamics, State),
-    eval_parts(IsPartialRender, Indexes, Bindings, State, Opts).
+    eval_parts(IsPartialRender, Indexes, Assigns, State, Opts).
 
-render_changes(Bindings, State) ->
-    render_changes(Bindings, State, #{}).
+render_changes(Assigns, State) ->
+    render_changes(Assigns, State, #{}).
 
-render_changes(Bindings, State, Opts) ->
+render_changes(Assigns, State, Opts) ->
     IsPartialRender = true,
-    Indexes = get_vars_indexes(Bindings, State),
-    eval_parts(IsPartialRender, Indexes, Bindings, State, Opts).
+    Indexes = get_vars_indexes(Assigns, State),
+    eval_parts(IsPartialRender, Indexes, Assigns, State, Opts).
 
-get_vars_indexes(Bindings, State) ->
+get_vars_indexes(Assigns, State) ->
     Vars = maps:get(vars, State),
     sets:to_list(
         lists:foldl(fun(Var, Set0) ->
@@ -40,7 +40,7 @@ get_vars_indexes(Bindings, State) ->
             lists:foldl(fun(Index, Set) ->
                 sets:add_element(Index, Set)
             end, Set0, Indexes)
-        end, sets:new([{version, 2}]), maps:keys(Bindings))
+        end, sets:new([{version, 2}]), maps:keys(Assigns))
     ).
 
 get_vars_from_indexes(Indexes, State) ->
@@ -57,19 +57,19 @@ get_vars_from_indexes(Indexes, State) ->
 %% Internal functions
 %%======================================================================
 
-eval_parts(Partial, Indexes, Bindings, State, Opts) ->
+eval_parts(Partial, Indexes, Assigns, State, Opts) ->
     Parts = maps:get(parts, State),
     ToStringFun = maps:get(to_string, Opts, fun eel_converter:to_string/1),
     lists:foldl(fun(Index, Acc) ->
-        Acc#{Index => eval_part(Partial, Index, Parts, ToStringFun, Bindings, State)}
+        Acc#{Index => eval_part(Partial, Index, Parts, ToStringFun, Assigns, State)}
     end, #{}, Indexes).
 
-eval_part(Partial, Index, Parts, ToStringFun, Bindings0, State) ->
+eval_part(Partial, Index, Parts, ToStringFun, Assigns, State) ->
     Bindings = #{
         '__PARTIAL__' => Partial,
         '__INDEX__' => Index,
         '__STATE__' => State,
-        'Bindings' => Bindings0
+        'Assigns' => Assigns
     },
     Expr = maps:get(Index, Parts),
     case erl_eval:exprs(Expr, Bindings) of
@@ -118,15 +118,15 @@ render_test() ->
         [[<<"<li>">>,<<"Item - ">>,<<"1">>,<<"</li>">>],
          [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
          [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]},
-    BindingsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
+    AssignsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
     StateAll = eel_compiler:compile(Tree),
-    ResultAll = render(BindingsAll, StateAll),
+    ResultAll = render(AssignsAll, StateAll),
     ?assertEqual(ExpectedAll, ResultAll),
 
     ExpectedChanges = #{1 => <<"EEl - Embedded Erlang">>},
-    BindingsChanges = #{title => <<"EEl - Embedded Erlang">>},
+    AssignsChanges = #{title => <<"EEl - Embedded Erlang">>},
     StateChanges = maps:merge(StateAll, ResultAll),
-    ResultChanges = render_changes(BindingsChanges, StateChanges),
+    ResultChanges = render_changes(AssignsChanges, StateChanges),
     ?assertEqual(ExpectedChanges, ResultChanges).
 
 -endif.

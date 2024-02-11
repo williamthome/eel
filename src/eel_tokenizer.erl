@@ -185,7 +185,7 @@ resolve_handled_tokens([], _, Acc) ->
 
 tokenize_test() ->
     Expected = [{text_token,<<"<html><head><title>">>},
-    {expr_token,<<"(maps:get(title, Bindings))">>,
+    {expr_token,<<"(maps:get(title, Assigns))">>,
                 eel_smart_engine,
                 {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
                         [push_token],
@@ -205,7 +205,7 @@ tokenize_test() ->
                         undefined},
                 []},
     {text_token,<<"<li>">>},
-    {expr_token,<<"(maps:get(item_prefix, Bindings))">>,
+    {expr_token,<<"(maps:get(item_prefix, Assigns))">>,
                 eel_smart_engine,
                 {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
                         [push_token],
@@ -217,7 +217,7 @@ tokenize_test() ->
                         expr},
                 []},
     {text_token,<<"</li>">>},
-    {expr_token,<<"end, (maps:get(items, Bindings)))">>,
+    {expr_token,<<"end, (maps:get(items, Assigns)))">>,
                 eel_smart_engine,
                 {marker,expr_end,<<"<%\\s+">>,<<"\\s+.%>">>,[],
                         [],

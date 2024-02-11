@@ -39,7 +39,7 @@ or a set of functions used in a module, for example, given this module
 % by evaluating it in te compile time, boosting the performance.
 -include("eel.hrl").
 
-render(Bindings) ->
+render(Assigns) ->
     {ok, Snapshot} = eel:compile(<<
         "<html>"
         "<head>"
@@ -50,10 +50,10 @@ render(Bindings) ->
         "</body>"
         "</html>"
     >>),
-    render(Bindings, Snapshot).
+    render(Assigns, Snapshot).
 
-render(Bindings, Snapshot) ->
-    {ok, RenderSnapshot} = eel_renderer:render(Bindings, Snapshot),
+render(Assigns, Snapshot) ->
+    {ok, RenderSnapshot} = eel_renderer:render(Assigns, Snapshot),
     {eel_evaluator:eval(RenderSnapshot), RenderSnapshot}.
 ```
 
@@ -139,18 +139,18 @@ and the second a metadata called `snapshot`
            [{2,<<"Hey!">>},{4,<<"World">>}]}
 ```
 
-The line `1` will evaluate the bindings `Title` and `Name`, but the line `2`
+The line `1` will evaluate the assigns `Title` and `Name`, but the line `2`
 will only eval the `Name` variable, because it uses the snapshot of the previous
-render. It only eval the changes and does not need to compile the binary again, unless the expression contains the global `Bindings` variable (see below),
+render. It only eval the changes and does not need to compile the binary again, unless the expression contains the global `Assigns` variable (see below),
 because the `snapshot` includes the required information.
 
-The var `Bindings` is a reserved one and can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
+The var `Assigns` is a reserved one and can be used to get values in a conditional way, checking if the variable exists in the template, e.g.:
 
 ```
-<%= maps:get('Foo', Bindings, bar) .%>
+<%= maps:get('Foo', Assigns, bar) .%>
 ```
 
-The `Bindings` should contains the unbound/required variables of the template. The syntax it's a map with keys as atoms starting with upper case, e.g:
+The `Assigns` should contains the unbound/required variables of the template. The syntax it's a map with keys as atoms starting with upper case, e.g:
 
 ```erlang
 #{'Foo' => <<"foo">>, 'FooBar' => bar}
@@ -159,16 +159,16 @@ The `Bindings` should contains the unbound/required variables of the template. T
 or the same in lower case when passing the option #{snake_case => true} to the render function, e.g.:
 
 ```erlang
-eel_renderer:render(Bindings, Snapshot, #{snake_case => true})
+eel_renderer:render(Assigns, Snapshot, #{snake_case => true})
 ```
 
-Passing the snake_case option the `Bindings` above you must write the keys as
+Passing the snake_case option the `Assigns` above you must write the keys as
 
 ```erlang
 #{foo => <<"foo">>, foo_bar => bar}
 ```
 
-Including `Bindings` to the expression makes it to be always evaluated by the render function.
+Including `Assigns` to the expression makes it to be always evaluated by the render function.
 
 ## Engine
 

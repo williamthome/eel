@@ -242,7 +242,7 @@ compile_test() ->
           1 =>
            [{call,1,
              {remote,1,{atom,1,maps},{atom,1,get}},
-             [{atom,1,title},{var,1,'Bindings'}]}],
+             [{atom,1,title},{var,1,'Assigns'}]}],
           2 => <<"</title></head><body><ul>">>,
           3 =>
            [{call,1,
@@ -261,7 +261,7 @@ compile_test() ->
                     {cons,1,
                      {call,1,
                       {remote,1,{atom,1,maps},{atom,1,get}},
-                      [{atom,1,item_prefix},{var,1,'Bindings'}]},
+                      [{atom,1,item_prefix},{var,1,'Assigns'}]},
                      {cons,1,
                       {call,1,
                        {atom,1,integer_to_binary},
@@ -275,7 +275,7 @@ compile_test() ->
                        {nil,1}}}}}]}]}},
               {call,1,
                {remote,1,{atom,1,maps},{atom,1,get}},
-               [{atom,1,items},{var,1,'Bindings'}]}]}],
+               [{atom,1,items},{var,1,'Assigns'}]}]}],
           4 => <<"</ul></body></html>">>},
        dynamics => [3,1],
        vars => [{item_prefix,3},{title,1}]},
