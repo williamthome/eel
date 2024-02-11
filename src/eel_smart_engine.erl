@@ -123,8 +123,21 @@ find_var_default(<<$\\, T/binary>>) ->
 find_var_default(_) ->
     none.
 
-find_var_default_ending(<<$., T/binary>>, Default) ->
+% FIXME: Should ignore symbols when a inside string.
+% TODO: Check more symbols.
+find_var_default_ending(<<$\r, _/binary>> = T, Default) ->
     {Default, T};
+find_var_default_ending(<<$\n, _/binary>> = T, Default) ->
+    {Default, T};
+find_var_default_ending(<<$,, _/binary>> = T, Default) ->
+    {Default, T};
+find_var_default_ending(<<$., _/binary>> = T, Default) ->
+    {Default, T};
+find_var_default_ending(<<$}, _/binary>> = T, Default) ->
+    {Default, T};
+find_var_default_ending(<<$], _/binary>> = T, Default) ->
+    {Default, T};
+% TODO: Should check this space implementation after drop the required dot.
 find_var_default_ending(<<$\s, T/binary>>, <<>>) ->
     find_var_default_ending(T, <<>>);
 find_var_default_ending(<<H, T/binary>>, Acc) ->
