@@ -8,12 +8,15 @@
     compile_as     :: marker_compile_as()
 }).
 
--record(text_token, { text   :: binary() }).
+-record(text_token, { text     :: binary()
+                    , metadata :: term()
+                    }).
 
--record(expr_token, { expr   :: binary()
-                    , engine :: engine()
-                    , marker :: #marker{}
-                    , vars   :: [atom()]
+-record(expr_token, { expr     :: binary()
+                    , engine   :: engine()
+                    , marker   :: #marker{}
+                    , vars     :: [atom()]
+                    , metadata :: term()
                     }).
 
 -record(master_vertex, { ast :: ast() }).
