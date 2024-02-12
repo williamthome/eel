@@ -1,12 +1,11 @@
 -module(eel_smart_engine).
+-behaviour(eel_engine).
 
--export([ init/1
-        , handle_text/1
-        , handle_expr/2
-        , handle_tokens/1
-        , normalize_expr/1
-        , get_expr_vars/1
-        ]).
+%% eel_engine callbacks
+-export([ init/1, handle_text/1, handle_expr/2, handle_tokens/1 ]).
+
+%% API
+-export([ normalize_expr/1, get_expr_vars/1 ]).
 
 -include("eel.hrl").
 
