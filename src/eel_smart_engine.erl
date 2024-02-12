@@ -63,18 +63,60 @@ normalize_expr(Expr) ->
     replace_expr_vars(Expr, <<>>).
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
+% TODO: Improve code readability.
+% TODO: Support records and nested records.
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
-    {Var, T1} = find_var_ending(T0),
-    case find_var_default(T1) of
-        {Default0, T} ->
-            Default = normalize_expr(Default0),
-            replace_expr_vars(T, <<Acc/binary,
-                "(maps:get(", Var/binary, ", Assigns, ", Default/binary, "))"
-            >>);
-        none ->
-            replace_expr_vars(T1, <<Acc/binary,
-                "(maps:get(", Var/binary, ", Assigns))"
-            >>)
+    case find_var_ending(T0) of
+        {ok, {Var, T1}} ->
+            case find_var_default(T1) of
+                {Default0, T} ->
+                    Default = normalize_expr(Default0),
+                    replace_expr_vars(T, <<Acc/binary,
+                        "(maps:get(", Var/binary, ", Assigns, ", Default/binary, "))"
+                    >>);
+                none ->
+                    replace_expr_vars(T1, <<Acc/binary,
+                        "(maps:get(", Var/binary, ", Assigns))"
+                    >>)
+            end;
+        % Provides nested maps getting, e.g.:
+        %   <%= @foo.baz.baz \\ 5 .%> = (maps:get(baz, (maps:get(bar, (maps:get(foo, Assigns)))), 5))
+        {nested, {[Var | Rest], T1}} ->
+            First = <<"(maps:get(", Var/binary, ", Assigns))">>,
+            case Rest of
+                [] ->
+                    replace_expr_vars(T1, <<Acc/binary,
+                        First/binary
+                    >>);
+                [Last] ->
+                    case find_var_default(T1) of
+                        {Default0, T2} ->
+                            Default = normalize_expr(Default0),
+                            replace_expr_vars(T2, <<Acc/binary,
+                                "(maps:get(", Last/binary, ", ", First/binary, ", ", Default/binary, "))"
+                            >>);
+                        none ->
+                            replace_expr_vars(T1, <<Acc/binary,
+                                "(maps:get(", Last/binary, ", ", First/binary, "))"
+                            >>)
+                    end;
+                Rest ->
+                    Others = lists:foldl(fun(V, VAcc) ->
+                        <<"(maps:get(", V/binary, ", ", VAcc/binary, "))">>
+                    end, First, lists:droplast(Rest)),
+                    Last = lists:last(Rest),
+                    case find_var_default(T1) of
+                        {Default0, T2} ->
+                            Default = normalize_expr(Default0),
+                            replace_expr_vars(T2, <<Acc/binary,
+                                "(maps:get(", Last/binary, ", ", Others/binary, ", ", Default/binary, "))"
+                            >>);
+                        none ->
+                            replace_expr_vars(T1, <<Acc/binary,
+                                "(maps:get(", Last/binary, ", ", Others/binary,"))"
+                            >>)
+                    end
+            end
     end;
 replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
@@ -85,12 +127,26 @@ get_expr_vars(Expr) ->
     get_expr_vars(Expr, []).
 
 get_expr_vars(<<$@, T0/binary>>, Acc) ->
-    {Var, T} = find_var_ending(T0),
+    {Var, T} =
+        case find_var_ending(T0) of
+            {ok, {V, Rest}} ->
+                {V, Rest};
+            {nested, {[V | _], Rest}} ->
+                {V, find_expr_vars_ending(Rest)}
+        end,
     get_expr_vars(T, [binary_to_atom(Var) | Acc]);
 get_expr_vars(<<_, T/binary>>, Acc) ->
     get_expr_vars(T, Acc);
 get_expr_vars(<<>>, Acc) ->
     Acc.
+
+find_expr_vars_ending(T0) ->
+    case find_var_ending(T0, <<>>) of
+        {ok, {_Var, T}} ->
+            T;
+        {nested, {_Var, T}} ->
+            find_expr_vars_ending(T)
+    end.
 
 find_var_ending(<<H, T/binary>>) when H >= $a andalso H =< $z ->
     find_var_ending(T, <<H>>);
@@ -104,8 +160,22 @@ find_var_ending(<<H, T/binary>>, Acc)
      ; H =:= $_
      ; H =:= $@ ->
     find_var_ending(T, <<Acc/binary, H>>);
+find_var_ending(<<$., Next, T/binary>>, Var) when Next >= $a, Next =< $z ->
+    {nested, find_nested_var_ending(<<Next, T/binary>>, [Var])};
 find_var_ending(T, Var) ->
-    {Var, T}.
+    {ok, {Var, T}}.
+
+find_nested_var_ending(<<>>, Acc) ->
+    {Acc, <<>>};
+find_nested_var_ending(T0, Acc) ->
+    case find_var_ending(T0, <<>>) of
+        {ok, {<<>>, T}} ->
+            {Acc, T};
+        {ok, {Var, T}} ->
+            {Acc ++ [Var], T};
+        {nested, {Vars, T}} ->
+            find_nested_var_ending(T, Acc ++ Vars)
+    end.
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve the default syntax or remove it.
