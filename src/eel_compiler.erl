@@ -24,11 +24,21 @@
 %% API functions
 %%======================================================================
 
-compile(Payload) ->
-    compile(Payload, #{}).
+compile({Root, Tree}) ->
+    compile(Root, Tree).
 
-compile({Root, Tree}, Opts) ->
-    State = fold_compile(Root, Tree, Opts),
+compile(VertexLabel, Tree) ->
+    Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
+    State0 = #state{
+        parts = #{},
+        vars = [],
+        dynamics = [],
+        index = 0,
+        recursive = false,
+        tree = Tree,
+        metadata = #{}
+    },
+    State = do_fold_compile(Vertex, State0),
     #{
         parts => State#state.parts,
         vars => State#state.vars,
@@ -39,19 +49,6 @@ compile({Root, Tree}, Opts) ->
 %%======================================================================
 %% Internal functions
 %%======================================================================
-
-fold_compile(VertexLabel, Tree, Opts) ->
-    Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
-    State = #state{
-        parts = #{},
-        vars = [],
-        dynamics = [],
-        index = 0,
-        recursive = false,
-        tree = Tree,
-        metadata = #{}
-    },
-    do_fold_compile(Vertex, State).
 
 do_fold_compile(Vertex, State) ->
     Children = lists:reverse(eel_tree:fetch_vertex_children(Vertex, State#state.tree)),
