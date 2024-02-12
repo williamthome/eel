@@ -145,8 +145,7 @@ tree_test() ->
        9 =>
         {vertex,6,9,[],false,true,
          {slave_vertex,
-          {expr_token,<<"integer_to_binary(Item)">>,
-           eel_smart_engine,
+          {expr_token,<<"Item">>,eel_smart_engine,
            {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
             [push_token],
             expr},
@@ -179,8 +178,7 @@ tree_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary. %%>"
-                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+                "<li><%= @item_prefix .%><%= Item .%></li>"
             "<% end, @items) .%>"
             "</ul>"
         "</body>"

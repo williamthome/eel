@@ -8,7 +8,6 @@
 
 -include("eel.hrl").
 
-% TODO
 -record( state,
        { parts
        , vars
@@ -263,9 +262,7 @@ compile_test() ->
                       {remote,1,{atom,1,maps},{atom,1,get}},
                       [{atom,1,item_prefix},{var,1,'Assigns'}]},
                      {cons,1,
-                      {call,1,
-                       {atom,1,integer_to_binary},
-                       [{var,1,'Item'}]},
+                      {var,1,'Item'},
                       {cons,1,
                        {bin,1,
                         [{bin_element,1,
@@ -277,8 +274,8 @@ compile_test() ->
                {remote,1,{atom,1,maps},{atom,1,get}},
                [{atom,1,items},{var,1,'Assigns'}]}]}],
           4 => <<"</ul></body></html>">>},
-       dynamics => [3,1],
-       vars => [{item_prefix,3},{title,1}]},
+       vars => [{item_prefix,3},{title,1}],
+       dynamics => [3,1]},
 
     Bin = <<
         "<html>"
@@ -288,7 +285,7 @@ compile_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+                "<li><%= @item_prefix .%><%= Item .%></li>"
             "<% end, @items) .%>"
             "</ul>"
         "</body>"

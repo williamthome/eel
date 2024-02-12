@@ -86,21 +86,23 @@ eval_parts(Partial, Indexes, Assigns, State, Opts) ->
 
 eval_part(Index, Parts, ToStringFun, Bindings) ->
     Expr = maps:get(Index, Parts),
-    case erl_eval:exprs(Expr, Bindings) of
-        {value, IOData, _} when is_binary(IOData) ->
-            IOData;
-        {value, [IOData], _} when is_binary(IOData) ->
-            IOData;
-        {value, [Term], _} ->
-            ToStringFun(Term);
-        {value, IOData, _} when is_list(IOData) ->
-            % NOTE: Here we have a list that can be optimized to the changes return.
-            %       We need to know the static x dynamics of the expression.
-            % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOData}]),
-            IOData;
-        {value, Term, _} ->
-            ToStringFun(Term)
-    end.
+    {value, Term, _} = erl_eval:exprs(Expr, Bindings),
+    to_string(Term, ToStringFun).
+
+% TODO: Let the user transform data to string.
+to_string(IOData, _ToStringFun) when is_binary(IOData) ->
+    IOData;
+to_string([IOData], _ToStringFun) when is_binary(IOData) ->
+    IOData;
+to_string([Term], ToStringFun) ->
+    ToStringFun(Term);
+to_string(IOList, ToStringFun) when is_list(IOList) ->
+    % NOTE: Here we have a list that can be optimized to the changes return.
+    %       We need to know the static x dynamics of the expression.
+    % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOList}]),
+    lists:map(fun(Term) -> to_string(Term, ToStringFun) end, IOList);
+to_string(Term, ToStringFun) ->
+    ToStringFun(Term).
 
 %%======================================================================
 %% Tests
@@ -117,8 +119,7 @@ render_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary. %%>"
-                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+                "<li><%= @item_prefix .%><%= Item .%></li>"
             "<% end, @items) .%>"
             "</ul>"
         "</body>"

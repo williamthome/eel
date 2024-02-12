@@ -199,12 +199,6 @@ tokenize_test() ->
                         [add_vertex,push_token,add_vertex],
                         expr_start},
                 [],undefined},
-    {expr_token,<<"TODO: Items to binary.">>,eel_smart_engine,
-                {marker,comment,<<"<%%\\s+">>,<<"\\s+%%>">>,[],
-                        [],
-                        [ignore_token],
-                        undefined},
-                [],undefined},
     {text_token,<<"<li>">>,undefined},
     {expr_token,<<"(maps:get(item_prefix, Assigns))">>,
                 eel_smart_engine,
@@ -213,7 +207,7 @@ tokenize_test() ->
                         expr},
                 [item_prefix],
                 undefined},
-    {expr_token,<<"integer_to_binary(Item)">>,eel_smart_engine,
+    {expr_token,<<"Item">>,eel_smart_engine,
                 {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
                         [push_token],
                         expr},
@@ -238,8 +232,7 @@ tokenize_test() ->
         "<body>"
             "<ul>"
             "<%= lists:map(fun(Item) -> %>"
-                "<%% TODO: Items to binary. %%>"
-                "<li><%= @item_prefix .%><%= integer_to_binary(Item) .%></li>"
+                "<li><%= @item_prefix .%><%= Item .%></li>"
             "<% end, @items) .%>"
             "</ul>"
         "</body>"
