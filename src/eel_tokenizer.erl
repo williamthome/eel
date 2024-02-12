@@ -26,8 +26,13 @@ tokenize(Bin) ->
 
 tokenize(Input, Opts)
   when (is_binary(Input) orelse is_list(Input)), is_map(Opts) ->
+    Engines0 = maps:get(engines, Opts, default_engines()),
+    Engines = lists:map(fun(Engine) ->
+        {ok, EngineState} = Engine:init(Opts),
+        EngineState#{module => Engine}
+    end, Engines0),
     State = #state{
-        engines = maps:get(engines, Opts, default_engines()),
+        engines = Engines,
         buffer = <<>>,
         text_acc = <<>>,
         tokens = []
@@ -81,7 +86,7 @@ do_tokenize(<<H, T/binary>>, State0) ->
             do_tokenize(T, State)
     end;
 do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
-    lists:foldl(fun(Engine, Tokens) ->
+    lists:foldl(fun(#{module := Engine}, Tokens) ->
         Engine:handle_tokens(lists:flatten(Tokens))
     end, lists:reverse(State#state.tokens), State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
@@ -95,12 +100,12 @@ do_tokenize(<<>>, #state{text_acc = Text} = State) ->
             {error, Reason}
     end.
 
-handle_expr_start([Engine | Engines], Bin) ->
-    case start_marker_match(Engine:markers(), Bin, []) of
+handle_expr_start([#{markers := Markers} = Engine | Engines], Bin) ->
+    case start_marker_match(Markers, Bin, []) of
         [] ->
             handle_expr_start(Engines, Bin);
-        Markers ->
-            {ok, {Engine, Markers}}
+        MatchMarkers ->
+            {ok, {Engine, MatchMarkers}}
     end;
 handle_expr_start([], _) ->
     none.
@@ -148,10 +153,10 @@ marker_match(Bin, Marker) ->
             nomatch
     end.
 
-handle_text([Engine | Engines], Bin) ->
+handle_text([#{module := Engine} | Engines], Bin) ->
     case Engine:handle_text(Bin) of
         {ok, Tokens} ->
-            {ok, resolve_handled_tokens(Tokens, Engine, [])};
+            {ok, resolve_handled_tokens(Tokens, [])};
         {error, Reason} ->
             {error, Reason};
         next ->
@@ -160,21 +165,21 @@ handle_text([Engine | Engines], Bin) ->
 handle_text([], Bin) ->
     {ok, [#text_token{text = Bin}]}.
 
-handle_expr(Engine, Marker, Bin) ->
+handle_expr(#{module := Engine}, Marker, Bin) ->
     case Engine:handle_expr(Marker, Bin) of
         {ok, Tokens} ->
-            {ok, resolve_handled_tokens(Tokens, Engine, [])};
+            {ok, resolve_handled_tokens(Tokens, [])};
         {error, Reason} ->
             {error, Reason}
     end.
 
-resolve_handled_tokens([#text_token{} = TextToken | T], Engine, Acc0) ->
+resolve_handled_tokens([#text_token{} = TextToken | T], Acc0) ->
     Acc = [TextToken | Acc0],
-    resolve_handled_tokens(T, Engine, Acc);
-resolve_handled_tokens([#expr_token{} = ExprToken | T], Engine, Acc0) ->
+    resolve_handled_tokens(T, Acc);
+resolve_handled_tokens([#expr_token{} = ExprToken | T], Acc0) ->
     Acc = [ExprToken | Acc0],
-    resolve_handled_tokens(T, Engine, Acc);
-resolve_handled_tokens([], _, Acc) ->
+    resolve_handled_tokens(T, Acc);
+resolve_handled_tokens([], Acc) ->
     Acc.
 
 %%======================================================================

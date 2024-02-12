@@ -1,6 +1,6 @@
 -module(eel_smart_engine).
 
--export([ markers/0
+-export([ init/1
         , handle_text/1
         , handle_expr/2
         , handle_tokens/1
@@ -10,41 +10,43 @@
 
 -include("eel.hrl").
 
-markers() ->
-    [
-        #marker{
-            id = expr,
-            start = <<"<%=\\s+">>,
-            final = <<"\\s+.%>">>,
-            tree_behaviors = [push_token],
-            compile_as = expr
-        },
-        #marker{
-            id = expr_start,
-            start = <<"<%=\\s+">>,
-            final = <<"\\s+%>">>,
-            tree_behaviors = [add_vertex, push_token, add_vertex],
-            compile_as = expr_start
-        },
-        #marker{
-            id = expr_continue,
-            start = <<"<%\\s+">>,
-            final = <<"\\s+%>">>,
-            tree_behaviors = [fetch_vertex_parent, push_token, add_vertex]
-        },
-        #marker{
-            id = expr_end,
-            start = <<"<%\\s+">>,
-            final = <<"\\s+.%>">>,
-            tree_behaviors = [fetch_vertex_parent, push_token, fetch_vertex_parent]
-        },
-        #marker{
-            id = comment,
-            start = <<"<%%\\s+">>,
-            final = <<"\\s+%%>">>,
-            tree_behaviors = [ignore_token]
-        }
-    ].
+init(_Opts) ->
+    {ok, #{
+        markers => [
+            #marker{
+                id = expr,
+                start = <<"<%=\\s+">>,
+                final = <<"\\s+.%>">>,
+                tree_behaviors = [push_token],
+                compile_as = expr
+            },
+            #marker{
+                id = expr_start,
+                start = <<"<%=\\s+">>,
+                final = <<"\\s+%>">>,
+                tree_behaviors = [add_vertex, push_token, add_vertex],
+                compile_as = expr_start
+            },
+            #marker{
+                id = expr_continue,
+                start = <<"<%\\s+">>,
+                final = <<"\\s+%>">>,
+                tree_behaviors = [fetch_vertex_parent, push_token, add_vertex]
+            },
+            #marker{
+                id = expr_end,
+                start = <<"<%\\s+">>,
+                final = <<"\\s+.%>">>,
+                tree_behaviors = [fetch_vertex_parent, push_token, fetch_vertex_parent]
+            },
+            #marker{
+                id = comment,
+                start = <<"<%%\\s+">>,
+                final = <<"\\s+%%>">>,
+                tree_behaviors = [ignore_token]
+            }
+        ]
+    }}.
 
 handle_text(_Text) ->
     next.
