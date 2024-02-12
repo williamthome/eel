@@ -38,12 +38,12 @@ compile(VertexLabel, Tree) ->
         metadata = #{}
     },
     State = do_fold_compile(Vertex, State0),
-    #{
-        parts => State#state.parts,
-        vars => State#state.vars,
-        dynamics => State#state.dynamics,
-        metadata => State#state.metadata
-    }.
+    eel_renderer:new_state(
+        State#state.parts,
+        State#state.vars,
+        State#state.dynamics,
+        State#state.metadata
+    ).
 
 %%======================================================================
 %% Internal functions
@@ -233,49 +233,49 @@ normalize_expr(Expr) ->
 -ifdef(TEST).
 
 compile_test() ->
-    Expected = #{metadata =>
-        #{0 => undefined,1 => undefined,2 => undefined,
-          3 => undefined,4 => undefined},
-       parts =>
-        #{0 => <<"<html><head><title>">>,
-          1 =>
-           [{call,1,
-             {remote,1,{atom,1,maps},{atom,1,get}},
-             [{atom,1,title},{var,1,'Assigns'}]}],
-          2 => <<"</title></head><body><ul>">>,
-          3 =>
-           [{call,1,
-             {remote,1,{atom,1,lists},{atom,1,map}},
-             [{'fun',1,
-               {clauses,
-                [{clause,1,
-                  [{var,1,'Item'}],
-                  [],
-                  [{cons,1,
-                    {bin,1,
-                     [{bin_element,1,
-                       {string,1,"<li>"},
-                       default,
-                       [utf8]}]},
-                    {cons,1,
-                     {call,1,
-                      {remote,1,{atom,1,maps},{atom,1,get}},
-                      [{atom,1,item_prefix},{var,1,'Assigns'}]},
-                     {cons,1,
-                      {var,1,'Item'},
-                      {cons,1,
-                       {bin,1,
-                        [{bin_element,1,
-                          {string,1,"</li>"},
-                          default,
-                          [utf8]}]},
-                       {nil,1}}}}}]}]}},
-              {call,1,
-               {remote,1,{atom,1,maps},{atom,1,get}},
-               [{atom,1,items},{var,1,'Assigns'}]}]}],
-          4 => <<"</ul></body></html>">>},
-       vars => [{item_prefix,3},{title,1}],
-       dynamics => [3,1]},
+    Expected = {render_state,
+    #{0 => <<"<html><head><title>">>,
+      1 =>
+       [{call,1,
+         {remote,1,{atom,1,maps},{atom,1,get}},
+         [{atom,1,title},{var,1,'Assigns'}]}],
+      2 => <<"</title></head><body><ul>">>,
+      3 =>
+       [{call,1,
+         {remote,1,{atom,1,lists},{atom,1,map}},
+         [{'fun',1,
+           {clauses,
+            [{clause,1,
+              [{var,1,'Item'}],
+              [],
+              [{cons,1,
+                {bin,1,
+                 [{bin_element,1,
+                   {string,1,"<li>"},
+                   default,
+                   [utf8]}]},
+                {cons,1,
+                 {call,1,
+                  {remote,1,{atom,1,maps},{atom,1,get}},
+                  [{atom,1,item_prefix},{var,1,'Assigns'}]},
+                 {cons,1,
+                  {var,1,'Item'},
+                  {cons,1,
+                   {bin,1,
+                    [{bin_element,1,
+                      {string,1,"</li>"},
+                      default,
+                      [utf8]}]},
+                   {nil,1}}}}}]}]}},
+          {call,1,
+           {remote,1,{atom,1,maps},{atom,1,get}},
+           [{atom,1,items},{var,1,'Assigns'}]}]}],
+      4 => <<"</ul></body></html>">>},
+    [{item_prefix,3},{title,1}],
+    [3,1],
+    #{0 => undefined,1 => undefined,2 => undefined,
+      3 => undefined,4 => undefined},
+    undefined},
 
     Bin = <<
         "<html>"
