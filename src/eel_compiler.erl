@@ -201,8 +201,13 @@ do_fold_compile_4(#master_vertex{}, Vertex, Expr0, State0) ->
         dynamics = StateTmp#state.dynamics
     },
     {Expr, State};
-do_fold_compile_4(#slave_vertex{token = #expr_token{expr = Expr1}}, _, Expr0, State) ->
-    Expr = [Expr0, $\s, Expr1],
+do_fold_compile_4(#slave_vertex{token = #expr_token{} = Token}, _Vertex, Expr0, State0) ->
+    Expr = [Expr0, $\s, Token#expr_token.expr],
+    Index = State0#state.index,
+    ExprVars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
+    State = State0#state{
+        vars = State0#state.vars ++ ExprVars
+    },
     {Expr, State}.
 
 %%======================================================================
@@ -271,7 +276,7 @@ compile_test() ->
            {remote,1,{atom,1,maps},{atom,1,get}},
            [{atom,1,items},{var,1,'Assigns'}]}]}],
       4 => <<"</ul></body></html>">>},
-    [{item_prefix,3},{title,1}],
+    [{item_prefix,3},{title,1},{items,3}],
     [3,1],
     #{0 => undefined,1 => undefined,2 => undefined,
       3 => undefined,4 => undefined},
