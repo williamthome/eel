@@ -39,25 +39,23 @@ new_state(Parts, Vars, Dynamics, Metadata) ->
         metadata = Metadata
     }.
 
-update_state_snapshot(Snapshot, State) ->
-    Parts = State#render_state.parts,
+update_state_snapshot(Snapshot, #render_state{parts = Parts} = State) ->
     State#render_state{snapshot = maps:merge(Parts, Snapshot)}.
 
-update_changes_state_snapshot(Snapshot, State) ->
-    State#render_state{snapshot = maps:merge(State#render_state.snapshot, Snapshot)}.
+update_changes_state_snapshot(Snapshot, #render_state{snapshot = Parts} = State) ->
+    State#render_state{snapshot = maps:merge(Parts, Snapshot)}.
 
 render_state(Assigns, State) ->
     render_state(Assigns, State, #{}).
 
-render_state(Assigns, State, Opts) ->
-    Parts = State#render_state.parts,
-    render(State#render_state.dynamics, Assigns, Parts, Opts).
+render_state(Assigns, #render_state{dynamics = Indexes, parts = Parts}, Opts) ->
+    render(Indexes, Assigns, Parts, Opts).
 
 render_state_changes(Assigns, State) ->
     render_state_changes(Assigns, State, #{}).
 
-render_state_changes(Assigns, State, Opts) ->
-    render_changes(Assigns, State#render_state.vars, State#render_state.parts, Opts).
+render_state_changes(Assigns, #render_state{vars = Vars, parts = Parts}, Opts) ->
+    render_changes(Assigns, Vars, Parts, Opts).
 
 render(Indexes, Assigns, Parts) ->
     render(Indexes, Assigns, Parts, #{}).
