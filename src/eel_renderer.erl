@@ -165,6 +165,7 @@ render_test() ->
     >>,
     Tokens = eel_tokenizer:tokenize(Bin),
     Tree = eel_structurer:tree(Tokens),
+    State = eel_compiler:compile(Tree),
 
     RenderExpected = #{1 => <<"EEl">>,
     3 =>
@@ -172,7 +173,6 @@ render_test() ->
          [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
          [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]},
     AssignsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
-    State = eel_compiler:compile(Tree),
     RenderSnapshot = render_state(AssignsAll, State),
     RenderState = update_state_snapshot(RenderSnapshot, State),
     ?assertEqual(RenderExpected, RenderSnapshot),
