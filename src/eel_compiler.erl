@@ -222,10 +222,10 @@ expr_ast(Bin) ->
                 {ok, AST} ->
                     {ok, AST};
                 {error, Reason} ->
-                    {error, Reason}
+                    {error, {parse, String, Reason}}
             end;
         {error, ErrorInfo, ErrorLocation} ->
-            {error, {ErrorInfo, ErrorLocation}}
+            {error, {scan, {String, ErrorInfo, ErrorLocation}}}
     end.
 
 normalize_expr(Expr) ->
