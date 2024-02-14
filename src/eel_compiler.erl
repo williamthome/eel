@@ -41,7 +41,7 @@ compile(VertexLabel, Tree) ->
     eel_renderer:new_state(
         State#state.parts,
         State#state.vars,
-        State#state.dynamics,
+        lists:reverse(State#state.dynamics),
         State#state.metadata
     ).
 
