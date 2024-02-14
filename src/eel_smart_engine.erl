@@ -139,7 +139,7 @@ get_expr_vars(<<$@, T0/binary>>, Acc) ->
 get_expr_vars(<<_, T/binary>>, Acc) ->
     get_expr_vars(T, Acc);
 get_expr_vars(<<>>, Acc) ->
-    Acc.
+    lists:reverse(Acc).
 
 find_expr_vars_ending(T0) ->
     case find_var_ending(T0, <<>>) of
@@ -211,6 +211,8 @@ find_var_default_ending(<<$], _/binary>> = T, Default) ->
 % TODO: Should check this space implementation after drop the required dot.
 find_var_default_ending(<<$\s, T/binary>>, <<>>) ->
     find_var_default_ending(T, <<>>);
+find_var_default_ending(<<$\s, _/binary>> = T, Default) ->
+    {Default, T};
 find_var_default_ending(<<H, T/binary>>, Acc) ->
     find_var_default_ending(T, <<Acc/binary, H>>);
 find_var_default_ending(<<>>, Default) ->
@@ -221,25 +223,25 @@ handle_tokens(Tokens) ->
     {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens),
     lists:reverse(Reversed).
 
- % Expr
- resolve_tokens_acc(
+% Expr
+resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
     { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
     , {in_expr, false} }
 ) ->
-     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+    {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
     { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
     , {in_continue, false} }
 ) ->
-     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
+    {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
     { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
     , {in_expr, false} }
 ) ->
-     {[merge_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
+    {[merge_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
 resolve_tokens_acc(
     #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
     { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
@@ -262,11 +264,12 @@ resolve_tokens_acc(
     {[#expr_token{engine = ?MODULE} | _] = Acc, In}
 ) ->
     {Acc, In};
-resolve_tokens_acc(
-    #text_token{} = Token,
-    {[#text_token{} = TAcc | Acc], State}
-) ->
-     {[merge_text_tokens(Token, TAcc) | Acc], State};
+% NOTE: Merge texts cause Arizona components to break.
+% resolve_tokens_acc(
+%     #text_token{} = Token,
+%     {[#text_token{} = TAcc | Acc], State}
+% ) ->
+%      {[merge_text_tokens(Token, TAcc) | Acc], State};
 resolve_tokens_acc(
     #text_token{} = Token,
     {Acc, State}
@@ -279,10 +282,10 @@ resolve_tokens_acc(
 ) ->
      {[Token | Acc], State}.
 
-merge_text_tokens(Discard, Keep) ->
-    Keep#text_token{
-        text = merge_bin(Keep#text_token.text, Discard#text_token.text)
-    }.
+% merge_text_tokens(Discard, Keep) ->
+%     Keep#text_token{
+%         text = merge_bin(Keep#text_token.text, Discard#text_token.text)
+%     }.
 
 merge_expr_tokens(Discard, Keep) ->
     Keep#expr_token{

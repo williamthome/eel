@@ -60,10 +60,10 @@ get_state_snapshot(#render_state{snapshot = Snapshot}) ->
     Snapshot.
 
 update_state_snapshot(Snapshot, #render_state{parts = Parts} = State) ->
-    State#render_state{snapshot = maps:merge(Parts, Snapshot)}.
+    update_snapshot(Snapshot, Parts, State).
 
 update_changes_state_snapshot(Snapshot, #render_state{snapshot = Parts} = State) ->
-    State#render_state{snapshot = maps:merge(Parts, Snapshot)}.
+    update_snapshot(Snapshot, Parts, State).
 
 render_state(Assigns, State) ->
     render_state(Assigns, State, #{}).
@@ -88,22 +88,22 @@ render(Indexes, Assigns, Parts, Opts) ->
             Bindings0 = Globals#{
                 'Assigns' => Assigns
             },
-            lists:foldl(fun(Index, Acc) ->
+            lists:reverse(lists:foldl(fun(Index, Acc) ->
                 Bindings = Bindings0#{
                     '__INDEX__' => Index
                 },
-                Expr = maps:get(Index, Parts),
+                {Index, Expr} = proplists:lookup(Index, Parts),
                 Part = eval_expr(Expr, Bindings, ToStringFun),
-                Acc#{Index => Part}
-            end, #{}, Indexes);
+                [{Index, Part} | Acc]
+            end, [], Indexes));
         #{} ->
             Globals = maps:get(global_vars, Opts, #{}),
             Bindings = Globals#{'Assigns' => Assigns},
-            lists:foldl(fun(Index, Acc) ->
-                Expr = maps:get(Index, Parts),
+            lists:reverse(lists:foldl(fun(Index, Acc) ->
+                {Index, Expr} = proplists:lookup(Index, Parts),
                 Part = eval_expr(Expr, Bindings, ToStringFun),
-                Acc#{Index => Part}
-            end, #{}, Indexes)
+                [{Index, Part} | Acc]
+            end, [], Indexes))
     end.
 
 render_changes(Assigns, Vars, Parts) ->
@@ -140,6 +140,12 @@ get_vars_from_indexes(Indexes, Vars) ->
 %%======================================================================
 %% Internal functions
 %%======================================================================
+
+update_snapshot(Snapshot0, Parts, State) ->
+    Snapshot = lists:foldl(fun({K, V}, Acc) ->
+        lists:keyreplace(K, 1, Acc, {K, V})
+    end, Parts, Snapshot0),
+    State#render_state{snapshot = Snapshot}.
 
 eval_expr(Expr, Bindings, ToStringFun) ->
     {value, Term, _} = erl_eval:exprs(Expr, Bindings),
@@ -185,17 +191,17 @@ render_test() ->
     Tree = eel_structurer:tree(Tokens),
     State = eel_compiler:compile(Tree),
 
-    RenderExpected = #{1 => <<"EEl">>,
-    3 =>
-        [[<<"<li>">>,<<"Item - ">>,<<"1">>,<<"</li>">>],
-         [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
-         [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]},
+    RenderExpected = [{1,<<"EEl">>},
+    {3,
+     [[<<"<li>">>,<<"Item - ">>,<<"1">>,<<"</li>">>],
+      [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
+      [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]}],
     AssignsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
     RenderSnapshot = render_state(AssignsAll, State),
     RenderState = update_state_snapshot(RenderSnapshot, State),
     ?assertEqual(RenderExpected, RenderSnapshot),
 
-    ChangesExpected = #{1 => <<"EEl - Embedded Erlang">>},
+    ChangesExpected = [{1,<<"EEl - Embedded Erlang">>}],
     AssignsChanges = #{title => <<"EEl - Embedded Erlang">>},
     ChangesSnapshot = render_state_changes(AssignsChanges, RenderState),
     ?assertEqual(ChangesExpected, ChangesSnapshot).

@@ -86,9 +86,14 @@ do_tokenize(<<H, T/binary>>, State0) ->
             do_tokenize(T, State)
     end;
 do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
+    StateTokens0 = lists:flatten(lists:reverse(State#state.tokens)),
+    StateTokens = lists:filter(fun
+        (#text_token{text = Text}) -> not is_string_empty(Text);
+        (#expr_token{expr = Expr}) -> not is_string_empty(Expr)
+    end, StateTokens0),
     lists:foldl(fun(#{module := Engine}, Tokens) ->
-        Engine:handle_tokens(lists:flatten(Tokens))
-    end, lists:reverse(State#state.tokens), State#state.engines);
+        Engine:handle_tokens(Tokens)
+    end, StateTokens, State#state.engines);
 do_tokenize(<<>>, #state{text_acc = Text} = State) ->
     case handle_text(State#state.engines, Text) of
         {ok, Tokens} ->
@@ -98,6 +103,13 @@ do_tokenize(<<>>, #state{text_acc = Text} = State) ->
             });
         {error, Reason} ->
             {error, Reason}
+    end.
+
+is_string_empty(String) ->
+    case string:trim(String) of
+        [] -> true;
+        <<>> -> true;
+        _ -> false
     end.
 
 handle_expr_start([#{markers := Markers} = Engine | Engines], Bin) ->

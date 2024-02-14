@@ -74,7 +74,7 @@ new() ->
 new(Opts) ->
     #tree{
         vertex_count = 0,
-        vertices = #{},
+        vertices = [],
         root = undefined,
         metadata = maps:get(metadata, Opts, undefined)
     }.
@@ -120,7 +120,8 @@ add_edge(FromLabel, ToLabel, Tree) ->
 fetch_vertex(#vertex{label = Label}, Tree) ->
     fetch_vertex(Label, Tree);
 fetch_vertex(Label, Tree) ->
-    maps:get(Label, get_vertices(Tree)).
+    {Label, Vertex} = proplists:lookup(Label, get_vertices(Tree)),
+    Vertex.
 
 fetch_vertex_parent(Vertex, Tree) ->
     get_vertex_parent(fetch_vertex(Vertex, Tree)).
@@ -146,14 +147,12 @@ set_vertex_metadata(Metadata, Vertex) ->
     Vertex#vertex{metadata = Metadata}.
 
 map_vertices(Fun, Tree) when is_function(Fun, 2) ->
-    Tree#tree{vertices = maps:map(Fun, get_vertices(Tree))}.
+    Tree#tree{vertices = lists:map(Fun, get_vertices(Tree))}.
 
 put_vertex(#vertex{label = Label} = Vertex, Tree) ->
     Vertices = get_vertices(Tree),
     Tree#tree{
-        vertices = Vertices#{
-            Label => Vertex
-        }
+        vertices = lists:keystore(Label, 1, Vertices, {Label, Vertex})
     }.
 
 %%======================================================================
@@ -172,7 +171,7 @@ incr_vertex_count(#tree{vertex_count = Count} = Tree) ->
 new_vertex(Label, Tree0, Opts) ->
     Parent = maps:get(parent, Opts, undefined),
     Children = maps:get(children, Opts, []),
-    IsRoot = maps:get(is_root, Opts, map_size(get_vertices(Tree0)) =:= 0),
+    IsRoot = maps:get(is_root, Opts, get_vertices(Tree0) =:= []),
     Metadata = maps:get(metadata, Opts, undefined),
     IsLeaf = maps:get(is_leaf, Opts, true),
     new_vertex(Parent, Label, Children, IsRoot, IsLeaf, Metadata).
@@ -206,11 +205,12 @@ put_vertices(Vertices, Tree0) ->
 
 tree_test() ->
     Expected = {tree,3,
-        #{root => {vertex,undefined,root,[b,a],true,false,undefined},
-        a => {vertex,root,a,[],false,true,undefined},
-        b => {vertex,root,b,[],false,true,undefined}},
-        root,undefined},
-
+    [{root,{vertex,undefined,root,
+                   [b,a],
+                   true,false,undefined}},
+     {a,{vertex,root,a,[],false,true,undefined}},
+     {b,{vertex,root,b,[],false,true,undefined}}],
+    root,undefined},
     Tree0 = new(),
     {VR, Tree1} = add_vertex(root, Tree0),
     {VA, Tree2} = add_vertex(a, Tree1),

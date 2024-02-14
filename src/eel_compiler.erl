@@ -29,7 +29,7 @@ compile({Root, Tree}) ->
 compile(VertexLabel, Tree) ->
     Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
     State0 = #state{
-        parts = #{},
+        parts = [],
         vars = [],
         dynamics = [],
         index = 0,
@@ -64,14 +64,12 @@ do_fold_compile_0([Vertex | T] = Vertices, State) ->
 do_fold_compile_0([], State) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    case maps:find(Index, Parts) of
-        {ok, Expr} ->
+    case proplists:lookup(Index, Parts) of
+        {Index, Expr} ->
             State#state{
-                parts = Parts#{
-                    Index => lists:join($,, lists:reverse(Expr))
-                }
+                parts = lists:keystore(Index, 1, Parts, {Index, lists:join($,, lists:reverse(Expr))})
             };
-        error ->
+        none ->
             State
     end.
 
@@ -89,9 +87,7 @@ do_fold_compile_2( #text_token{} = Token
     Metadata = State#state.metadata,
     Static = Token#text_token.text,
     State#state{
-        parts = Parts#{
-            Index => Static
-        },
+        parts = lists:keystore(Index, 1, Parts, {Index, Static}),
         index = Index+1,
         metadata = Metadata#{
             Index => Token#text_token.metadata
@@ -102,12 +98,12 @@ do_fold_compile_2( #text_token{} = Token
     Index = State#state.index,
     Parts = State#state.parts,
     Metadata = State#state.metadata,
-    IndexParts = maps:get(Index, Parts, []),
+    IndexParts = proplists:get_value(Index, Parts, []),
     Static = Token#text_token.text,
     State#state{
-        parts = Parts#{
-            Index => [<<"<<\"", Static/binary, "\"/utf8>>">> | IndexParts]
-        },
+        parts = lists:keystore(Index, 1, Parts,
+            {Index, [<<"<<\"", Static/binary, "\"/utf8>>">> | IndexParts]}
+        ),
         metadata = Metadata#{
             Index => Token#text_token.metadata
         }
@@ -120,9 +116,7 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
     {ok, AST} = expr_ast(Token#expr_token.expr),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
-        parts = Parts#{
-            Index => AST
-        },
+        parts = lists:keystore(Index, 1, Parts, {Index, AST}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
         dynamics = [Index | State#state.dynamics],
@@ -135,12 +129,10 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
     Index = State#state.index,
     Parts = State#state.parts,
     Metadata = State#state.metadata,
-    IndexParts = maps:get(Index, Parts, []),
+    IndexParts = proplists:get_value(Index, Parts, []),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
-        parts = Parts#{
-            Index => [Token#expr_token.expr | IndexParts]
-        },
+        parts = lists:keystore(Index, 1, Parts, {Index, [Token#expr_token.expr | IndexParts]}),
         vars = lists:merge(State#state.vars, Vars),
         metadata = Metadata#{
             Index => Token#expr_token.metadata
@@ -156,9 +148,7 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
     {ok, AST} = expr_ast(Expr),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
-        parts = Parts#{
-            Index => AST
-        },
+        parts = lists:keystore(Index, 1, Parts, {Index, AST}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
         dynamics = [Index | State#state.dynamics],
@@ -175,9 +165,7 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
     Metadata = State#state.metadata,
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
-        parts = Parts#{
-            Index => Expr
-        },
+        parts = lists:keystore(Index, 1, Parts, {Index, Expr}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
         metadata = Metadata#{
@@ -193,19 +181,29 @@ do_fold_compile_3([], Expr, State) ->
     {Expr, State}.
 
 do_fold_compile_4(#master_vertex{}, Vertex, Expr0, State0) ->
-    StateTmp = do_fold_compile(Vertex, State0#state{parts = #{}, recursive = true}),
-    Expr1 = maps:values(StateTmp#state.parts),
-    Expr = [Expr0, $\s, $[, Expr1, $], $\s],
+    StateTmp = do_fold_compile(Vertex, State0#state{parts = [], recursive = true}),
+    Expr1 = lists:map(fun({_, V}) -> V end, StateTmp#state.parts),
+    Expr = case State0#state.recursive of
+        true ->
+            [[Expr0, $\s, $[, Expr1, $], $\s]];
+        false ->
+            [Expr0, $\s, $[, lists:join($,, Expr1), $], $\s]
+    end,
+    Index = State0#state.index,
+    Parts = State0#state.parts,
     State = State0#state{
+        parts = lists:keystore(Index, 1, Parts, {Index, Expr}),
         vars = StateTmp#state.vars,
-        dynamics = StateTmp#state.dynamics
+        dynamics = lists:reverse(StateTmp#state.dynamics)
     },
     {Expr, State};
 do_fold_compile_4(#slave_vertex{token = #expr_token{} = Token}, _Vertex, Expr0, State0) ->
-    Expr = [Expr0, $\s, Token#expr_token.expr],
+    Expr = [[Expr0, $\s, Token#expr_token.expr]],
     Index = State0#state.index,
+    Parts = State0#state.parts,
     ExprVars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State = State0#state{
+        parts = lists:keystore(Index, 1, Parts, {Index, Expr}),
         vars = State0#state.vars ++ ExprVars
     },
     {Expr, State}.
@@ -239,45 +237,45 @@ normalize_expr(Expr) ->
 
 compile_test() ->
     Expected = {render_state,
-    #{0 => <<"<html><head><title>">>,
-      1 =>
-       [{call,1,
-         {remote,1,{atom,1,maps},{atom,1,get}},
-         [{atom,1,title},{var,1,'Assigns'}]}],
-      2 => <<"</title></head><body><ul>">>,
-      3 =>
-       [{call,1,
-         {remote,1,{atom,1,lists},{atom,1,map}},
-         [{'fun',1,
-           {clauses,
-            [{clause,1,
-              [{var,1,'Item'}],
-              [],
-              [{cons,1,
-                {bin,1,
-                 [{bin_element,1,
-                   {string,1,"<li>"},
-                   default,
-                   [utf8]}]},
+    [{0,<<"<html><head><title>">>},
+     {1,
+      [{call,1,
+        {remote,1,{atom,1,maps},{atom,1,get}},
+        [{atom,1,title},{var,1,'Assigns'}]}]},
+     {2,<<"</title></head><body><ul>">>},
+     {3,
+      [{call,1,
+        {remote,1,{atom,1,lists},{atom,1,map}},
+        [{'fun',1,
+          {clauses,
+           [{clause,1,
+             [{var,1,'Item'}],
+             [],
+             [{cons,1,
+               {bin,1,
+                [{bin_element,1,
+                  {string,1,"<li>"},
+                  default,
+                  [utf8]}]},
+               {cons,1,
+                {call,1,
+                 {remote,1,{atom,1,maps},{atom,1,get}},
+                 [{atom,1,item_prefix},{var,1,'Assigns'}]},
                 {cons,1,
-                 {call,1,
-                  {remote,1,{atom,1,maps},{atom,1,get}},
-                  [{atom,1,item_prefix},{var,1,'Assigns'}]},
+                 {var,1,'Item'},
                  {cons,1,
-                  {var,1,'Item'},
-                  {cons,1,
-                   {bin,1,
-                    [{bin_element,1,
-                      {string,1,"</li>"},
-                      default,
-                      [utf8]}]},
-                   {nil,1}}}}}]}]}},
-          {call,1,
-           {remote,1,{atom,1,maps},{atom,1,get}},
-           [{atom,1,items},{var,1,'Assigns'}]}]}],
-      4 => <<"</ul></body></html>">>},
+                  {bin,1,
+                   [{bin_element,1,
+                     {string,1,"</li>"},
+                     default,
+                     [utf8]}]},
+                  {nil,1}}}}}]}]}},
+         {call,1,
+          {remote,1,{atom,1,maps},{atom,1,get}},
+          [{atom,1,items},{var,1,'Assigns'}]}]}]},
+     {4,<<"</ul></body></html>">>}],
     [{item_prefix,3},{title,1},{items,3}],
-    [3,1],
+    [1,3],
     #{0 => undefined,1 => undefined,2 => undefined,
       3 => undefined,4 => undefined},
     undefined},
