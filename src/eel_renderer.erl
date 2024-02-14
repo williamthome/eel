@@ -1,6 +1,11 @@
 -module(eel_renderer).
 
 -export([ new_state/4
+        , get_state_parts/1
+        , get_state_vars/1
+        , get_state_dynamics/1
+        , get_state_metadata/1
+        , get_state_snapshot/1
         , update_state_snapshot/2
         , update_changes_state_snapshot/2
         , render_state/2
@@ -38,6 +43,21 @@ new_state(Parts, Vars, Dynamics, Metadata) ->
         dynamics = Dynamics,
         metadata = Metadata
     }.
+
+get_state_parts(#render_state{parts = Parts}) ->
+    Parts.
+
+get_state_vars(#render_state{vars = Vars}) ->
+    Vars.
+
+get_state_dynamics(#render_state{dynamics = Dynamics}) ->
+    Dynamics.
+
+get_state_metadata(#render_state{metadata = Metadata}) ->
+    Metadata.
+
+get_state_snapshot(#render_state{snapshot = Snapshot}) ->
+    Snapshot.
 
 update_state_snapshot(Snapshot, #render_state{parts = Parts} = State) ->
     State#render_state{snapshot = maps:merge(Parts, Snapshot)}.
