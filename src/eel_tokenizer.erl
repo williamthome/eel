@@ -1,6 +1,13 @@
 -module(eel_tokenizer).
 
--export([tokenize/1, tokenize/2, default_engines/0]).
+-export([ tokenize/1
+        , tokenize/2
+        , default_engines/0
+        , get_tokens/1
+        , set_tokens/2
+        , push_tokens/2
+        , push_token/2
+        ]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -39,31 +46,42 @@ tokenize(Input, Opts)
     },
     do_tokenize(iolist_to_binary(Input), State).
 
+default_engines() ->
+    [?SMART_ENGINE].
+
+get_tokens(#state{tokens = Tokens}) ->
+    Tokens.
+
+set_tokens(Tokens, State) ->
+    State#state{tokens = Tokens}.
+
+push_tokens(Tokens, State) ->
+    lists:foldl(fun push_token/2, State, Tokens).
+
+push_token(Token, State) ->
+    State#state{tokens = [Token | State#state.tokens]}.
+
 %%======================================================================
 %% Internal functions
 %%======================================================================
-
-default_engines() ->
-    [?SMART_ENGINE].
 
 do_tokenize(<<H, T/binary>>, State0) ->
     State = State0#state{
         buffer = <<(State0#state.buffer)/binary, H>>,
         text_acc = <<(State0#state.text_acc)/binary, H>>
     },
-    case handle_expr_start(State#state.engines, State#state.text_acc) of
+    Engines = State#state.engines,
+    case handle_expr_start(Engines, State#state.text_acc) of
         {ok, {Engine, Markers}} ->
             case handle_expr_end(T, Markers, <<>>) of
                 {ok, {Marker, Text, Expr, Rest}} ->
-                    case handle_text(State#state.engines, Text) of
-                        {ok, TextTokens} ->
-                            case handle_expr(Engine, Marker, Expr) of
-                                {ok, ExprTokens} ->
-                                    Buffer = State#state.buffer,
-                                    do_tokenize(Rest, State#state{
+                    case handle_text(Engines, Text, State) of
+                        {ok, TextState} ->
+                            case handle_expr(Engine, Marker, Expr, TextState) of
+                                {ok, ExprState} ->
+                                    Buffer = ExprState#state.buffer,
+                                    do_tokenize(Rest, ExprState#state{
                                         buffer = <<Buffer/binary, Expr/binary>>,
-                                        tokens = [ExprTokens, TextTokens
-                                                 | State#state.tokens ],
                                         text_acc = <<>>
                                     });
                                 {error, Reason} ->
@@ -85,20 +103,18 @@ do_tokenize(<<H, T/binary>>, State0) ->
         none ->
             do_tokenize(T, State)
     end;
-do_tokenize(<<>>, #state{text_acc = <<>>} = State) ->
-    StateTokens0 = lists:flatten(lists:reverse(State#state.tokens)),
-    StateTokens = lists:filter(fun
+do_tokenize(<<>>, #state{text_acc = <<>>} = State0) ->
+    Tokens0 = lists:flatten(lists:reverse(State0#state.tokens)),
+    Tokens = lists:filter(fun
         (#text_token{text = Text}) -> not is_string_empty(Text);
         (#expr_token{expr = Expr}) -> not is_string_empty(Expr)
-    end, StateTokens0),
-    lists:foldl(fun(#{module := Engine}, Tokens) ->
-        Engine:handle_tokens(Tokens)
-    end, StateTokens, State#state.engines);
-do_tokenize(<<>>, #state{text_acc = Text} = State) ->
-    case handle_text(State#state.engines, Text) of
-        {ok, Tokens} ->
+    end, Tokens0),
+    State = State0#state{tokens = Tokens},
+    handle_tokens(State#state.engines, State);
+do_tokenize(<<>>, #state{text_acc = Text} = State0) ->
+    case handle_text(State0#state.engines, Text, State0) of
+        {ok, State} ->
             do_tokenize(<<>>, State#state{
-                tokens = [Tokens | State#state.tokens],
                 text_acc = <<>>
             });
         {error, Reason} ->
@@ -165,34 +181,36 @@ marker_match(Bin, Marker) ->
             nomatch
     end.
 
-handle_text([#{module := Engine} | Engines], Bin) ->
-    case Engine:handle_text(Bin) of
-        {ok, Tokens} ->
-            {ok, resolve_handled_tokens(Tokens, [])};
+handle_text([#{module := Engine} | Engines], Bin, State0) ->
+    case Engine:handle_text(Bin, State0) of
+        {ok, State} ->
+            handle_text(Engines, Bin, State);
+        {halt, State} ->
+            {ok, State};
         {error, Reason} ->
-            {error, Reason};
-        next ->
-            handle_text(Engines, Bin)
+            {error, Reason}
     end;
-handle_text([], Bin) ->
-    {ok, [#text_token{text = Bin}]}.
+handle_text([], Bin, State0) ->
+    State = push_token(#text_token{text = Bin}, State0),
+    {ok, State}.
 
-handle_expr(#{module := Engine}, Marker, Bin) ->
-    case Engine:handle_expr(Marker, Bin) of
-        {ok, Tokens} ->
-            {ok, resolve_handled_tokens(Tokens, [])};
+handle_expr(#{module := Engine}, Marker, Bin, State0) ->
+    case Engine:handle_expr(Marker, Bin, State0) of
+        {ok, State} ->
+            {ok, State};
         {error, Reason} ->
             {error, Reason}
     end.
 
-resolve_handled_tokens([#text_token{} = TextToken | T], Acc0) ->
-    Acc = [TextToken | Acc0],
-    resolve_handled_tokens(T, Acc);
-resolve_handled_tokens([#expr_token{} = ExprToken | T], Acc0) ->
-    Acc = [ExprToken | Acc0],
-    resolve_handled_tokens(T, Acc);
-resolve_handled_tokens([], Acc) ->
-    Acc.
+handle_tokens([#{module := Engine} | Engines], State0) ->
+    case Engine:handle_tokens(State0) of
+        {ok, State} ->
+            handle_tokens(Engines, State);
+        {error, Reason} ->
+            {error, Reason}
+    end;
+handle_tokens([], State) ->
+    State#state.tokens.
 
 %%======================================================================
 %% Tests

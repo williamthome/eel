@@ -2,7 +2,7 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([ init/1, handle_text/1, handle_expr/2, handle_tokens/1 ]).
+-export([ init/1, handle_text/2, handle_expr/3, handle_tokens/1 ]).
 
 %% API
 -export([ normalize_expr/1, get_expr_vars/1 ]).
@@ -48,18 +48,20 @@ init(_Opts) ->
         ]
     }}.
 
-handle_text(_Text) ->
-    next.
+handle_text(_Text, State) ->
+    {ok, State}.
 
-handle_expr(Marker, Expr0) ->
+handle_expr(Marker, Expr0, State0) ->
     Expr = normalize_expr(Expr0),
     Vars = get_expr_vars(Expr0),
-    {ok, [#expr_token{
+    ExprToken = #expr_token{
         engine = ?MODULE,
         marker = Marker,
         expr = Expr,
         vars = Vars
-    }]}.
+    },
+    State = eel_tokenizer:push_token(ExprToken, State0),
+    {ok, State}.
 
 normalize_expr(Expr) ->
     replace_expr_vars(Expr, <<>>).
@@ -221,10 +223,13 @@ find_var_default_ending(<<H, T/binary>>, Acc) ->
 find_var_default_ending(<<>>, Default) ->
     {Default, <<>>}.
 
-handle_tokens(Tokens) ->
+handle_tokens(State0) ->
+    Tokens0 = eel_tokenizer:get_tokens(State0),
     Acc = {[], {in_text, false}},
-    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens),
-    lists:reverse(Reversed).
+    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens0),
+    Tokens = lists:reverse(Reversed),
+    State = eel_tokenizer:set_tokens(Tokens, State0),
+    {ok, State}.
 
 % Expr
 resolve_tokens_acc(
