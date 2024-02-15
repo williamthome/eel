@@ -78,8 +78,6 @@ do_fold_compile_1(#master_vertex{}, #state{vertices = [Vertex | _]} = State) ->
 do_fold_compile_1(#slave_vertex{token = Token}, State) ->
     do_fold_compile_2(Token, State).
 
-% TODO: Marker match must bem more generic.
-%       The engine should be able to handle it.
 do_fold_compile_2( #text_token{} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
