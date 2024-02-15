@@ -48,8 +48,8 @@ init(_Opts) ->
         ]
     }}.
 
-handle_text(_Text, State) ->
-    {ok, State}.
+handle_text(Text, State) ->
+    {ok, Text, State}.
 
 handle_expr(Marker, Expr0, State0) ->
     Expr = normalize_expr(Expr0),

@@ -227,9 +227,9 @@ marker_match(Bin, RE) ->
             nomatch
     end.
 
-handle_text([#engine_state{module = Engine} | Engines], Bin, State0) ->
-    case Engine:handle_text(Bin, State0) of
-        {ok, State} ->
+handle_text([#engine_state{module = Engine} | Engines], Bin0, State0) ->
+    case Engine:handle_text(Bin0, State0) of
+        {ok, Bin, State} ->
             handle_text(Engines, Bin, State);
         {halt, State} ->
             {ok, State};
