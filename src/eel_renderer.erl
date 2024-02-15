@@ -82,6 +82,8 @@ render(Indexes, Assigns, Parts) ->
     render(Indexes, Assigns, Parts, #{}).
 
 render(Indexes, Assigns, Parts, Opts) ->
+    LocalFunHandler = maps:get(local_function_handler, Opts, none),
+    NonLocalFunHandler = maps:get(non_local_function_handler, Opts, none),
     ToStringFun = maps:get(to_string, Opts, fun to_string/1),
     case Opts of
         #{debug_info := true} ->
@@ -94,7 +96,12 @@ render(Indexes, Assigns, Parts, Opts) ->
                     '__INDEX__' => Index
                 },
                 {Index, Expr} = proplists:lookup(Index, Parts),
-                Part = eval_expr(Expr, Bindings, ToStringFun),
+                Part = eval_expr( Expr
+                                , Bindings
+                                , LocalFunHandler
+                                , NonLocalFunHandler
+                                , ToStringFun
+                                ),
                 [{Index, Part} | Acc]
             end, [], Indexes));
         #{} ->
@@ -102,7 +109,12 @@ render(Indexes, Assigns, Parts, Opts) ->
             Bindings = Globals#{'Assigns' => Assigns},
             lists:reverse(lists:foldl(fun(Index, Acc) ->
                 {Index, Expr} = proplists:lookup(Index, Parts),
-                Part = eval_expr(Expr, Bindings, ToStringFun),
+                Part = eval_expr( Expr
+                                , Bindings
+                                , LocalFunHandler
+                                , NonLocalFunHandler
+                                , ToStringFun
+                                ),
                 [{Index, Part} | Acc]
             end, [], Indexes))
     end.
@@ -159,9 +171,13 @@ update_snapshot(Snapshot0, Parts, State) ->
     end, Parts, Snapshot0),
     State#render_state{snapshot = Snapshot}.
 
-eval_expr(Expr, Bindings, ToStringFun) ->
-    {value, Term, _} = erl_eval:exprs(Expr, Bindings),
-    ToStringFun(Term).
+eval_expr(Expr, Bindings, LocalFunHandler, NonLocalFunHandler, ToStringFun) ->
+    {value, Value, _NewBindings} = erl_eval:exprs( Expr
+                                                 , Bindings
+                                                 , LocalFunHandler
+                                                 , NonLocalFunHandler
+                                                 ),
+    ToStringFun(Value).
 
 %%======================================================================
 %% Tests
