@@ -42,6 +42,7 @@ init(_Opts) ->
                 id = comment,
                 start = <<"<%%\\s+">>,
                 final = <<"\\s+%%>">>,
+                % FIXME: Nested comments causes error.
                 tree_behaviors = [ignore_token]
             }
         ]
@@ -66,6 +67,8 @@ normalize_expr(Expr) ->
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve code readability.
 % TODO: Support records and nested records.
+% TODO: Union of ok and nested returns. Both should return vars to support
+%       multiple defaults assigns.
 replace_expr_vars(<<$@, T0/binary>>, Acc) ->
     case find_var_ending(T0) of
         {ok, {Var, T1}} ->
