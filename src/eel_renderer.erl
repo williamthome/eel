@@ -184,7 +184,7 @@ render_test() ->
         "</body>"
         "</html>"
     >>,
-    Tokens = eel_tokenizer:tokenize(Bin),
+    {Tokens, _State} = eel_tokenizer:tokenize(Bin),
     Tree = eel_structurer:tree(Tokens),
     State = eel_compiler:compile(Tree),
 

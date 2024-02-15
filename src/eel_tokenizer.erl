@@ -256,7 +256,7 @@ handle_tokens([#engine_state{module = Engine} | Engines], State0) ->
             {error, Reason}
     end;
 handle_tokens([], State) ->
-    State#state.tokens.
+    {State#state.tokens, State}.
 
 %%======================================================================
 %% Tests
@@ -381,7 +381,7 @@ tokenize_test() ->
         "</body>"
         "</html>"
     >>,
-    Result = tokenize(Bin),
+    {Result, _State} = tokenize(Bin),
     ?assertEqual(Expected, Result).
 
 -endif.
