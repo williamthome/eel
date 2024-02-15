@@ -19,6 +19,11 @@
                     , metadata :: term()
                     }).
 
+-record(engine_state, { module   :: engine()
+                      , markers  :: [#marker{}]
+                      , metadata :: term()
+                      }).
+
 -record(master_vertex, { ast :: ast() }).
 
 -record(slave_vertex, { token :: token() }).

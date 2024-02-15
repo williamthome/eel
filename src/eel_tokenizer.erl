@@ -7,6 +7,8 @@
         , set_tokens/2
         , push_tokens/2
         , push_token/2
+        , get_engine_state/2
+        , set_engine_state/3
         ]).
 
 -ifdef(TEST).
@@ -34,10 +36,11 @@ tokenize(Bin) ->
 tokenize(Input, Opts)
   when (is_binary(Input) orelse is_list(Input)), is_map(Opts) ->
     Engines0 = maps:get(engines, Opts, default_engines()),
-    Engines = lists:map(fun(Engine) ->
-        {ok, EngineState} = Engine:init(Opts),
-        EngineState#{module => Engine}
-    end, Engines0),
+    Engines = lists:foldl(fun(Engine, Acc) ->
+        {ok, EngineState0} = Engine:init(Opts),
+        EngineState = normalize_engine_state(Engine, EngineState0),
+        Acc#{Engine => EngineState}
+    end, #{}, Engines0),
     State = #state{
         engines = Engines,
         buffer = <<>>,
@@ -61,16 +64,42 @@ push_tokens(Tokens, State) ->
 push_token(Token, State) ->
     State#state{tokens = [Token | State#state.tokens]}.
 
+get_engine_state(Engine, State) ->
+    maps:get(Engine, State#state.engines).
+
+set_engine_state(Engine, EngineState, State) ->
+    Engines = State#state.engines,
+    case is_map_key(Engine, Engines) of
+        true ->
+            State#state{engines = Engines#{Engine => EngineState}};
+        false ->
+            error(badarg, [Engine, EngineState, State])
+    end.
+
 %%======================================================================
 %% Internal functions
 %%======================================================================
+
+normalize_engine_state(Module, EngineState) ->
+    Markers = lists:map(fun(Marker) ->
+        {ok, MarkerStart} = re:compile(<<(Marker#marker.start)/binary, "$">>),
+        {ok, MarkerFinal} = re:compile(<<(Marker#marker.final)/binary, "$">>),
+        Marker#marker{
+            start = MarkerStart,
+            final = MarkerFinal
+        }
+    end, EngineState#engine_state.markers),
+    EngineState#engine_state{
+        module = Module,
+        markers = Markers
+    }.
 
 do_tokenize(<<H, T/binary>>, State0) ->
     State = State0#state{
         buffer = <<(State0#state.buffer)/binary, H>>,
         text_acc = <<(State0#state.text_acc)/binary, H>>
     },
-    Engines = State#state.engines,
+    Engines = maps:values(State#state.engines),
     case handle_expr_start(Engines, State#state.text_acc) of
         {ok, {Engine, Markers}} ->
             case handle_expr_end(T, Markers, <<>>) of
@@ -110,9 +139,11 @@ do_tokenize(<<>>, #state{text_acc = <<>>} = State0) ->
         (#expr_token{expr = Expr}) -> not is_string_empty(Expr)
     end, Tokens0),
     State = State0#state{tokens = Tokens},
-    handle_tokens(State#state.engines, State);
+    Engines = maps:values(State#state.engines),
+    handle_tokens(Engines, State);
 do_tokenize(<<>>, #state{text_acc = Text} = State0) ->
-    case handle_text(State0#state.engines, Text, State0) of
+    Engines = maps:values(State0#state.engines),
+    case handle_text(Engines, Text, State0) of
         {ok, State} ->
             do_tokenize(<<>>, State#state{
                 text_acc = <<>>
@@ -128,7 +159,7 @@ is_string_empty(String) ->
         _ -> false
     end.
 
-handle_expr_start([#{markers := Markers} = Engine | Engines], Bin) ->
+handle_expr_start([#engine_state{markers = Markers} = Engine | Engines], Bin) ->
     case start_marker_match(Markers, Bin, []) of
         [] ->
             handle_expr_start(Engines, Bin);
@@ -169,9 +200,8 @@ end_marker_match([{#marker{final = Final} = Marker, Text} | Markers], Bin) ->
 end_marker_match([], _) ->
     none.
 
-% TODO: Compile markers using re:compile to improve performance.
-marker_match(Bin, Marker) ->
-    case re:run(Bin, <<Marker/binary, "$">>, [{capture, all, binary}]) of
+marker_match(Bin, RE) ->
+    case re:run(Bin, RE, [{capture, all, binary}]) of
         {match, [Match0 | Groups]} ->
             Match = binary:part(Bin, 0, byte_size(Bin) - byte_size(Match0)),
             {match, Match, Groups};
@@ -181,7 +211,7 @@ marker_match(Bin, Marker) ->
             nomatch
     end.
 
-handle_text([#{module := Engine} | Engines], Bin, State0) ->
+handle_text([#engine_state{module = Engine} | Engines], Bin, State0) ->
     case Engine:handle_text(Bin, State0) of
         {ok, State} ->
             handle_text(Engines, Bin, State);
@@ -194,7 +224,7 @@ handle_text([], Bin, State0) ->
     State = push_token(#text_token{text = Bin}, State0),
     {ok, State}.
 
-handle_expr(#{module := Engine}, Marker, Bin, State0) ->
+handle_expr(#engine_state{module = Engine}, Marker, Bin, State0) ->
     case Engine:handle_expr(Marker, Bin, State0) of
         {ok, State} ->
             {ok, State};
@@ -202,7 +232,7 @@ handle_expr(#{module := Engine}, Marker, Bin, State0) ->
             {error, Reason}
     end.
 
-handle_tokens([#{module := Engine} | Engines], State0) ->
+handle_tokens([#engine_state{module = Engine} | Engines], State0) ->
     case Engine:handle_tokens(State0) of
         {ok, State} ->
             handle_tokens(Engines, State);
@@ -221,42 +251,104 @@ handle_tokens([], State) ->
 tokenize_test() ->
     Expected = [{text_token,<<"<html><head><title>">>,undefined},
     {expr_token,<<"(maps:get(title, Assigns))">>,
-                eel_smart_engine,
-                {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
-                        [push_token],
-                        expr},
-                [title],
-                undefined},
+        eel_smart_engine,
+        {marker,expr,
+            {re_pattern,0,0,0,
+                <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,
+                  255,255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,12,29,60,29,37,29,61,87,
+                  9,25,120,0,12,0>>},
+            {re_pattern,0,0,0,
+                <<69,82,67,80,79,0,0,0,0,0,0,0,65,0,0,0,255,255,
+                  255,255,255,255,255,255,0,0,62,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,11,87,9,12,29,37,29,62,
+                  25,120,0,11,0>>},
+            [],[],
+            [push_token],
+            expr},
+        [title],
+        undefined},
     {text_token,<<"</title></head><body><ul>">>,undefined},
     {expr_token,<<"lists:map(fun(Item) ->">>,eel_smart_engine,
-                {marker,expr_start,<<"<%=\\s+">>,<<"\\s+%>">>,
-                        [],[],
-                        [add_vertex,push_token,add_vertex],
-                        expr_start},
-                [],undefined},
+        {marker,expr_start,
+            {re_pattern,0,0,0,
+                <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,
+                  255,255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,12,29,60,29,37,29,61,87,
+                  9,25,120,0,12,0>>},
+            {re_pattern,0,0,0,
+                <<69,82,67,80,78,0,0,0,0,0,0,0,65,0,0,0,255,255,
+                  255,255,255,255,255,255,0,0,62,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,10,95,9,29,37,29,62,25,
+                  120,0,10,0>>},
+            [],[],
+            [add_vertex,push_token,add_vertex],
+            expr_start},
+        [],undefined},
     {text_token,<<"<li>">>,undefined},
     {expr_token,<<"(maps:get(item_prefix, Assigns))">>,
-                eel_smart_engine,
-                {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
-                        [push_token],
-                        expr},
-                [item_prefix],
-                undefined},
+        eel_smart_engine,
+        {marker,expr,
+            {re_pattern,0,0,0,
+                <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,
+                  255,255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,12,29,60,29,37,29,61,87,
+                  9,25,120,0,12,0>>},
+            {re_pattern,0,0,0,
+                <<69,82,67,80,79,0,0,0,0,0,0,0,65,0,0,0,255,255,
+                  255,255,255,255,255,255,0,0,62,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,11,87,9,12,29,37,29,62,
+                  25,120,0,11,0>>},
+            [],[],
+            [push_token],
+            expr},
+        [item_prefix],
+        undefined},
     {expr_token,<<"Item">>,eel_smart_engine,
-                {marker,expr,<<"<%=\\s+">>,<<"\\s+.%>">>,[],[],
-                        [push_token],
-                        expr},
-                [],undefined},
+        {marker,expr,
+            {re_pattern,0,0,0,
+                <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,
+                  255,255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,12,29,60,29,37,29,61,87,
+                  9,25,120,0,12,0>>},
+            {re_pattern,0,0,0,
+                <<69,82,67,80,79,0,0,0,0,0,0,0,65,0,0,0,255,255,
+                  255,255,255,255,255,255,0,0,62,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,11,87,9,12,29,37,29,62,
+                  25,120,0,11,0>>},
+            [],[],
+            [push_token],
+            expr},
+        [],undefined},
     {text_token,<<"</li>">>,undefined},
     {expr_token,<<"end, (maps:get(items, Assigns)))">>,
-                eel_smart_engine,
-                {marker,expr_end,<<"<%\\s+">>,<<"\\s+.%>">>,[],
-                        [],
-                        [fetch_vertex_parent,push_token,
-                         fetch_vertex_parent],
-                        undefined},
-                [items],
-                undefined},
+        eel_smart_engine,
+        {marker,expr_end,
+            {re_pattern,0,0,0,
+                <<69,82,67,80,78,0,0,0,0,0,0,0,81,0,0,0,255,255,
+                  255,255,255,255,255,255,60,0,37,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,10,29,60,29,37,87,9,25,
+                  120,0,10,0>>},
+            {re_pattern,0,0,0,
+                <<69,82,67,80,79,0,0,0,0,0,0,0,65,0,0,0,255,255,
+                  255,255,255,255,255,255,0,0,62,0,0,0,0,0,0,0,
+                  64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                  0,0,0,0,0,0,0,0,131,0,11,87,9,12,29,37,29,62,
+                  25,120,0,11,0>>},
+            [],[],
+            [fetch_vertex_parent,push_token,fetch_vertex_parent],
+            undefined},
+        [items],
+        undefined},
     {text_token,<<"</ul></body></html>">>,undefined}],
 
     Bin = <<

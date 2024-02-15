@@ -10,8 +10,8 @@
 -include("eel.hrl").
 
 init(_Opts) ->
-    {ok, #{
-        markers => [
+    {ok, #engine_state{
+        markers = [
             #marker{
                 id = expr,
                 start = <<"<%=\\s+">>,
