@@ -162,10 +162,11 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
                                      , Token#expr_token.expr, State0 ),
     Index = State#state.index,
     Parts = State#state.parts,
+    IndexParts = proplists:get_value(State0#state.index, State0#state.parts, []),
     Metadata = State#state.metadata,
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
-        parts = lists:keystore(Index, 1, Parts, {Index, Expr}),
+        parts = lists:keystore(Index, 1, Parts, {Index, lists:join($,, [IndexParts | Expr])}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
         metadata = Metadata#{
