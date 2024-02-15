@@ -36,8 +36,15 @@ tokenize(Bin) ->
 tokenize(Input, Opts)
   when (is_binary(Input) orelse is_list(Input)), is_map(Opts) ->
     Engines0 = maps:get(engines, Opts, default_engines()),
-    Engines = lists:foldl(fun(Engine, Acc) ->
-        {ok, EngineState0} = Engine:init(Opts),
+    Engines = lists:foldl(fun(EngineDef, Acc) ->
+        {Engine, EngineOpts} =
+            case EngineDef of
+                {EMod, EOpts} when is_atom(EMod) ->
+                    {EMod, EOpts};
+                EMod when is_atom(EMod) ->
+                    {EMod, #{}}
+            end,
+        {ok, EngineState0} = Engine:init(EngineOpts),
         EngineState = normalize_engine_state(Engine, EngineState0),
         Acc#{Engine => EngineState}
     end, #{}, Engines0),
