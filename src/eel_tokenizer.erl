@@ -9,6 +9,7 @@
         , push_token/2
         , get_engine_state/2
         , set_engine_state/3
+        , get_opts/1
         ]).
 
 -ifdef(TEST).
@@ -22,7 +23,11 @@
        , buffer   :: binary()
        , text_acc :: binary()
        , tokens   :: [token() | [token()]]
+       , opts     :: opts()
        }).
+
+% TODO: opts/0 fields.
+-type opts() :: map().
 
 -define(SMART_ENGINE, eel_smart_engine).
 
@@ -52,7 +57,8 @@ tokenize(Input, Opts)
         engines = Engines,
         buffer = <<>>,
         text_acc = <<>>,
-        tokens = []
+        tokens = [],
+        opts = Opts
     },
     do_tokenize(iolist_to_binary(Input), State).
 
@@ -82,6 +88,9 @@ set_engine_state(Engine, EngineState, State) ->
         false ->
             error(badarg, [Engine, EngineState, State])
     end.
+
+get_opts(#state{opts = Opts}) ->
+    Opts.
 
 %%======================================================================
 %% Internal functions
