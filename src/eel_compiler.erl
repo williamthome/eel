@@ -213,22 +213,28 @@ do_fold_compile_4(#slave_vertex{token = #expr_token{} = Token}, _Vertex, Expr0, 
 %% Internal functions
 %%======================================================================
 
-expr_ast(Bin) ->
-    String = binary_to_list(iolist_to_binary(normalize_expr(Bin))),
-    case erl_scan:string(String) of
+expr_ast(Expr0) ->
+    Expr = normalize_expr(Expr0),
+    case erl_scan:string(Expr) of
         {ok, Tokens, _} ->
             case erl_parse:parse_exprs(Tokens) of
                 {ok, AST} ->
                     {ok, AST};
                 {error, Reason} ->
-                    {error, {parse, String, Reason}}
+                    {error, {parse, Expr, Reason}}
             end;
         {error, ErrorInfo, ErrorLocation} ->
-            {error, {scan, {String, ErrorInfo, ErrorLocation}}}
+            {error, {scan, {Expr, ErrorInfo, ErrorLocation}}}
     end.
 
-normalize_expr(Expr) ->
-    [Expr, $.].
+normalize_expr(Expr0) ->
+    Expr = binary_to_list(string:trim(iolist_to_binary(Expr0))),
+    case lists:last(Expr) =:= $. of
+        true ->
+            Expr;
+        false ->
+            Expr ++ [$.]
+    end.
 
 %%======================================================================
 %% Tests
