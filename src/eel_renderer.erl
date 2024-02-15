@@ -18,6 +18,7 @@
         , render_changes/4
         , get_vars_indexes/2
         , get_vars_from_indexes/2
+        , to_string/1
         ]).
 
 -ifdef(TEST).
@@ -81,7 +82,7 @@ render(Indexes, Assigns, Parts) ->
     render(Indexes, Assigns, Parts, #{}).
 
 render(Indexes, Assigns, Parts, Opts) ->
-    ToStringFun = maps:get(to_string, Opts, fun eel_converter:to_string/1),
+    ToStringFun = maps:get(to_string, Opts, fun to_string/1),
     case Opts of
         #{debug_info := true} ->
             Globals = maps:get(global_vars, Opts, #{}),
@@ -137,6 +138,17 @@ get_vars_from_indexes(Indexes, Vars) ->
         end
     end, Vars).
 
+to_string(IOData) when is_binary(IOData) ->
+    IOData;
+to_string([IOData]) when is_binary(IOData) ->
+    IOData;
+to_string([Term]) ->
+    eel_converter:to_string(Term);
+to_string(IOList) when is_list(IOList) ->
+    lists:map(fun(Term) -> to_string(Term) end, IOList);
+to_string(Term) ->
+    eel_converter:to_string(Term).
+
 %%======================================================================
 %% Internal functions
 %%======================================================================
@@ -149,21 +161,6 @@ update_snapshot(Snapshot0, Parts, State) ->
 
 eval_expr(Expr, Bindings, ToStringFun) ->
     {value, Term, _} = erl_eval:exprs(Expr, Bindings),
-    to_string(Term, ToStringFun).
-
-% TODO: Let the user transform data to string.
-to_string(IOData, _ToStringFun) when is_binary(IOData) ->
-    IOData;
-to_string([IOData], _ToStringFun) when is_binary(IOData) ->
-    IOData;
-to_string([Term], ToStringFun) ->
-    ToStringFun(Term);
-to_string(IOList, ToStringFun) when is_list(IOList) ->
-    % NOTE: Here we have a list that can be optimized to the changes return.
-    %       We need to know the static x dynamics of the expression.
-    % ?debugFmt("[TODO: Optimize list] ~p~n", [{Index, IOList}]),
-    lists:map(fun(Term) -> to_string(Term, ToStringFun) end, IOList);
-to_string(Term, ToStringFun) ->
     ToStringFun(Term).
 
 %%======================================================================
