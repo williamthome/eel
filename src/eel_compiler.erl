@@ -1,6 +1,24 @@
+%% @author William Fank Thomé <willilamthome@hotmail.com>
+%% @copyright 2023-2024 William Fank Thomé
+%% @doc Compiler.
+
+%% Copyright 2023-2024 William Fank Thomé
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 -module(eel_compiler).
 
--export([compile/1, compile/2]).
+%% API
+-export([ compile/1, compile/2 ]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -19,9 +37,9 @@
        , metadata
        }).
 
-%%======================================================================
-%% API functions
-%%======================================================================
+%%%=====================================================================
+%%% API
+%%%=====================================================================
 
 compile({Root, Tree}) ->
     compile(Root, Tree).
@@ -45,9 +63,9 @@ compile(VertexLabel, Tree) ->
         State#state.metadata
     ).
 
-%%======================================================================
-%% Internal functions
-%%======================================================================
+%%%=====================================================================
+%%% Internal functions
+%%%=====================================================================
 
 do_fold_compile(Vertex, State) ->
     Children = lists:reverse(eel_tree:fetch_vertex_children(Vertex, State#state.tree)),
@@ -207,10 +225,6 @@ do_fold_compile_4(#slave_vertex{token = #expr_token{} = Token}, _Vertex, Expr0, 
     },
     {Expr, State}.
 
-%%======================================================================
-%% Internal functions
-%%======================================================================
-
 expr_ast(Expr0) ->
     Expr = normalize_expr(Expr0),
     case erl_scan:string(Expr) of
@@ -234,9 +248,9 @@ normalize_expr(Expr0) ->
             Expr ++ [$.]
     end.
 
-%%======================================================================
-%% Tests
-%%======================================================================
+%%%=====================================================================
+%%% Test
+%%%=====================================================================
 
 -ifdef(TEST).
 

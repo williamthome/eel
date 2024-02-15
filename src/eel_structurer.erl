@@ -1,6 +1,24 @@
+%% @author William Fank Thomé <willilamthome@hotmail.com>
+%% @copyright 2023-2024 William Fank Thomé
+%% @doc Structurer.
+
+%% Copyright 2023-2024 William Fank Thomé
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 -module(eel_structurer).
 
--export([tree/1]).
+%% API
+-export([ tree/1 ]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -8,9 +26,9 @@
 
 -include("eel.hrl").
 
-%%======================================================================
-%% API functions
-%%======================================================================
+%%%=====================================================================
+%%% API
+%%%=====================================================================
 
 tree(Tokens) ->
     Tree0 = eel_tree:new(),
@@ -20,9 +38,9 @@ tree(Tokens) ->
     Tree = eel_tree:set_metadata(State, Tree1),
     do_tree(Tokens, VRoot, Tree).
 
-%%======================================================================
-%% Internal functions
-%%======================================================================
+%%%=====================================================================
+%%% Internal functions
+%%%=====================================================================
 
 do_tree(Tokens, VParent, Tree) ->
     lists:foldl(fun
@@ -77,9 +95,9 @@ add_slave_vertex(Token, MVertex, Tree0) ->
     Tree = eel_tree:add_edge(MVertex, SVertex, Tree1),
     {SVertex, Tree}.
 
-%%======================================================================
-%% Tests
-%%======================================================================
+%%%=====================================================================
+%%% Test
+%%%=====================================================================
 
 -ifdef(TEST).
 

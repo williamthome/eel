@@ -1,6 +1,24 @@
-% @see https://www.geeksforgeeks.org/introduction-to-tree-data-structure-and-algorithm-tutorials/
+%% @author William Fank Thomé <willilamthome@hotmail.com>
+%% @copyright 2023-2024 William Fank Thomé
+%% @doc Tree data structure.
+%% Based on https://www.geeksforgeeks.org/introduction-to-tree-data-structure-and-algorithm-tutorials/
+
+%% Copyright 2023-2024 William Fank Thomé
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 -module(eel_tree).
 
+%% API
 -export([ new/0
         , new/1
         , add_vertex/1
@@ -64,9 +82,9 @@
 -type vertices() :: [vertex()].
 -type metadata() :: term().
 
-%%======================================================================
-%% API functions
-%%======================================================================
+%%%=====================================================================
+%%% API
+%%%=====================================================================
 
 new() ->
     new(#{}).
@@ -155,9 +173,9 @@ put_vertex(#vertex{label = Label} = Vertex, Tree) ->
         vertices = lists:keystore(Label, 1, Vertices, {Label, Vertex})
     }.
 
-%%======================================================================
-%% Internal functions
-%%======================================================================
+%%%=====================================================================
+%%% Internal functions
+%%%=====================================================================
 
 get_curr_index(#tree{vertex_count = Count}) ->
     Count.
@@ -197,9 +215,9 @@ maybe_set_vertex_as_root(#vertex{is_root = false}, Tree) ->
 put_vertices(Vertices, Tree0) ->
     lists:foldl(fun put_vertex/2, Tree0, Vertices).
 
-%%======================================================================
-%% Tests
-%%======================================================================
+%%%=====================================================================
+%%% Test
+%%%=====================================================================
 
 -ifdef(TEST).
 

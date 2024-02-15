@@ -1,4 +1,22 @@
+%% @author William Fank Thomé <willilamthome@hotmail.com>
+%% @copyright 2023-2024 William Fank Thomé
+%% @doc Smart engine.
+
+%% Copyright 2023-2024 William Fank Thomé
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
 -module(eel_smart_engine).
+
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
@@ -8,6 +26,10 @@
 -export([ normalize_expr/1, get_expr_vars/1 ]).
 
 -include("eel.hrl").
+
+%%%=====================================================================
+%%% eel_engine callbacks
+%%%=====================================================================
 
 init(_Opts) ->
     {ok, #engine_state{
@@ -63,8 +85,24 @@ handle_expr(Marker, Expr0, State0) ->
     State = eel_tokenizer:push_token(ExprToken, State0),
     {ok, State}.
 
+handle_tokens(State0) ->
+    Tokens0 = eel_tokenizer:get_tokens(State0),
+    Acc = {[], {in_text, false}},
+    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens0),
+    Tokens = lists:reverse(Reversed),
+    State = eel_tokenizer:set_tokens(Tokens, State0),
+    {ok, State}.
+
+%%%=====================================================================
+%%% API
+%%%=====================================================================
+
 normalize_expr(Expr) ->
     replace_expr_vars(Expr, <<>>).
+
+%%%=====================================================================
+%%% Internal functions
+%%%=====================================================================
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve code readability.
@@ -222,14 +260,6 @@ find_var_default_ending(<<H, T/binary>>, Acc) ->
     find_var_default_ending(T, <<Acc/binary, H>>);
 find_var_default_ending(<<>>, Default) ->
     {Default, <<>>}.
-
-handle_tokens(State0) ->
-    Tokens0 = eel_tokenizer:get_tokens(State0),
-    Acc = {[], {in_text, false}},
-    {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens0),
-    Tokens = lists:reverse(Reversed),
-    State = eel_tokenizer:set_tokens(Tokens, State0),
-    {ok, State}.
 
 % Expr
 resolve_tokens_acc(
