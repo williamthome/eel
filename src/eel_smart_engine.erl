@@ -112,6 +112,9 @@ handle_tokens(State0) ->
 normalize_expr(Expr) ->
     replace_expr_vars(Expr, <<>>).
 
+get_expr_vars(Expr) ->
+    get_expr_vars(Expr, []).
+
 %%%=====================================================================
 %%% Internal functions
 %%%=====================================================================
@@ -203,9 +206,6 @@ replace_expr_vars(<<H, T/binary>>, Acc) ->
     replace_expr_vars(T, <<Acc/binary, H>>);
 replace_expr_vars(<<>>, Acc) ->
     Acc.
-
-get_expr_vars(Expr) ->
-    get_expr_vars(Expr, []).
 
 get_expr_vars(<<$@, T0/binary>>, Acc) ->
     {Var, T} =
