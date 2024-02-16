@@ -27,11 +27,13 @@
 
 -include("eel.hrl").
 
+-record(metadata, { constants }).
+
 %%%=====================================================================
 %%% eel_engine callbacks
 %%%=====================================================================
 
-init(_Opts) ->
+init(Opts) ->
     {ok, #engine_state{
         markers = [
             #marker{
@@ -67,22 +69,32 @@ init(_Opts) ->
                 % FIXME: Nested comments causes error.
                 tree_behaviors = [ignore_token]
             }
-        ]
+        ],
+        metadata = #metadata{
+            constants = maps:get(constants, Opts, #{})
+        }
     }}.
 
 handle_text(Text, State) ->
     {ok, Text, State}.
 
 handle_expr(Marker, Expr0, State0) ->
-    Expr = normalize_expr(Expr0),
-    Vars = get_expr_vars(Expr0),
-    ExprToken = #expr_token{
-        engine = ?MODULE,
-        marker = Marker,
-        expr = Expr,
-        vars = Vars
-    },
-    State = eel_tokenizer:push_token(ExprToken, State0),
+    Token = case expand_constants(Expr0, State0) of
+        {expr, Expr1} ->
+            Expr = normalize_expr(Expr1),
+            Vars = get_expr_vars(Expr1),
+            #expr_token{
+                engine = ?MODULE,
+                marker = Marker,
+                expr = Expr,
+                vars = Vars
+            };
+        {text, Text} ->
+            #text_token{
+                text = Text
+            }
+    end,
+    State = eel_tokenizer:push_token(Token, State0),
     {ok, State}.
 
 handle_tokens(State0) ->
@@ -103,6 +115,31 @@ normalize_expr(Expr) ->
 %%%=====================================================================
 %%% Internal functions
 %%%=====================================================================
+
+expand_constants(Expr, State) ->
+    EngineState = eel_tokenizer:get_engine_state(?MODULE, State),
+    Metadata = EngineState#engine_state.metadata,
+    Constants = maps:to_list(Metadata#metadata.constants),
+    do_expand_constants(Constants, Expr).
+
+do_expand_constants([{Key, Value} | Constants], Expr) ->
+    case is_constant_expr(Key, Expr) of
+        true ->
+            {text, expand_constant(Key, Value, Expr)};
+        false ->
+            do_expand_constants(Constants, expand_constant(Key, Value, Expr))
+    end;
+do_expand_constants([], Expr) ->
+    {expr, Expr}.
+
+is_constant_expr(Key, Expr) ->
+    Pattern = <<"^\s*@", (atom_to_binary(Key))/binary, "\s*$">>,
+    re:run(Expr, Pattern, [{capture, none}]) =:= match.
+
+expand_constant(Key, Value, Expr) ->
+    Pattern = <<"@", (atom_to_binary(Key))/binary>>,
+    Replacement = eel_converter:to_string(Value),
+    iolist_to_binary(string:replace(Expr, Pattern, Replacement, all)).
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve code readability.
