@@ -27,7 +27,7 @@
 
 -include("eel.hrl").
 
--record(metadata, { constants }).
+-record(metadata, { macros }).
 
 %%%=====================================================================
 %%% eel_engine callbacks
@@ -71,7 +71,7 @@ init(Opts) ->
             }
         ],
         metadata = #metadata{
-            constants = maps:get(constants, Opts, #{})
+            macros = maps:get(macros, Opts, #{})
         }
     }}.
 
@@ -79,7 +79,7 @@ handle_text(Text, State) ->
     {ok, Text, State}.
 
 handle_expr(Marker, Expr0, State0) ->
-    Token = case expand_constants(Expr0, State0) of
+    Token = case expand_macros(Expr0, State0) of
         {expr, Expr1} ->
             Expr = normalize_expr(Expr1),
             Vars = get_expr_vars(Expr1),
@@ -119,30 +119,27 @@ get_expr_vars(Expr) ->
 %%% Internal functions
 %%%=====================================================================
 
-expand_constants(Expr, State) ->
+expand_macros(Expr, State) ->
     EngineState = eel_tokenizer:get_engine_state(?MODULE, State),
     Metadata = EngineState#engine_state.metadata,
-    Constants = maps:to_list(Metadata#metadata.constants),
-    do_expand_constants(Constants, Expr).
+    Macros = proplists:from_map(Metadata#metadata.macros),
+    do_expand_macros(Macros, Expr).
 
-do_expand_constants([{Key, Value} | Constants], Expr) ->
-    case is_constant_expr(Key, Expr) of
+do_expand_macros([{Name, Value} | Macros], Expr0) ->
+    case is_macro_expr(Name, Expr0) of
         true ->
-            {text, expand_constant(Key, Value, Expr)};
+            Text = eel_utils:expand_expr_macro(Name, Value, Expr0),
+            {text, Text};
         false ->
-            do_expand_constants(Constants, expand_constant(Key, Value, Expr))
+            Expr = eel_utils:expand_expr_macro(Name, Value, Expr0),
+            do_expand_macros(Macros, Expr)
     end;
-do_expand_constants([], Expr) ->
+do_expand_macros([], Expr) ->
     {expr, Expr}.
 
-is_constant_expr(Key, Expr) ->
-    Pattern = <<"^\s*@", (atom_to_binary(Key))/binary, "\s*$">>,
+is_macro_expr(Key, Expr) ->
+    Pattern = <<"^\s*\\?", (atom_to_binary(Key))/binary, "\s*$">>,
     re:run(Expr, Pattern, [{capture, none}]) =:= match.
-
-expand_constant(Key, Value, Expr) ->
-    Pattern = <<"@", (atom_to_binary(Key))/binary>>,
-    Replacement = eel_converter:to_string(Value),
-    iolist_to_binary(string:replace(Expr, Pattern, Replacement, all)).
 
 % FIXME: Ignore when inside quotes (single [atom] and double [string]).
 % TODO: Improve code readability.
