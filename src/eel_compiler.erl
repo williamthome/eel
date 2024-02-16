@@ -18,7 +18,7 @@
 -module(eel_compiler).
 
 %% API
--export([ compile/1, compile/2 ]).
+-export([ compile/1, compile/2, compile/3 ]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -35,6 +35,7 @@
        , tree
        , vertices
        , metadata
+       , records
        }).
 
 %%%=====================================================================
@@ -44,7 +45,12 @@
 compile({Root, Tree}) ->
     compile(Root, Tree).
 
+compile({Root, Tree}, Opts) ->
+    compile(Root, Tree, Opts);
 compile(VertexLabel, Tree) ->
+    compile(VertexLabel, Tree, #{}).
+
+compile(VertexLabel, Tree, Opts) ->
     Vertex = eel_tree:fetch_vertex(VertexLabel, Tree),
     State0 = #state{
         parts = [],
@@ -53,7 +59,8 @@ compile(VertexLabel, Tree) ->
         index = 0,
         recursive = false,
         tree = Tree,
-        metadata = #{}
+        metadata = #{},
+        records = maps:get(records, Opts, [])
     },
     State = do_fold_compile(Vertex, State0),
     eel_renderer:new_state(
@@ -129,7 +136,7 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
     Index = State#state.index,
     Parts = State#state.parts,
     Metadata = State#state.metadata,
-    {ok, AST} = expr_ast(Token#expr_token.expr),
+    {ok, AST} = expr_ast(Token#expr_token.expr, State#state.records),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, AST}),
@@ -161,7 +168,7 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
     Index = State#state.index,
     Parts = State#state.parts,
     Metadata = State#state.metadata,
-    {ok, AST} = expr_ast(Expr),
+    {ok, AST} = expr_ast(Expr, State#state.records),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, AST}),
@@ -225,19 +232,33 @@ do_fold_compile_4(#slave_vertex{token = #expr_token{} = Token}, _Vertex, Expr0, 
     },
     {Expr, State}.
 
-expr_ast(Expr0) ->
+expr_ast(Expr0, Records) ->
     Expr = normalize_expr(Expr0),
     case erl_scan:string(Expr) of
         {ok, Tokens, _} ->
             case erl_parse:parse_exprs(Tokens) of
                 {ok, AST} ->
-                    {ok, AST};
+                    {ok, expand_records(Records, AST)};
                 {error, Reason} ->
                     {error, {parse, Expr, Reason}}
             end;
         {error, ErrorInfo, ErrorLocation} ->
             {error, {scan, {Expr, ErrorInfo, ErrorLocation}}}
     end.
+
+% @see https://erlangforums.com/t/how-to-evaluate-expressions-containing-record-reference/3273/6?u=williamthome
+expand_records(Records, AST) ->
+    Forms = Records ++ wrap_ast(AST),
+    Fun = lists:last(erl_expand_records:module(Forms, [])),
+    unwrap_fun(Fun).
+
+% TODO: Use erl_syntax.
+wrap_ast(Expr) ->
+    [{function, 1, {atom, 1, foo}, 1, [{clause, 1, [], [], Expr}]}].
+
+% TODO: Use erl_syntax.
+unwrap_fun({function, 1, {atom, 1, foo}, 1, [{clause, 1, [], [], Expr}]}) ->
+    Expr.
 
 normalize_expr(Expr0) ->
     Expr = binary_to_list(string:trim(iolist_to_binary(Expr0))),
