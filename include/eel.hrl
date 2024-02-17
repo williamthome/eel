@@ -8,15 +8,12 @@
     compile_as     :: marker_compile_as()
 }).
 
--record(text_token, { text     :: binary()
-                    , metadata :: term()
-                    }).
+-record(text_token, { text   :: binary() }).
 
--record(expr_token, { expr     :: binary()
-                    , engine   :: engine()
-                    , marker   :: #marker{}
-                    , vars     :: [atom()]
-                    , metadata :: term()
+-record(expr_token, { expr   :: binary()
+                    , engine :: engine()
+                    , marker :: #marker{}
+                    , vars   :: [atom()]
                     }).
 
 -record(engine_metadata, { module  :: engine()

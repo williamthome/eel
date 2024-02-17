@@ -34,7 +34,6 @@
        , recursive
        , tree
        , vertices
-       , metadata
        , records
        }).
 
@@ -59,15 +58,13 @@ compile(VertexLabel, Tree, Opts) ->
         index = 0,
         recursive = false,
         tree = Tree,
-        metadata = #{},
         records = maps:get(records, Opts, [])
     },
     State = do_fold_compile(Vertex, State0),
     eel_renderer:new_state(
         State#state.parts,
         State#state.vars,
-        lists:reverse(State#state.dynamics),
-        State#state.metadata
+        lists:reverse(State#state.dynamics)
     ).
 
 %%%=====================================================================
@@ -107,59 +104,43 @@ do_fold_compile_2( #text_token{} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    Metadata = State#state.metadata,
     Static = Token#text_token.text,
     State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, Static}),
-        index = Index+1,
-        metadata = Metadata#{
-            Index => Token#text_token.metadata
-        }
+        index = Index+1
     };
 do_fold_compile_2( #text_token{} = Token
                  , #state{recursive = true} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    Metadata = State#state.metadata,
     IndexParts = proplists:get_value(Index, Parts, []),
     Static = Token#text_token.text,
     State#state{
         parts = lists:keystore(Index, 1, Parts,
             {Index, [<<"<<\"", Static/binary, "\"/utf8>>">> | IndexParts]}
-        ),
-        metadata = Metadata#{
-            Index => Token#text_token.metadata
-        }
+        )
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = false} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    Metadata = State#state.metadata,
     {ok, AST} = expr_ast(Token#expr_token.expr, State#state.records),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, AST}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
-        dynamics = [Index | State#state.dynamics],
-        metadata = Metadata#{
-            Index => Token#expr_token.metadata
-        }
+        dynamics = [Index | State#state.dynamics]
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr}} = Token
                  , #state{recursive = true} = State ) ->
     Index = State#state.index,
     Parts = State#state.parts,
-    Metadata = State#state.metadata,
     IndexParts = proplists:get_value(Index, Parts, []),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, [Token#expr_token.expr | IndexParts]}),
-        vars = lists:merge(State#state.vars, Vars),
-        metadata = Metadata#{
-            Index => Token#expr_token.metadata
-        }
+        vars = lists:merge(State#state.vars, Vars)
     };
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = false} = State0 ) ->
@@ -167,17 +148,13 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
                                      , Token#expr_token.expr, State0 ),
     Index = State#state.index,
     Parts = State#state.parts,
-    Metadata = State#state.metadata,
     {ok, AST} = expr_ast(Expr, State#state.records),
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, AST}),
         index = Index+1,
         vars = lists:merge(State#state.vars, Vars),
-        dynamics = [Index | State#state.dynamics],
-        metadata = Metadata#{
-            Index => Token#expr_token.metadata
-        }
+        dynamics = [Index | State#state.dynamics]
     }};
 do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Token
                  , #state{recursive = true} = State0 ) ->
@@ -186,15 +163,11 @@ do_fold_compile_2( #expr_token{marker = #marker{compile_as = expr_start}} = Toke
     Index = State#state.index,
     Parts = State#state.parts,
     IndexParts = proplists:get_value(State0#state.index, State0#state.parts, []),
-    Metadata = State#state.metadata,
     Vars = lists:map(fun(Var) -> {Var, Index} end, Token#expr_token.vars),
     {halt, State#state{
         parts = lists:keystore(Index, 1, Parts, {Index, lists:join($,, [IndexParts | Expr])}),
         index = Index+1,
-        vars = lists:merge(State#state.vars, Vars),
-        metadata = Metadata#{
-            Index => Token#expr_token.metadata
-        }
+        vars = lists:merge(State#state.vars, Vars)
     }}.
 
 do_fold_compile_3([Vertex | T], Expr0, State0) ->
@@ -316,8 +289,6 @@ compile_test() ->
      {4,<<"</ul></body></html>">>}],
     [{item_prefix,3},{title,1},{items,3}],
     [1,3],
-    #{0 => undefined,1 => undefined,2 => undefined,
-      3 => undefined,4 => undefined},
     undefined},
 
     Bin = <<
