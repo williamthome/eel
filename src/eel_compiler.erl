@@ -334,7 +334,8 @@ compile_test() ->
         "</body>"
         "</html>"
     >>,
-    {Tokens, _State} = eel_tokenizer:tokenize(Bin),
+    TokenizeState = eel_tokenizer:tokenize(Bin),
+    Tokens = eel_tokenizer:get_tokens(TokenizeState),
     Tree = eel_structurer:tree(Tokens),
     Result = compile(Tree),
     ?assertEqual(Expected, Result).

@@ -257,7 +257,8 @@ tree_test() ->
         "</body>"
         "</html>"
     >>,
-    {Tokens, _State} = eel_tokenizer:tokenize(Bin),
+    TokenizeState = eel_tokenizer:tokenize(Bin),
+    Tokens = eel_tokenizer:get_tokens(TokenizeState),
     Result = tree(Tokens),
     ?assertEqual(Expected, Result).
 

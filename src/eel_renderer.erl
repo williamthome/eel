@@ -218,9 +218,10 @@ render_test() ->
         "</body>"
         "</html>"
     >>,
-    {Tokens, _State} = eel_tokenizer:tokenize(Bin),
+    TokenizeState = eel_tokenizer:tokenize(Bin),
+    Tokens = eel_tokenizer:get_tokens(TokenizeState),
     Tree = eel_structurer:tree(Tokens),
-    State = eel_compiler:compile(Tree),
+    RenderState0 = eel_compiler:compile(Tree),
 
     RenderExpected = [{1,<<"EEl">>},
     {3,
@@ -228,8 +229,8 @@ render_test() ->
       [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
       [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]}],
     AssignsAll = #{title => <<"EEl">>, items => [1,2,3], item_prefix => <<"Item - ">>},
-    RenderSnapshot = render_state(AssignsAll, State),
-    RenderState = update_state_snapshot(RenderSnapshot, State),
+    RenderSnapshot = render_state(AssignsAll, RenderState0),
+    RenderState = update_state_snapshot(RenderSnapshot, RenderState0),
     ?assertEqual(RenderExpected, RenderSnapshot),
 
     ChangesExpected = [{1,<<"EEl - Embedded Erlang">>}],
