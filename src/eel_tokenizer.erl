@@ -96,16 +96,15 @@ push_token(Token, State) ->
     State#state{tokens = [Token | State#state.tokens]}.
 
 get_engine_state(Engine, State) ->
-    maps:get(Engine, State#state.engines).
+    Metadata = maps:get(Engine, State#state.engines),
+    Metadata#engine_metadata.state.
 
 set_engine_state(Engine, EngineState, State) ->
     Engines = State#state.engines,
-    case is_map_key(Engine, Engines) of
-        true ->
-            State#state{engines = Engines#{Engine => EngineState}};
-        false ->
-            error(badarg, [Engine, EngineState, State])
-    end.
+    Metadata = maps:get(Engine, Engines),
+    State#state{engines = Engines#{
+        Engine => Metadata#engine_metadata{state = EngineState}
+    }}.
 
 get_opts(#state{opts = Opts}) ->
     Opts.
@@ -122,8 +121,8 @@ normalize_engine_state(Module, EngineState) ->
             start = MarkerStart,
             final = MarkerFinal
         }
-    end, EngineState#engine_state.markers),
-    EngineState#engine_state{
+    end, EngineState#engine_metadata.markers),
+    EngineState#engine_metadata{
         module = Module,
         markers = Markers
     }.
@@ -193,7 +192,7 @@ is_string_empty(String) ->
         _ -> false
     end.
 
-handle_expr_start([#engine_state{markers = Markers} = Engine | Engines], Bin) ->
+handle_expr_start([#engine_metadata{markers = Markers} = Engine | Engines], Bin) ->
     case start_marker_match(Markers, Bin, []) of
         [] ->
             handle_expr_start(Engines, Bin);
@@ -245,7 +244,7 @@ marker_match(Bin, RE) ->
             nomatch
     end.
 
-handle_text([#engine_state{module = Engine} | Engines], Bin0, State0) ->
+handle_text([#engine_metadata{module = Engine} | Engines], Bin0, State0) ->
     case Engine:handle_text(Bin0, State0) of
         {ok, Bin, State} ->
             handle_text(Engines, Bin, State);
@@ -258,7 +257,7 @@ handle_text([], Bin, State0) ->
     State = push_token(#text_token{text = Bin}, State0),
     {ok, State}.
 
-handle_expr(#engine_state{module = Engine}, Marker, Bin, State0) ->
+handle_expr(#engine_metadata{module = Engine}, Marker, Bin, State0) ->
     case Engine:handle_expr(Marker, Bin, State0) of
         {ok, State} ->
             {ok, State};
@@ -266,7 +265,7 @@ handle_expr(#engine_state{module = Engine}, Marker, Bin, State0) ->
             {error, Reason}
     end.
 
-handle_tokens([#engine_state{module = Engine} | Engines], State0) ->
+handle_tokens([#engine_metadata{module = Engine} | Engines], State0) ->
     case Engine:handle_tokens(State0) of
         {ok, State} ->
             handle_tokens(Engines, State);

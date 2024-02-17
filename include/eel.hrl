@@ -19,10 +19,10 @@
                     , metadata :: term()
                     }).
 
--record(engine_state, { module   :: engine()
-                      , markers  :: [#marker{}]
-                      , metadata :: term()
-                      }).
+-record(engine_metadata, { module  :: engine()
+                         , markers :: [#marker{}]
+                         , state   :: term()
+                         }).
 
 -record(master_vertex, { ast :: ast() }).
 

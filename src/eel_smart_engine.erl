@@ -27,14 +27,14 @@
 
 -include("eel.hrl").
 
--record(metadata, { macros }).
+-record(state, { macros }).
 
 %%%=====================================================================
 %%% eel_engine callbacks
 %%%=====================================================================
 
 init(Opts) ->
-    {ok, #engine_state{
+    {ok, #engine_metadata{
         markers = [
             #marker{
                 id = expr,
@@ -70,7 +70,7 @@ init(Opts) ->
                 tree_behaviors = [ignore_token]
             }
         ],
-        metadata = #metadata{
+        state = #state{
             macros = maps:get(macros, Opts, #{})
         }
     }}.
@@ -121,8 +121,7 @@ get_expr_vars(Expr) ->
 
 expand_macros(Expr, State) ->
     EngineState = eel_tokenizer:get_engine_state(?MODULE, State),
-    Metadata = EngineState#engine_state.metadata,
-    Macros = proplists:from_map(Metadata#metadata.macros),
+    Macros = proplists:from_map(EngineState#state.macros),
     do_expand_macros(Macros, Expr).
 
 do_expand_macros([{Name, Value} | Macros], Expr0) ->
