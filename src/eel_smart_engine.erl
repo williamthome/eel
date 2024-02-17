@@ -23,7 +23,7 @@
 -export([ init/1, handle_text/2, handle_expr/3, handle_tokens/1 ]).
 
 %% API
--export([ normalize_expr/1, get_expr_vars/1 ]).
+-export([ normalize_expr/1, get_expr_vars/1, expand_macros/2 ]).
 
 -include("eel.hrl").
 
@@ -115,6 +115,9 @@ normalize_expr(Expr) ->
 get_expr_vars(Expr) ->
     get_expr_vars(Expr, []).
 
+expand_macros(Expr, State) ->
+    do_expand_macros(get_macros(State), Expr).
+
 %%%=====================================================================
 %%% Internal functions
 %%%=====================================================================
@@ -129,9 +132,6 @@ normalize_macros(Macros) when is_list(Macros) ->
     Macros;
 normalize_macros(Macros) when is_map(Macros) ->
     proplists:from_map(Macros).
-
-expand_macros(Expr, State) ->
-    do_expand_macros(get_macros(State), Expr).
 
 do_expand_macros([{Name, Value} | Macros], Expr0) ->
     case is_macro_expr(Name, Expr0) of
