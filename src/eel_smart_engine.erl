@@ -71,7 +71,7 @@ init(Opts) ->
             }
         ],
         state = #state{
-            macros = maps:get(macros, Opts, #{})
+            macros = normalize_macros(maps:get(macros, Opts, []))
         }
     }}.
 
@@ -119,10 +119,19 @@ get_expr_vars(Expr) ->
 %%% Internal functions
 %%%=====================================================================
 
+get_state(TokenizeState) ->
+    eel_tokenizer:get_engine_state(?MODULE, TokenizeState).
+
+get_macros(TokenizeState) ->
+    (get_state(TokenizeState))#state.macros.
+
+normalize_macros(Macros) when is_list(Macros) ->
+    Macros;
+normalize_macros(Macros) when is_map(Macros) ->
+    proplists:from_map(Macros).
+
 expand_macros(Expr, State) ->
-    EngineState = eel_tokenizer:get_engine_state(?MODULE, State),
-    Macros = proplists:from_map(EngineState#state.macros),
-    do_expand_macros(Macros, Expr).
+    do_expand_macros(get_macros(State), Expr).
 
 do_expand_macros([{Name, Value} | Macros], Expr0) ->
     case is_macro_expr(Name, Expr0) of
