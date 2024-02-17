@@ -25,6 +25,8 @@
         , get_state_snapshot/1
         , update_state_snapshot/2
         , update_changes_state_snapshot/2
+        , state_snapshot_to_iolist/1
+        , state_snapshot_to_binary/1
         , render_state/2
         , render_state/3
         , render_state_changes/2
@@ -77,6 +79,12 @@ update_state_snapshot(Snapshot, #render_state{parts = Parts} = State) ->
 
 update_changes_state_snapshot(Snapshot, #render_state{snapshot = Parts} = State) ->
     update_snapshot(Snapshot, Parts, State).
+
+state_snapshot_to_iolist(#render_state{snapshot = Snapshot}) ->
+    [IOData || {_, IOData} <- Snapshot].
+
+state_snapshot_to_binary(#render_state{snapshot = Snapshot}) ->
+    << IOData || {_, IOData} <- Snapshot >>.
 
 render_state(Assigns, State) ->
     render_state(Assigns, State, #{}).
