@@ -55,7 +55,7 @@ compile(VertexLabel, Tree, Opts) ->
         parts = [],
         vars = [],
         dynamics = [],
-        index = 0,
+        index = 1,
         recursive = false,
         tree = Tree,
         records = maps:get(records, Opts, [])
@@ -250,13 +250,13 @@ normalize_expr(Expr0) ->
 
 compile_test() ->
     Expected = {render_state,
-    [{0,<<"<html><head><title>">>},
-     {1,
+    [{1,<<"<html><head><title>">>},
+     {2,
       [{call,1,
         {remote,1,{atom,1,maps},{atom,1,get}},
         [{atom,1,title},{var,1,'Assigns'}]}]},
-     {2,<<"</title></head><body><ul>">>},
-     {3,
+     {3,<<"</title></head><body><ul>">>},
+     {4,
       [{call,1,
         {remote,1,{atom,1,lists},{atom,1,map}},
         [{'fun',1,
@@ -286,9 +286,9 @@ compile_test() ->
          {call,1,
           {remote,1,{atom,1,maps},{atom,1,get}},
           [{atom,1,items},{var,1,'Assigns'}]}]}]},
-     {4,<<"</ul></body></html>">>}],
-    [{item_prefix,3},{title,1},{items,3}],
-    [1,3],
+     {5,<<"</ul></body></html>">>}],
+    [{item_prefix,4},{title,2},{items,4}],
+    [2,4],
     undefined},
 
     Bin = <<

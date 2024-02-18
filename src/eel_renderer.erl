@@ -225,8 +225,8 @@ render_test() ->
     Tree = eel_structurer:tree(Tokens),
     RenderState0 = eel_compiler:compile(Tree),
 
-    RenderExpected = [{1,<<"EEl">>},
-    {3,
+    RenderExpected = [{2,<<"EEl">>},
+    {4,
      [[<<"<li>">>,<<"Item - ">>,<<"1">>,<<"</li>">>],
       [<<"<li>">>,<<"Item - ">>,<<"2">>,<<"</li>">>],
       [<<"<li>">>,<<"Item - ">>,<<"3">>,<<"</li>">>]]}],
@@ -235,7 +235,7 @@ render_test() ->
     RenderState = update_state_snapshot(RenderSnapshot, RenderState0),
     ?assertEqual(RenderExpected, RenderSnapshot),
 
-    ChangesExpected = [{1,<<"EEl - Embedded Erlang">>}],
+    ChangesExpected = [{2,<<"EEl - Embedded Erlang">>}],
     AssignsChanges = #{title => <<"EEl - Embedded Erlang">>},
     ChangesSnapshot = render_state_changes(AssignsChanges, RenderState),
     ?assertEqual(ChangesExpected, ChangesSnapshot).
