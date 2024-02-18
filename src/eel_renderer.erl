@@ -18,10 +18,11 @@
 -module(eel_renderer).
 
 %% API
--export([ new_state/3
+-export([ new_state/4
         , get_state_parts/1
         , get_state_vars/1
         , get_state_dynamics/1
+        , get_state_metadata/1
         , get_state_snapshot/1
         , update_state_snapshot/2
         , update_changes_state_snapshot/2
@@ -48,6 +49,7 @@
        { parts
        , vars
        , dynamics
+       , metadata
        , snapshot
        }).
 
@@ -55,11 +57,12 @@
 %%% API
 %%%=====================================================================
 
-new_state(Parts, Vars, Dynamics) ->
+new_state(Parts, Vars, Dynamics, Metadata) ->
     #render_state{
         parts = Parts,
         vars = Vars,
-        dynamics = Dynamics
+        dynamics = Dynamics,
+        metadata = Metadata
     }.
 
 get_state_parts(#render_state{parts = Parts}) ->
@@ -70,6 +73,9 @@ get_state_vars(#render_state{vars = Vars}) ->
 
 get_state_dynamics(#render_state{dynamics = Dynamics}) ->
     Dynamics.
+
+get_state_metadata(#render_state{metadata = Metadata}) ->
+    Metadata.
 
 get_state_snapshot(#render_state{snapshot = Snapshot}) ->
     Snapshot.
