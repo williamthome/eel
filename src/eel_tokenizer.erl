@@ -173,7 +173,7 @@ do_tokenize(<<>>, #state{text_acc = <<>>} = State0) ->
     end, Tokens0),
     State = State0#state{tokens = Tokens},
     Engines = maps:values(State#state.engines),
-    handle_tokens(Engines, State);
+    handle_tokens(Engines, Tokens, State);
 do_tokenize(<<>>, #state{text_acc = Text} = State0) ->
     Engines = maps:values(State0#state.engines),
     case handle_text(Engines, Text, State0) of
@@ -265,14 +265,14 @@ handle_expr(#engine_metadata{module = Engine}, Marker, Bin, State0) ->
             {error, Reason}
     end.
 
-handle_tokens([#engine_metadata{module = Engine} | Engines], State0) ->
-    case Engine:handle_tokens(State0) of
+handle_tokens([#engine_metadata{module = Engine} | Engines], Tokens, State0) ->
+    case Engine:handle_tokens(Tokens, State0) of
         {ok, State} ->
-            handle_tokens(Engines, State);
+            handle_tokens(Engines, Tokens, State);
         {error, Reason} ->
             {error, Reason}
     end;
-handle_tokens([], State) ->
+handle_tokens([], _, State) ->
     State.
 
 %%%=====================================================================

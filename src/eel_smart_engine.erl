@@ -20,7 +20,7 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([ init/1, handle_text/2, handle_expr/3, handle_tokens/1 ]).
+-export([ init/1, handle_text/2, handle_expr/3, handle_tokens/2 ]).
 
 %% API
 -export([ normalize_expr/1, get_expr_vars/1, expand_macros/2 ]).
@@ -97,8 +97,7 @@ handle_expr(Marker, Expr0, State0) ->
     State = eel_tokenizer:push_token(Token, State0),
     {ok, State}.
 
-handle_tokens(State0) ->
-    Tokens0 = eel_tokenizer:get_tokens(State0),
+handle_tokens(Tokens0, State0) ->
     Acc = {[], {in_text, false}},
     {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens0),
     Tokens = lists:reverse(Reversed),
