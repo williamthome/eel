@@ -246,9 +246,11 @@ marker_match(Bin, RE) ->
 
 handle_text([#engine_metadata{module = Engine} | Engines], Bin0, State0) ->
     case Engine:handle_text(Bin0, State0) of
-        {ok, Bin, State} ->
+        {noreply, State} ->
+            handle_text(Engines, Bin0, State);
+        {reply, Bin, State} ->
             handle_text(Engines, Bin, State);
-        {halt, State} ->
+        {stop, State} ->
             {ok, State};
         {error, Reason} ->
             {error, Reason}
@@ -259,15 +261,21 @@ handle_text([], Bin, State0) ->
 
 handle_expr(#engine_metadata{module = Engine}, Marker, Bin, State0) ->
     case Engine:handle_expr(Marker, Bin, State0) of
-        {ok, State} ->
+        {noreply, State} ->
+            {ok, State};
+        {reply, Tokens, State1} when is_list(Tokens) ->
+            State = eel_tokenizer:push_tokens(Tokens, State1),
             {ok, State};
         {error, Reason} ->
             {error, Reason}
     end.
 
-handle_tokens([#engine_metadata{module = Engine} | Engines], Tokens, State0) ->
-    case Engine:handle_tokens(Tokens, State0) of
-        {ok, State} ->
+handle_tokens([#engine_metadata{module = Engine} | Engines], Tokens0, State0) ->
+    case Engine:handle_tokens(Tokens0, State0) of
+        {noreply, State} ->
+            handle_tokens(Engines, Tokens0, State);
+        {reply, Tokens, State1} ->
+            State = eel_tokenizer:set_tokens(Tokens, State1),
             handle_tokens(Engines, Tokens, State);
         {error, Reason} ->
             {error, Reason}

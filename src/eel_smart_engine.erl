@@ -75,11 +75,11 @@ init(Opts) ->
         }
     }}.
 
-handle_text(Text, State) ->
-    {ok, Text, State}.
+handle_text(_Text, State) ->
+    {noreply, State}.
 
-handle_expr(Marker, Expr0, State0) ->
-    Token = case expand_macros(Expr0, State0) of
+handle_expr(Marker, Expr0, State) ->
+    Token = case expand_macros(Expr0, State) of
         {expr, Expr1} ->
             Expr = normalize_expr(Expr1),
             Vars = get_expr_vars(Expr1),
@@ -94,15 +94,13 @@ handle_expr(Marker, Expr0, State0) ->
                 text = Text
             }
     end,
-    State = eel_tokenizer:push_token(Token, State0),
-    {ok, State}.
+    {reply, [Token], State}.
 
-handle_tokens(Tokens0, State0) ->
+handle_tokens(Tokens0, State) ->
     Acc = {[], {in_text, false}},
     {Reversed, _} = lists:foldl(fun resolve_tokens_acc/2, Acc, Tokens0),
     Tokens = lists:reverse(Reversed),
-    State = eel_tokenizer:set_tokens(Tokens, State0),
-    {ok, State}.
+    {reply, Tokens, State}.
 
 %%%=====================================================================
 %%% API
