@@ -248,8 +248,7 @@ marker_match(Bin, RE) ->
             nomatch
     end.
 
-handle_text([Metadata | Engines], Bin0, State0) ->
-    #engine_metadata{module = Engine} = Metadata,
+handle_text([#engine_metadata{module = Engine} | Engines], Bin0, State0) ->
     case Engine:handle_text(Bin0, State0) of
         {noreply, State} ->
             handle_text(Engines, Bin0, State);
@@ -264,9 +263,8 @@ handle_text([], Bin, State0) ->
     State = push_token(#text_token{text = Bin}, State0),
     {ok, State}.
 
-handle_expr([Metadata | Engines], Marker, Bin, State0) ->
-    #engine_metadata{module = Engine, state = EngineState} = Metadata,
-    case Engine:handle_expr(Marker, Bin, EngineState, State0) of
+handle_expr([#engine_metadata{module = Engine} | Engines], Marker, Bin, State0) ->
+    case Engine:handle_expr(Marker, Bin, State0) of
         {noreply, State} ->
             handle_expr(Engines, Marker, Bin, State);
         {reply, Tokens, State1} when is_list(Tokens) ->

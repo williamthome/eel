@@ -20,7 +20,7 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([ init/1, handle_text/2, handle_expr/4, handle_tokens/2 ]).
+-export([ init/1, handle_text/2, handle_expr/3, handle_tokens/2 ]).
 
 %% API
 -export([ normalize_expr/1, get_expr_vars/1, expand_macros/2 ]).
@@ -78,7 +78,7 @@ init(Opts) ->
 handle_text(_Text, State) ->
     {noreply, State}.
 
-handle_expr(#marker{engine = ?MODULE} = Marker, Expr0, _EngineState, State) ->
+handle_expr(#marker{engine = ?MODULE} = Marker, Expr0, State) ->
     Token = case expand_macros(Expr0, State) of
         {expr, Expr1} ->
             Expr = normalize_expr(Expr1),
@@ -94,7 +94,7 @@ handle_expr(#marker{engine = ?MODULE} = Marker, Expr0, _EngineState, State) ->
             }
     end,
     {reply, [Token], State};
-handle_expr(_Marker, _Expr, _EngineState, State) ->
+handle_expr(_Marker, _Expr, State) ->
     {noreply, State}.
 
 handle_tokens(Tokens0, State) ->
