@@ -24,6 +24,11 @@
         , get_state_dynamics/1
         , get_state_metadata/1
         , get_state_snapshot/1
+        , set_state_parts/2
+        , set_state_vars/2
+        , set_state_dynamics/2
+        , set_state_metadata/2
+        , set_state_snapshot/2
         , update_state_snapshot/2
         , update_changes_state_snapshot/2
         , state_snapshot_to_iolist/1
@@ -79,6 +84,20 @@ get_state_metadata(#render_state{metadata = Metadata}) ->
 
 get_state_snapshot(#render_state{snapshot = Snapshot}) ->
     Snapshot.
+
+set_state_parts(Parts, State) ->
+    State#render_state{parts = Parts}.
+
+set_state_vars(Vars, State) ->
+    State#render_state{vars = Vars}.
+
+set_state_dynamics(Dynamics, State) ->
+    State#render_state{dynamics = Dynamics}.
+set_state_metadata(Metadata, State) ->
+    State#render_state{metadata = Metadata}.
+
+set_state_snapshot(Snapshot, State) ->
+    State#render_state{snapshot = Snapshot}.
 
 update_state_snapshot(Snapshot, #render_state{parts = Parts} = State) ->
     update_snapshot(Snapshot, Parts, State).
