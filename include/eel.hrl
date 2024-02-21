@@ -1,19 +1,18 @@
--record(marker, {
-    id             :: marker_id(),
-    start          :: marker_symbol(),
-    final          :: marker_symbol(),
-    start_groups   :: [marker_regex_group()],
-    final_groups   :: [marker_regex_group()],
-    tree_behaviors :: [marker_tree_behavior()],
-    compile_as     :: marker_compile_as()
-}).
+-record(marker, { engine         :: engine()
+                , id             :: marker_id()
+                , start          :: marker_symbol()
+                , final          :: marker_symbol()
+                , start_groups   :: [marker_regex_group()]
+                , final_groups   :: [marker_regex_group()]
+                , tree_behaviors :: [marker_tree_behavior()]
+                , compile_as     :: marker_compile_as()
+                }).
 
 -record(text_token, { text     :: binary()
                     , metadata :: term()
                     }).
 
 -record(expr_token, { expr     :: binary()
-                    , engine   :: engine()
                     , marker   :: #marker{}
                     , vars     :: [atom()]
                     , metadata :: term()

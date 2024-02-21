@@ -20,7 +20,7 @@
 -behaviour(eel_engine).
 
 %% eel_engine callbacks
--export([ init/1, handle_text/2, handle_expr/3, handle_tokens/2 ]).
+-export([ init/1, handle_text/2, handle_expr/4, handle_tokens/2 ]).
 
 %% API
 -export([ normalize_expr/1, get_expr_vars/1, expand_macros/2 ]).
@@ -78,13 +78,12 @@ init(Opts) ->
 handle_text(_Text, State) ->
     {noreply, State}.
 
-handle_expr(Marker, Expr0, State) ->
+handle_expr(#marker{engine = ?MODULE} = Marker, Expr0, _EngineState, State) ->
     Token = case expand_macros(Expr0, State) of
         {expr, Expr1} ->
             Expr = normalize_expr(Expr1),
             Vars = get_expr_vars(Expr1),
             #expr_token{
-                engine = ?MODULE,
                 marker = Marker,
                 expr = Expr,
                 vars = Vars
@@ -94,7 +93,9 @@ handle_expr(Marker, Expr0, State) ->
                 text = Text
             }
     end,
-    {reply, [Token], State}.
+    {reply, [Token], State};
+handle_expr(_Marker, _Expr, _EngineState, State) ->
+    {noreply, State}.
 
 handle_tokens(Tokens0, State) ->
     Acc = {[], {in_text, false}},
@@ -302,43 +303,43 @@ find_var_default_ending(<<>>, Default) ->
 
 % Expr
 resolve_tokens_acc(
-    #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
-    { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
+    #expr_token{marker = #marker{id = expr_continue, engine = ?MODULE}} = Token,
+    { [#expr_token{marker = #marker{id = expr_start, engine = ?MODULE}} = TAcc | Acc]
     , {in_expr, false} }
 ) ->
     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
-    #expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = Token,
-    { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
+    #expr_token{marker = #marker{id = expr_continue, engine = ?MODULE}} = Token,
+    { [#expr_token{marker = #marker{id = expr_continue, engine = ?MODULE}} = TAcc | Acc]
     , {in_continue, false} }
 ) ->
     {[merge_expr_tokens(Token, TAcc) | Acc], {in_continue, false}};
 resolve_tokens_acc(
-    #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
-    { [#expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = TAcc | Acc]
+    #expr_token{marker = #marker{id = expr_end, engine = ?MODULE}} = Token,
+    { [#expr_token{marker = #marker{id = expr_start, engine = ?MODULE}} = TAcc | Acc]
     , {in_expr, false} }
 ) ->
     {[merge_expr_tokens(Token, TAcc) | Acc], {in_expr, false}};
 resolve_tokens_acc(
-    #expr_token{marker = #marker{id = expr_end}, engine = ?MODULE} = Token,
-    { [#expr_token{marker = #marker{id = expr_continue}, engine = ?MODULE} = TAcc | Acc]
+    #expr_token{marker = #marker{id = expr_end, engine = ?MODULE}} = Token,
+    { [#expr_token{marker = #marker{id = expr_continue, engine = ?MODULE}} = TAcc | Acc]
     , {in_continue, false} }
 ) ->
      {[merge_expr_tokens(Token, TAcc) | Acc], {in_text, false}};
 resolve_tokens_acc(
-    #expr_token{marker = #marker{id = expr_start}, engine = ?MODULE} = Token,
+    #expr_token{marker = #marker{id = expr_start, engine = ?MODULE}} = Token,
     {Acc, _In}
 ) ->
      {[Token | Acc], {in_expr, false}};
 resolve_tokens_acc(
-    #expr_token{engine = ?MODULE} = Token,
+    #expr_token{marker = #marker{engine = ?MODULE}} = Token,
     {[#text_token{text = <<>>} | Acc], In}
 ) ->
     resolve_tokens_acc(Token, {Acc, In});
 % Text
 resolve_tokens_acc(
     #text_token{text = <<>>},
-    {[#expr_token{engine = ?MODULE} | _] = Acc, In}
+    {[#expr_token{marker = #marker{engine = ?MODULE}} | _] = Acc, In}
 ) ->
     {Acc, In};
 % NOTE: Merge texts cause Arizona components to break.

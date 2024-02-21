@@ -114,18 +114,22 @@ get_opts(#state{opts = Opts}) ->
 %%%=====================================================================
 
 normalize_engine_state(Module, EngineState) ->
-    Markers = lists:map(fun(Marker) ->
+    Markers = EngineState#engine_metadata.markers,
+    EngineState#engine_metadata{
+        module = Module,
+        markers = normalize_engine_markers(Markers, Module)
+    }.
+
+normalize_engine_markers(Markers, Module) ->
+    lists:map(fun(Marker) ->
         {ok, MarkerStart} = re:compile(<<(Marker#marker.start)/binary, "$">>),
         {ok, MarkerFinal} = re:compile(<<(Marker#marker.final)/binary, "$">>),
         Marker#marker{
+            engine = Module,
             start = MarkerStart,
             final = MarkerFinal
         }
-    end, EngineState#engine_metadata.markers),
-    EngineState#engine_metadata{
-        module = Module,
-        markers = Markers
-    }.
+    end, Markers).
 
 do_tokenize(<<H, T/binary>>, State0) ->
     State = State0#state{
@@ -139,7 +143,7 @@ do_tokenize(<<H, T/binary>>, State0) ->
                 {ok, {Marker, Text, Expr, Rest}} ->
                     case handle_text(Engines, Text, State) of
                         {ok, TextState} ->
-                            case handle_expr(Engine, Marker, Expr, TextState) of
+                            case handle_expr(Engines, Marker, Expr, TextState) of
                                 {ok, ExprState} ->
                                     Buffer = ExprState#state.buffer,
                                     do_tokenize(Rest, ExprState#state{
@@ -244,7 +248,8 @@ marker_match(Bin, RE) ->
             nomatch
     end.
 
-handle_text([#engine_metadata{module = Engine} | Engines], Bin0, State0) ->
+handle_text([Metadata | Engines], Bin0, State0) ->
+    #engine_metadata{module = Engine} = Metadata,
     case Engine:handle_text(Bin0, State0) of
         {noreply, State} ->
             handle_text(Engines, Bin0, State);
@@ -259,16 +264,21 @@ handle_text([], Bin, State0) ->
     State = push_token(#text_token{text = Bin}, State0),
     {ok, State}.
 
-handle_expr(#engine_metadata{module = Engine}, Marker, Bin, State0) ->
-    case Engine:handle_expr(Marker, Bin, State0) of
+handle_expr([Metadata | Engines], Marker, Bin, State0) ->
+    #engine_metadata{module = Engine, state = EngineState} = Metadata,
+    case Engine:handle_expr(Marker, Bin, EngineState, State0) of
         {noreply, State} ->
-            {ok, State};
+            handle_expr(Engines, Marker, Bin, State);
         {reply, Tokens, State1} when is_list(Tokens) ->
             State = eel_tokenizer:push_tokens(Tokens, State1),
+            handle_expr(Engines, Marker, Bin, State);
+        {stop, State} ->
             {ok, State};
         {error, Reason} ->
             {error, Reason}
-    end.
+    end;
+handle_expr([], _Marker, _Bin, State) ->
+    {ok, State}.
 
 handle_tokens([#engine_metadata{module = Engine} | Engines], Tokens0, State0) ->
     case Engine:handle_tokens(Tokens0, State0) of
@@ -293,7 +303,7 @@ tokenize_test() ->
     Expected = {state,
     #{eel_smart_engine =>
        {engine_metadata,eel_smart_engine,
-        [{marker,expr,
+        [{marker,eel_smart_engine,expr,
           {re_pattern,0,0,0,
            <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,
              255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,
@@ -307,7 +317,7 @@ tokenize_test() ->
           undefined,undefined,
           [push_token],
           expr},
-         {marker,expr_start,
+         {marker,eel_smart_engine,expr_start,
           {re_pattern,0,0,0,
            <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,
              255,255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,
@@ -321,7 +331,7 @@ tokenize_test() ->
           undefined,undefined,
           [add_vertex,push_token,add_vertex],
           expr_start},
-         {marker,expr_continue,
+         {marker,eel_smart_engine,expr_continue,
           {re_pattern,0,0,0,
            <<69,82,67,80,78,0,0,0,0,0,0,0,81,0,0,0,255,255,255,
              255,255,255,255,255,60,0,37,0,0,0,0,0,0,0,64,0,0,0,
@@ -335,7 +345,7 @@ tokenize_test() ->
           undefined,undefined,
           [fetch_vertex_parent,push_token,add_vertex],
           undefined},
-         {marker,expr_end,
+         {marker,eel_smart_engine,expr_end,
           {re_pattern,0,0,0,
            <<69,82,67,80,78,0,0,0,0,0,0,0,81,0,0,0,255,255,255,
              255,255,255,255,255,60,0,37,0,0,0,0,0,0,0,64,0,0,0,
@@ -349,7 +359,7 @@ tokenize_test() ->
           undefined,undefined,
           [fetch_vertex_parent,push_token,fetch_vertex_parent],
           undefined},
-         {marker,comment,
+         {marker,eel_smart_engine,comment,
           {re_pattern,0,0,0,
            <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,
              255,255,255,255,255,60,0,37,0,0,0,0,0,0,0,64,0,0,0,
@@ -368,8 +378,7 @@ tokenize_test() ->
     <<>>,
     [{text_token,<<"<html><head><title>">>,undefined},
      {expr_token,<<"(maps:get(title, Assigns))">>,
-      eel_smart_engine,
-      {marker,expr,
+      {marker,eel_smart_engine,expr,
        {re_pattern,0,0,0,
         <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,255,
           255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,0,0,0,
@@ -386,8 +395,8 @@ tokenize_test() ->
       [title],
       undefined},
      {text_token,<<"</title></head><body><ul>">>,undefined},
-     {expr_token,<<"lists:map(fun(Item) ->">>,eel_smart_engine,
-      {marker,expr_start,
+     {expr_token,<<"lists:map(fun(Item) ->">>,
+      {marker,eel_smart_engine,expr_start,
        {re_pattern,0,0,0,
         <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,255,
           255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,0,0,0,
@@ -404,8 +413,7 @@ tokenize_test() ->
       [],undefined},
      {text_token,<<"<li>">>,undefined},
      {expr_token,<<"(maps:get(item_prefix, Assigns))">>,
-      eel_smart_engine,
-      {marker,expr,
+      {marker,eel_smart_engine,expr,
        {re_pattern,0,0,0,
         <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,255,
           255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,0,0,0,
@@ -421,8 +429,8 @@ tokenize_test() ->
        expr},
       [item_prefix],
       undefined},
-     {expr_token,<<"Item">>,eel_smart_engine,
-      {marker,expr,
+     {expr_token,<<"Item">>,
+      {marker,eel_smart_engine,expr,
        {re_pattern,0,0,0,
         <<69,82,67,80,80,0,0,0,0,0,0,0,81,0,0,0,255,255,255,255,
           255,255,255,255,60,0,61,0,0,0,0,0,0,0,64,0,0,0,0,0,0,
@@ -439,8 +447,7 @@ tokenize_test() ->
       [],undefined},
      {text_token,<<"</li>">>,undefined},
      {expr_token,<<"end, (maps:get(items, Assigns)))">>,
-      eel_smart_engine,
-      {marker,expr_end,
+      {marker,eel_smart_engine,expr_end,
        {re_pattern,0,0,0,
         <<69,82,67,80,78,0,0,0,0,0,0,0,81,0,0,0,255,255,255,255,
           255,255,255,255,60,0,37,0,0,0,0,0,0,0,64,0,0,0,0,0,0,
